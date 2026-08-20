@@ -1,0 +1,59 @@
+# Vibe Code Detector — Apache configuration for LWS shared hosting.
+#
+# Everything here degrades quietly: each block is wrapped in IfModule so that a
+# host without mod_rewrite or mod_headers serves the site anyway rather than
+# returning a 500. Do not add php_value/php_flag directives — LWS runs PHP
+# through FPM and those will hard-fail the whole vhost.
+
+DirectoryIndex index.php index.html
+Options -Indexes -MultiViews
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Nothing below the document root is servable directly.
+  RewriteRule ^(lib|data|tests|tools|docs|\.github)/ - [F,L]
+  RewriteRule (^|/)\.(?!well-known/) - [F,L]
+
+  # Pretty paths for the two pages that have them.
+  RewriteRule ^verify/?$ verify.php [L,QSA]
+  RewriteRule ^certificate/?$ api/certificate.php [L,QSA]
+</IfModule>
+
+# Belt and braces for hosts where mod_rewrite is off.
+<FilesMatch "\.(md|yml|yaml|lock|json|dist|sample|log|sql|ini)$">
+  Require all denied
+</FilesMatch>
+<FilesMatch "^(composer\.|\.env|\.git)">
+  Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), interest-cohort=()"
+
+  # The page loads nothing from anywhere else, so the policy can say exactly that.
+  Header always set Content-Security-Policy "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'self'"
+
+  # Never cache a certificate or an analysis.
+  <FilesMatch "\.(php)$">
+    Header set Cache-Control "no-store, no-cache, must-revalidate"
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css            "access plus 7 days"
+  ExpiresByType application/javascript "access plus 7 days"
+  ExpiresByType image/svg+xml       "access plus 30 days"
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/plain application/javascript application/json image/svg+xml
+</IfModule>
+
+AddType image/svg+xml .svg
+
+ErrorDocument 404 /index.php

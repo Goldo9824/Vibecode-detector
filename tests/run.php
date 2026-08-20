@@ -1,0 +1,313 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+/**
+ * The whole test suite. No PHPUnit, because the deployment target has no
+ * Composer and a test runner that cannot run on the same box as the code is
+ * a test runner nobody runs.
+ *
+ *     php tests/run.php
+ *
+ * Exit code is the number of failures.
+ */
+
+require_once dirname(__DIR__) . '/lib/bootstrap.php';
+require_once dirname(__DIR__) . '/lib/Fetcher.php';
+require_once dirname(__DIR__) . '/lib/Certificate.php';
+
+$passed = 0;
+$failed = 0;
+$group = '';
+
+function group(string $name): void
+{
+    global $group;
+    $group = $name;
+    echo "\n\033[1m", $name, "\033[0m\n";
+}
+
+function ok(bool $condition, string $what, string $extra = ''): void
+{
+    global $passed, $failed;
+    if ($condition) {
+        $passed++;
+        echo "  \033[32m✓\033[0m ", $what, "\n";
+    } else {
+        $failed++;
+        echo "  \033[31m✗ ", $what, "\033[0m";
+        echo $extra !== '' ? "  — {$extra}\n" : "\n";
+    }
+}
+
+function between(int $value, int $lo, int $hi, string $what): void
+{
+    ok($value >= $lo && $value <= $hi, $what, "got {$value}, wanted {$lo}–{$hi}");
+}
+
+function fixture(string $name): string
+{
+    return (string) file_get_contents(__DIR__ . '/fixtures/' . $name);
+}
+
+// ---------------------------------------------------------------- site: AI
+
+group('A generated landing page');
+
+$site = new SiteAnalyzer('https://flowsync.example.com/', fixture('ai-landing.html'));
+$r = $site->analyze();
+$a = $r->toArray();
+
+between($a['score'], 70, 97, 'scores in the AI band');
+ok($r->has('st.section_comments'), 'catches the <!-- Hero --> navigational comments');
+ok($r->has('ae.indigo'), 'catches the indigo-to-violet palette');
+ok($r->has('ae.inter_font'), 'catches Inter');
+ok($r->has('ct.emoji_icons'), 'catches emoji standing in for icons');
+ok($r->has('ct.generic_names'), 'catches the statistically generic testimonials');
+ok($r->has('ct.marketing_cliche'), 'catches the house marketing voice');
+ok($r->has('ct.dead_links'), 'catches a nav where everything is href="#"');
+ok($r->has('ae.shadcn_defaults'), 'catches the untouched card defaults');
+ok($r->countAi(true) >= 4, 'four or more converging non-aesthetic signals');
+ok($a['confidence']['level'] === 'moderate', 'reports moderate confidence, not high', $a['confidence']['level']);
+
+// ------------------------------------------------------------- site: human
+
+group('A hand-built page');
+
+$site = new SiteAnalyzer('https://boulangerie-marchand.fr/', fixture('human-site.html'));
+$r = $site->analyze();
+$a = $r->toArray();
+
+between($a['score'], 3, 40, 'scores in the human band');
+ok($r->has('hu.legacy_stack'), 'notices jQuery and table markup');
+ok($r->has('hu.long_tail_copy'), 'notices prices, hours and an address');
+ok($r->has('hu.real_media'), 'notices real photography in mixed formats');
+ok(!$r->has('ae.indigo'), 'does not invent a palette signal');
+ok(!$r->hasFingerprint(), 'no false platform fingerprint');
+
+// -------------------------------------------------------- site: fingerprint
+
+group('A page carrying a builder fingerprint');
+
+$html = '<!DOCTYPE html><html><head><title>x</title></head><body>'
+      . '<div id="root"></div><script src="https://cdn.gpteng.co/gptengineer.js"></script>'
+      . '<img src="/lovable-uploads/abc.png"></body></html>';
+$r = (new SiteAnalyzer('https://thing.lovable.app/', $html))->analyze();
+$a = $r->toArray();
+
+ok($r->hasFingerprint(), 'identifies the builder');
+ok($a['score'] >= 90, 'a fingerprint dominates the score', (string) $a['score']);
+ok($a['verdict']['code'] === 'builder_identified', 'verdict names it as builder-built');
+ok($a['confidence']['level'] === 'high', 'confidence is high for a positive ID');
+ok($a['score'] <= 97, 'still never claims certainty', (string) $a['score']);
+
+// ---------------------------------------------------------------- code: AI
+
+group('Generated JavaScript');
+
+$r = (new CodeAnalyzer(fixture('ai-code.js')))->analyze();
+$a = $r->toArray();
+
+between($a['score'], 72, 97, 'scores in the AI band');
+ok($r->has('cd.what_comments'), 'catches comments that restate the next line');
+ok($r->has('cd.section_header_comments'), 'catches ===== banner comments =====');
+ok($r->has('cd.swallowed_errors'), 'catches catch blocks that only console.error');
+ok($r->has('cd.verbose_names'), 'catches currentLoggedInUserRecordValue');
+ok($r->has('cd.helper_pileup'), 'catches the Helper/Manager/Handler pile-up');
+ok($r->has('cd.formal_errors'), 'catches formal, complete error messages');
+ok($r->has('se.placeholder_secret'), 'catches the placeholder JWT secret');
+ok($r->has('st.docblock_on_everything'), 'catches a docblock on every function');
+ok($r->has('st.import_block_sorted'), 'catches the perfectly ordered import block');
+ok($r->has('st.dead_code'), 'catches classes and imports wired to nothing');
+ok($r->has('se.weak_auth'), 'catches a token signed with no expiry');
+
+// The evidence excerpts are the only place user input is echoed back, so that
+// is where redaction has to hold. Catalogue copy quoting the pattern is fine.
+$leaked = array();
+foreach ($r->signals() as $s) {
+    foreach ($s->evidence as $line) {
+        if (stripos($line, 'your-secret-key') !== false) $leaked[] = $s->id;
+    }
+}
+ok(!$leaked, 'never echoes a secret-shaped literal back in the evidence', implode(', ', $leaked));
+
+// ------------------------------------------------------------- code: human
+
+group('Hand-written JavaScript');
+
+$r = (new CodeAnalyzer(fixture('human-code.js')))->analyze();
+$a = $r->toArray();
+
+between($a['score'], 3, 42, 'scores in the human band');
+ok($r->has('hu.why_comments'), 'recognises comments carrying outside context');
+ok($r->has('hu.ticket_refs'), 'recognises the JIRA reference');
+ok($r->has('hu.informal'), 'recognises the XXX aside');
+ok($r->has('hu.commented_code'), 'recognises commented-out code');
+ok($r->has('hu.inconsistent_format'), 'recognises mixed tabs and spaces');
+ok(!$r->has('cd.what_comments'), 'does not mistake why-comments for what-comments');
+
+// --------------------------------------------------------------- guardrails
+
+group('Scoring guardrails');
+
+$aesthetic = '<!DOCTYPE html><html><head><title>t</title>'
+    . '<style>body{font-family:Inter}.a{color:#6366f1}.b{color:#8b5cf6}.c{background:#4f46e5}</style>'
+    . '</head><body class="bg-indigo-500 text-violet-600 border-purple-400">'
+    . str_repeat('<p>Some perfectly ordinary sentence about a subject.</p>', 40)
+    . '</body></html>';
+$r = (new SiteAnalyzer('https://example.com/', $aesthetic))->analyze();
+ok($r->countAi(true) === 0, 'the aesthetic-only fixture fires no structural signals');
+ok($r->score() <= 55, 'aesthetics alone cannot exceed 55%', (string) $r->score());
+
+$empty = new Report('code', 'nothing');
+$empty->stat('thin', true);
+between($empty->score(), 25, 50, 'an empty report lands near the prior, not at zero');
+
+$r = (new CodeAnalyzer("const a = 1;\nconst b = 2;\n"))->analyze();
+$a = $r->toArray();
+ok($a['confidence']['level'] === 'insufficient', 'two lines of code gives insufficient confidence');
+between($a['score'], 30, 60, 'a thin sample is pulled toward the middle');
+
+// -------------------------------------------------------------- certificate
+
+group('Certificate signing');
+
+$result = (new CodeAnalyzer(fixture('ai-code.js')))->analyze()->toArray();
+$token = vcd_cert_token($result);
+
+ok(vcd_verify($token['payload'], $token['sig']), 'a fresh token verifies');
+ok(!vcd_verify($token['payload'], str_repeat('0', 64)), 'a wrong signature is rejected');
+ok(vcd_cert_open($token['payload'], $token['sig']) !== null, 'a valid token opens');
+ok(vcd_cert_open($token['payload'] . 'x', $token['sig']) === null, 'a tampered payload is rejected');
+
+$cert = vcd_cert_open($token['payload'], $token['sig']);
+ok($cert['s'] === $result['score'], 'the token carries the score it was issued with');
+ok(strlen((string) $cert['id']) === 12, 'the certificate id is 12 characters');
+
+// Forging: swap the score inside the payload and re-encode without the key.
+$forged = $cert;
+$forged['s'] = 3;
+$forgedPayload = vcd_b64url_encode((string) json_encode($forged));
+ok(vcd_cert_open($forgedPayload, $token['sig']) === null, 'an edited score fails verification');
+
+// ---------------------------------------------------------------------- PDF
+
+group('PDF output');
+
+$pdf = (new Certificate($cert))->render();
+
+ok(strncmp($pdf, '%PDF-1.4', 8) === 0, 'starts with a PDF header');
+ok(substr(rtrim($pdf), -5) === '%%EOF', 'ends with %%EOF');
+ok(strpos($pdf, '/Type /Catalog') !== false, 'has a document catalogue');
+ok(strpos($pdf, 'startxref') !== false, 'has a cross-reference pointer');
+ok(strlen($pdf) > 1200, 'is a plausible size', strlen($pdf) . ' bytes');
+
+// The xref offsets must actually point at their objects, or readers reject it.
+preg_match('~startxref\s+(\d+)~', $pdf, $m);
+$xrefAt = (int) $m[1];
+ok(substr($pdf, $xrefAt, 4) === 'xref', 'startxref points at the xref table');
+
+preg_match_all('~^(\d{10}) 00000 n ~m', $pdf, $offsets);
+$badOffsets = 0;
+foreach ($offsets[1] as $i => $off) {
+    if (!preg_match('~^' . ($i + 1) . ' 0 obj~', substr($pdf, (int) $off, 20))) {
+        $badOffsets++;
+    }
+}
+ok($badOffsets === 0, 'every xref offset lands on its object', "{$badOffsets} wrong");
+
+$plain = (new Certificate(array_merge($cert, array('c' => 'likely_human', 's' => 12))))->render();
+ok(strlen($plain) > 1200, 'renders the human-verdict variant too');
+
+// ------------------------------------------------------------- PDF metrics
+
+group('PDF text metrics');
+
+$p = new Pdf();
+$p->addPage();
+ok(abs($p->textWidth('iiii', 'F1', 10) - 8.88) < 0.01, 'Helvetica narrow glyphs measure correctly');
+ok(abs($p->textWidth('WWWW', 'F1', 10) - 37.76) < 0.01, 'Helvetica wide glyphs measure correctly');
+ok(abs($p->textWidth('abcd', 'F4', 10) - 24.0) < 0.01, 'Courier measures as monospaced');
+ok($p->textWidth('AAA', 'F2', 10) > $p->textWidth('AAA', 'F1', 10), 'bold is wider than regular');
+
+$lines = $p->wrap(str_repeat('word ', 60), 100, 'F1', 10);
+ok(count($lines) > 1, 'long text wraps');
+$tooWide = 0;
+foreach ($lines as $line) {
+    if ($p->textWidth($line, 'F1', 10) > 100.5) $tooWide++;
+}
+ok($tooWide === 0, 'no wrapped line exceeds the column');
+ok(count($p->wrap('Supercalifragilistic', 20, 'F1', 10)) > 1, 'an over-wide single word is broken');
+
+// ------------------------------------------------------------------ fetcher
+
+group('Fetcher safety');
+
+$f = new Fetcher();
+$blocked = array(
+    'http://127.0.0.1/', 'http://localhost/admin', 'https://192.168.1.1/',
+    'http://10.0.0.5/', 'http://169.254.169.254/latest/meta-data/',
+    'file:///etc/passwd', 'gopher://example.com/', 'http://[::1]/',
+    'http://internal.local/', 'https://example.com:22/',
+);
+foreach ($blocked as $url) {
+    $rejected = false;
+    try {
+        $ref = new ReflectionMethod('Fetcher', 'assertSafe');
+        $ref->setAccessible(true);
+        $ref->invoke($f, $f->normalize($url));
+    } catch (FetchError $e) {
+        $rejected = true;
+    } catch (Throwable $e) {
+        $rejected = true;
+    }
+    ok($rejected, 'refuses ' . $url);
+}
+
+ok($f->normalize('example.com') === 'https://example.com', 'a bare host gets https://');
+
+$rejectedEmpty = false;
+try { $f->normalize('   '); } catch (FetchError $e) { $rejectedEmpty = true; }
+ok($rejectedEmpty, 'refuses an empty URL');
+
+// ------------------------------------------------------------------- brand
+
+group('Brand assets');
+
+$svg = Brand::markSvg();
+ok(strpos($svg, '<svg') === 0, 'the mark renders as SVG');
+ok(substr_count($svg, '<path') === 2, 'the mark has both halves of the trace');
+
+$onDisk = (string) file_get_contents(dirname(__DIR__) . '/assets/img/logo.svg');
+ok(strpos($onDisk, Brand::markSvg(120, 'currentColor', '#b8402e', 'role="img" aria-label="Vibe Code Detector"')) !== false,
+   'assets/img/logo.svg matches lib/Brand.php (run tools/build-assets.php)');
+
+// ------------------------------------------------------------------ catalog
+
+group('Catalogue integrity');
+
+$dupes = array();
+foreach (Catalog::all() as $id => $meta) {
+    ok2($meta, $id, $dupes);
+}
+function ok2(array $meta, string $id, array &$seen): void
+{
+    static $cats = null;
+    if ($cats === null) $cats = Catalog::categories();
+
+    $problems = array();
+    if (!isset($cats[$meta['category']])) $problems[] = 'unknown category';
+    if (!in_array($meta['direction'], array('ai', 'human'), true)) $problems[] = 'bad direction';
+    if ($meta['weight'] <= 0) $problems[] = 'non-positive weight';
+    if (trim($meta['label']) === '' || trim($meta['detail']) === '') $problems[] = 'missing copy';
+    if (strlen($meta['detail']) < 40) $problems[] = 'detail too short to be useful';
+
+    ok(empty($problems), 'catalogue entry ' . $id, implode(', ', $problems));
+}
+
+// --------------------------------------------------------------------- done
+
+echo "\n", str_repeat('─', 52), "\n";
+printf("  %d passed, %d failed\n\n", $passed, $failed);
+
+exit($failed > 0 ? 1 : 0);

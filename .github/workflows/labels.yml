@@ -1,0 +1,70 @@
+name: Sync labels
+
+# Applies .github/labels.json to the repository. Run it by hand from the Actions
+# tab, or let it run when the label file changes on main.
+#
+# Uses gh and jq, both preinstalled on the runner, so this stays dependency-free
+# like the rest of the project.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/labels.json
+      - .github/workflows/labels.yml
+
+permissions:
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create or update every label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          jq -c '.[]' .github/labels.json | while read -r label; do
+            name=$(printf '%s' "$label" | jq -r '.name')
+            color=$(printf '%s' "$label" | jq -r '.color')
+            desc=$(printf '%s' "$label" | jq -r '.description')
+
+            # Update if it exists, create if it does not. Existing labels keep
+            # their attached issues either way.
+            if gh api "repos/$REPO/labels/$(jq -rn --arg n "$name" '$n|@uri')" \
+                 --silent > /dev/null 2>&1; then
+              gh api --method PATCH "repos/$REPO/labels/$(jq -rn --arg n "$name" '$n|@uri')" \
+                -f new_name="$name" -f color="$color" -f description="$desc" --silent
+              echo "updated  $name"
+            else
+              gh api --method POST "repos/$REPO/labels" \
+                -f name="$name" -f color="$color" -f description="$desc" --silent
+              echo "created  $name"
+            fi
+          done
+
+      - name: Note labels that exist but are not in the file
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Reported, never deleted — removing a label detaches it from every
+          # issue that used it, which is not something a workflow should do
+          # unattended.
+          gh api "repos/$REPO/labels?per_page=100" --paginate --jq '.[].name' | sort > /tmp/live.txt
+          jq -r '.[].name' .github/labels.json | sort > /tmp/declared.txt
+          extra=$(comm -23 /tmp/live.txt /tmp/declared.txt || true)
+          if [ -n "$extra" ]; then
+            echo "Labels on the repo but not in .github/labels.json:"
+            echo "$extra" | sed 's/^/  /'
+            echo "Delete them by hand if they are unwanted."
+          else
+            echo "labels match the file exactly"
+          fi

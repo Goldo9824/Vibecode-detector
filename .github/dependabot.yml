@@ -1,0 +1,15 @@
+version: 2
+
+# There are no package ecosystems here on purpose — no Composer, no npm — so the
+# only thing with a version to keep current is the CI workflow itself.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "ci"
+    labels:
+      - dependencies
+      - ci
+    open-pull-requests-limit: 3

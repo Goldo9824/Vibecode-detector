@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # 7.4 is the floor the deployment target still offers; 8.4 is what it
+        # defaults to. Both have to work or the hosting claim is not true.
+        php: ['7.4', '8.1', '8.4']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, iconv, curl, zlib
+          coverage: none
+          tools: none
+
+      - name: Refuse a dependency manifest
+        run: |
+          # The whole premise is that this runs on shared hosting untouched.
+          for f in composer.json package.json composer.lock package-lock.json; do
+            if [ -e "$f" ]; then
+              echo "::error file=$f::$f exists — this project must stay dependency-free"
+              exit 1
+            fi
+          done
+          echo "no dependency manifests, as intended"
+
+      - name: Lint every PHP file
+        run: |
+          fail=0
+          while IFS= read -r -d '' f; do
+            if ! php -l "$f" > /dev/null 2>&1; then
+              echo "::error file=$f::syntax error"
+              php -l "$f" || true
+              fail=1
+            fi
+          done < <(find . -name '*.php' -not -path './.git/*' -print0)
+          exit $fail
+
+      - name: Run the test suite
+        run: php tests/run.php
+
+      - name: docs/SIGNALS.md matches lib/Catalog.php
+        run: php tools/gen-signals-doc.php --check
+
+      - name: SVG assets match lib/Brand.php
+        run: |
+          php tools/build-assets.php
+          if ! git diff --quiet -- assets/img; then
+            echo "::error::assets/img is stale — run: php tools/build-assets.php"
+            git diff --stat -- assets/img
+            exit 1
+          fi
+          echo "assets are current"
+
+  smoke:
+    name: End-to-end smoke test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, iconv, curl, zlib
+          coverage: none
+          tools: none
+
+      - name: Serve it
+        run: |
+          php -S 127.0.0.1:8080 > /tmp/server.log 2>&1 &
+          for i in $(seq 1 20); do
+            curl -sf http://127.0.0.1:8080/ > /dev/null && break
+            sleep 0.5
+          done
+
+      - name: The homepage renders
+        run: |
+          body=$(curl -sf http://127.0.0.1:8080/)
+          echo "$body" | grep -q 'Vibe Code Detector' || { echo "::error::no title"; exit 1; }
+          echo "$body" | grep -q 'github.com/goldo9824/vibecode-detector' || { echo "::error::repo link missing"; exit 1; }
+          if echo "$body" | grep -qi '<?php'; then echo "::error::PHP leaked into the output"; exit 1; fi
+          echo "homepage OK ($(echo "$body" | wc -c) bytes)"
+
+      - name: Code analysis returns a scored result
+        run: |
+          json=$(curl -sf -X POST http://127.0.0.1:8080/api/analyze.php \
+                   -F mode=code \
+                   -F "code=<tests/fixtures/ai-code.js")
+          echo "$json" | head -c 300; echo
+          echo "$json" | grep -q '"ok":true' || { echo "::error::not ok"; exit 1; }
+          echo "$json" | grep -q '"score":' || { echo "::error::no score"; exit 1; }
+          echo "$json" | grep -q '"cert":' || { echo "::error::no certificate token"; exit 1; }
+
+      - name: The certificate downloads as a real PDF
+        run: |
+          json=$(curl -sf -X POST http://127.0.0.1:8080/api/analyze.php \
+                   -F mode=code -F "code=<tests/fixtures/ai-code.js")
+          p=$(printf '%s' "$json" | sed -n 's/.*"payload":"\([^"]*\)".*/\1/p')
+          s=$(printf '%s' "$json" | sed -n 's/.*"sig":"\([^"]*\)".*/\1/p')
+          curl -sf "http://127.0.0.1:8080/api/certificate.php?p=$p&s=$s" -o /tmp/cert.pdf
+          head -c 8 /tmp/cert.pdf | grep -q '%PDF-1.4' || { echo "::error::not a PDF"; exit 1; }
+          tail -c 6 /tmp/cert.pdf | grep -q '%%EOF' || { echo "::error::truncated PDF"; exit 1; }
+          echo "certificate OK ($(stat -c%s /tmp/cert.pdf) bytes)"
+
+      - name: A tampered certificate is refused
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+                  "http://127.0.0.1:8080/api/certificate.php?p=forged&s=deadbeef")
+          [ "$code" = "400" ] || { echo "::error::expected 400, got $code"; exit 1; }
+          echo "forgery refused"
+
+      - name: The fetcher refuses local addresses
+        run: |
+          for target in "http://127.0.0.1:8080/" "http://169.254.169.254/" "http://localhost/"; do
+            body=$(curl -s -X POST http://127.0.0.1:8080/api/analyze.php -F mode=url -F "url=$target")
+            echo "$body" | grep -q '"ok":false' || { echo "::error::$target was not refused: $body"; exit 1; }
+            echo "refused $target"
+          done
+
+      - name: Server log
+        if: always()
+        run: cat /tmp/server.log || true

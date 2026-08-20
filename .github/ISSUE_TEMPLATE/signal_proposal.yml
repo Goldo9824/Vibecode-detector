@@ -1,0 +1,97 @@
+name: Propose a signal
+description: You have spotted a tell the detector does not know about yet.
+title: "[Signal] "
+labels: ["signal", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        New signals are welcome, particularly ones that are **hard to mask** —
+        anything a rename, a formatter or a minifier would erase is worth much less
+        than something structural.
+
+        Every signal has to earn its weight. The questions below are the ones it
+        will be judged on, and they are the same questions asked of the 55 already
+        in [`docs/SIGNALS.md`](../blob/main/docs/SIGNALS.md).
+
+  - type: input
+    id: name
+    attributes:
+      label: The tell, in one line
+      placeholder: Generated CSS keeps every custom property in one alphabetised :root block
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Which family does it belong to?
+      options:
+        - Platform fingerprint — a builder naming itself
+        - Structural — the shape of the whole
+        - Code style — line-level habits
+        - Content — what the page says
+        - Security profile — the durable family
+        - Aesthetic — how it looks
+        - Human authorship — evidence a person was here
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Examples
+      description: Two or three real examples, ideally from sources you can link to.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why does a generator do this and a human not?
+      description: >
+        The mechanism matters more than the correlation. "Models learned the median
+        of a corpus where X was the default" is a reason. "I have noticed it a lot"
+        is a starting point, not a reason.
+    validations:
+      required: true
+
+  - type: textarea
+    id: false-positives
+    attributes:
+      label: Who would this wrongly accuse?
+      description: >
+        Required, and answering it honestly counts in the proposal's favour. Which
+        careful human developers, house styles, linter configs or frameworks would
+        trip this? If you cannot think of any, look harder — convergent evolution
+        is the central risk in this whole project.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: masking
+    attributes:
+      label: How easily is it erased?
+      options:
+        - Survives formatting, renaming and minification
+        - Survives formatting but not a deliberate rewrite
+        - Erased by a formatter, a linter or a minifier
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: weight
+    attributes:
+      label: Suggested weight in log-odds
+      description: "Guide: 0.25 aesthetic · 0.5 moderate · 1.0 strong · 4.5 decisive/fingerprint."
+      placeholder: "0.6"
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I have read docs/SIGNALS.md and this is not already covered.
+          required: true

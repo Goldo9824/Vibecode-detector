@@ -1,0 +1,21 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/goldo9824/vibecode-detector/security/advisories/new
+    about: >
+      Report privately, never as a public issue. SSRF in the fetcher, certificate
+      forgery, and anything touching the signing key are in scope.
+
+  - name: Question about how the scoring works
+    url: https://github.com/goldo9824/vibecode-detector/blob/main/docs/SIGNALS.md
+    about: Every signal, its weight and its reasoning are documented there first.
+
+  - name: Deploying it yourself
+    url: https://github.com/goldo9824/vibecode-detector/blob/main/docs/DEPLOY-LWS.md
+    about: Requirements, upload steps and the two checks to run afterwards.
+
+  - name: Why the tool says it cannot prove anything
+    url: https://github.com/goldo9824/vibecode-detector/blob/main/docs/REFERENCE.md
+    about: >
+      The research behind the design, including the benchmarks that put automated
+      code detection near chance.

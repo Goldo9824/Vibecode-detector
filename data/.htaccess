@@ -1,0 +1,8 @@
+# The signing key and the rate-limit counters live here. Nothing in this
+# directory is ever served, on any host, under any configuration.
+Require all denied
+
+<IfModule !mod_authz_core.c>
+  Order allow,deny
+  Deny from all
+</IfModule>

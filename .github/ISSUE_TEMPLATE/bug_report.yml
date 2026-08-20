@@ -1,0 +1,77 @@
+name: Bug report
+description: Something is broken — an error, a crash, a page that will not load, a certificate that will not download.
+title: "[Bug] "
+labels: ["bug", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time.
+
+        **If the detector gave a reading you disagree with, that is not this form** —
+        use [Wrong reading](?template=false_positive.yml) instead, which asks the
+        right questions.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, and what did the site do?
+      placeholder: |
+        I pasted a 400-line Python file into the code tab and pressed Analyse.
+        The spinner ran for about 30 seconds and then the error box said
+        "The server sent something that was not a result."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - vibecodedetector.fanficnow.com
+        - A self-hosted copy
+        - Running locally with php -S
+    validations:
+      required: true
+
+  - type: input
+    id: url-analysed
+    attributes:
+      label: What you were analysing
+      description: >
+        The URL you put in, if it was public. Leave blank if the input was private —
+        do not paste anything confidential here, the issue tracker is public.
+      placeholder: https://example.com/some-page
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Browser and PHP version
+      description: PHP version only matters for self-hosted or local reports.
+      placeholder: |
+        Firefox 141 on Windows 11
+        PHP 8.2.14 (self-hosted)
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Anything in the browser console or the PHP error log
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues and this is not a duplicate.
+          required: true
+        - label: I have not pasted any credentials, tokens or private source into this report.
+          required: true

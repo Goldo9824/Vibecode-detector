@@ -219,6 +219,44 @@ ok($badOffsets === 0, 'every xref offset lands on its object', "{$badOffsets} wr
 $plain = (new Certificate(array_merge($cert, array('c' => 'likely_human', 's' => 12))))->render();
 ok(strlen($plain) > 1200, 'renders the human-verdict variant too');
 
+// A subject with every signal in the catalogue must still not run the evidence
+// list into the fixed caveat panel at the bottom of the page.
+$crowded = array_merge($cert, array('g' => array_keys(Catalog::all())));
+$long = (new Certificate($crowded))->render();
+ok(strlen($long) > 1200, 'renders with the whole catalogue as evidence');
+
+$caveatTop = Pdf::A4_H - 54.0 - 40.0 - 100.0;
+$lowest = 0.0;
+preg_match_all('~stream\n(.*?)\nendstream~s', $long, $streams);
+foreach ($streams[1] as $s) {
+    $raw = @gzuncompress($s);
+    if ($raw === false) $raw = $s;
+    // Text matrices are emitted in PDF space, so the lowest baseline is the
+    // smallest y — convert back to top-down to compare against the panel.
+    if (preg_match_all('~1 0 0 1 [\d.]+ ([\d.]+) Tm~', $raw, $ys)) {
+        foreach ($ys[1] as $py) {
+            $topDown = Pdf::A4_H - (float) $py;
+            if ($topDown > $lowest && $topDown < Pdf::A4_H - 80) $lowest = $topDown;
+        }
+    }
+}
+ok($lowest > 0, 'found text positions to check');
+ok($lowest < Pdf::A4_H - 54.0, 'nothing is drawn below the bottom margin', sprintf('lowest %.1f', $lowest));
+$overrun = 0;
+foreach ($streams[1] as $s) {
+    $raw = @gzuncompress($s);
+    if ($raw === false) $raw = $s;
+    if (preg_match_all('~1 0 0 1 [\d.]+ ([\d.]+) Tm~', $raw, $ys)) {
+        foreach ($ys[1] as $py) {
+            $topDown = Pdf::A4_H - (float) $py;
+            // The evidence list lives above the panel; the panel's own text and
+            // the footer live below its top edge by design.
+            if ($topDown > $caveatTop && $topDown < $caveatTop + 14) $overrun++;
+        }
+    }
+}
+ok($overrun === 0, 'the evidence list never overruns the caveat panel', "{$overrun} lines in the gap");
+
 // ------------------------------------------------------------- PDF metrics
 
 group('PDF text metrics');

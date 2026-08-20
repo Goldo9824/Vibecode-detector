@@ -17,6 +17,12 @@ final class Certificate
 {
     const MARGIN = 54.0;
 
+    /** Height of the fixed caveat panel above the footer. */
+    const CAVEAT_H = 100.0;
+
+    /** Clearance the evidence list keeps above that panel. */
+    const CAVEAT_GAP = 24.0;
+
     /** @var Pdf */
     private $pdf;
     /** @var array<string,mixed> */
@@ -182,7 +188,7 @@ final class Certificate
             if ($meta === null) {
                 continue;
             }
-            if ($y > $this->pdf->height() - 210) {
+            if ($y > $this->caveatTop() - self::CAVEAT_GAP) {
                 $this->pdf->text($this->x0, $y, sprintf('… and %d further signal(s), listed in the full report online.', count($ids) - $shown), 'F3', 9, Brand::GREY);
                 $y += 18;
                 break;
@@ -210,12 +216,17 @@ final class Certificate
         return $y + 8;
     }
 
+    /** Top edge of the caveat panel, which the evidence list must stay clear of. */
+    private function caveatTop(): float
+    {
+        return $this->pdf->height() - self::MARGIN - 40 - self::CAVEAT_H;
+    }
+
     private function caveat(): void
     {
-        $boxH = 84.0;
-        $y = $this->pdf->height() - self::MARGIN - 40 - $boxH;
+        $y = $this->caveatTop();
 
-        $this->pdf->rect($this->x0, $y, $this->colW, $boxH, array(255, 255, 255), Brand::RULE, 0.8);
+        $this->pdf->rect($this->x0, $y, $this->colW, self::CAVEAT_H, array(255, 255, 255), Brand::RULE, 0.8);
 
         $tx = $this->x0 + 14;
         $tw = $this->colW - 28;
@@ -229,7 +240,17 @@ final class Certificate
               . 'human developers adopt the same tools. Absence of signals proves nothing: agentic editors '
               . 'leave no fingerprint at all. Do not use this document to accuse anyone of anything.';
 
-        $this->pdf->paragraph($tx, $ty, $tw, $body, 'F1', 8.4, 11.2, Brand::GREY);
+        $ty = $this->pdf->paragraph($tx, $ty, $tw, $body, 'F1', 8.4, 11.2, Brand::GREY);
+
+        // Stated on the certificate itself, not only in the documentation. The
+        // tool scores 55% on its own detector, which is the clearest available
+        // demonstration of how far the number should be trusted.
+        $this->pdf->paragraph(
+            $tx, $ty + 3, $tw,
+            'The tool that issued this certificate was itself AI-generated, and its own detector '
+          . 'does not identify it as such.',
+            'F3', 8.4, 11.2, Brand::INK
+        );
     }
 
     private function footer(): void

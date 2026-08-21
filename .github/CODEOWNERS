@@ -1,0 +1,22 @@
+# Every change needs a review from the owner.
+* @goldo9824
+
+# The parts where a mistake is expensive, listed explicitly so the requirement
+# survives any future loosening of the catch-all above.
+
+# The signal catalogue is the source of truth for scoring, the certificate and
+# the documentation. A weight changed here changes every reading.
+/lib/Catalog.php    @goldo9824
+/lib/Report.php     @goldo9824
+
+# Takes a URL from an anonymous stranger and asks the server to fetch it.
+/lib/Fetcher.php    @goldo9824
+
+# Certificate signing and key handling.
+/lib/bootstrap.php  @goldo9824
+/api/               @goldo9824
+
+# Security posture and repository policy.
+/SECURITY.md        @goldo9824
+/.htaccess          @goldo9824
+/.github/           @goldo9824

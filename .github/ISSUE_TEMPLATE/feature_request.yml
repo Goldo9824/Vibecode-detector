@@ -1,0 +1,66 @@
+name: Feature request
+description: An idea for something the site should do.
+title: "[Feature] "
+labels: ["enhancement", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before writing: this project runs on **LWS shared hosting with no
+        dependencies**. That is a hard constraint, not a current limitation.
+        No Composer, no npm, no build step, no database, no cron, no background jobs.
+
+        Ideas that need any of those are not automatically out, but they need a
+        route that works without them.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is the problem?
+      description: Describe the situation, not the solution you have in mind.
+      placeholder: >
+        I check a lot of student submissions and I have to re-type the caveats into
+        every email myself.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What should happen instead?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part?
+      options:
+        - The detection engine
+        - URL / live-page analysis
+        - Pasted-code analysis
+        - The PDF certificate
+        - The website itself
+        - Deployment and hosting
+        - Documentation
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: How would it work without dependencies?
+      description: >
+        Optional, but it moves the conversation along a lot. If it needs to store
+        something, say what and for how long — the project currently stores nothing
+        about any analysis, and that is a feature people rely on.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: This does not require Composer, npm, a build step or a database.
+        - label: I searched the existing issues and this is not a duplicate.
+          required: true

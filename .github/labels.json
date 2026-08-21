@@ -1,0 +1,18 @@
+[
+  { "name": "bug",            "color": "b8402e", "description": "Something is broken" },
+  { "name": "wrong reading",  "color": "d4573f", "description": "The detector scored something incorrectly — the most useful report there is" },
+  { "name": "signal",         "color": "17140f", "description": "A new detection signal, or a change to one" },
+  { "name": "weight change",  "color": "8a3222", "description": "Changes a scoring weight — needs before/after fixture scores" },
+  { "name": "enhancement",    "color": "3f6b4a", "description": "A new feature or an improvement" },
+  { "name": "security",       "color": "7d1d0d", "description": "Security-relevant. Report privately first, never as a public issue" },
+  { "name": "documentation",  "color": "9a6b12", "description": "Docs, README, the signal catalogue" },
+  { "name": "ci",             "color": "6b6459", "description": "Build, workflows, tooling" },
+  { "name": "dependencies",   "color": "6b6459", "description": "Dependabot — GitHub Actions only, this project has no package dependencies" },
+  { "name": "needs triage",   "color": "ded5c2", "description": "Not yet looked at" },
+  { "name": "needs evidence", "color": "c9bfa8", "description": "Waiting on a fixture, an excerpt, or a reproducible case" },
+  { "name": "good first issue", "color": "3f6b4a", "description": "Small, self-contained, a good place to start" },
+  { "name": "help wanted",    "color": "2f5138", "description": "Input or a contribution would be welcome" },
+  { "name": "wontfix",        "color": "7d7666", "description": "Deliberate. Usually because it would need a dependency or would store user data" },
+  { "name": "duplicate",      "color": "7d7666", "description": "Already reported elsewhere" },
+  { "name": "question",       "color": "b07d1a", "description": "A question rather than a report" }
+]

@@ -1,0 +1,210 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/lib/bootstrap.php';
+require_once __DIR__ . '/lib/Brand.php';
+
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+?>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vibe Code Detector — how likely is this AI-generated?</title>
+<meta name="description" content="Paste a URL or some source code and get a percentage reading of how likely it is to be AI-generated, with the evidence shown and the limits stated. Free, no account, open source.">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/site.css?v=<?= h(VCD_VERSION) ?>">
+<meta property="og:title" content="Vibe Code Detector">
+<meta property="og:description" content="A percentage reading of how likely a page or a snippet is to be AI-generated — with the evidence shown and the limits stated.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="<?= h(VCD_SITE_URL) ?>/">
+</head>
+<body>
+
+<header class="masthead-wrap">
+  <div class="shell masthead">
+    <a class="brand" href="./">
+      <?= Brand::markSvg(34, 'currentColor', 'var(--red)', 'aria-hidden="true"') ?>
+      <span class="brand-name">Vibe Code Detector<span class="brand-tag">reads the tells, shows its working</span></span>
+    </a>
+    <nav>
+      <a href="#method">Method</a>
+      <a href="#limits">Limits</a>
+      <a href="#provenance">Provenance</a>
+      <a href="verify.php">Verify</a>
+      <a href="<?= h(VCD_REPO_URL) ?>" rel="noopener">Source</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="shell">
+
+    <section class="hero">
+      <h1>Was this written by a person, or generated?</h1>
+      <p>Give it a URL or paste some code. It reads the same tells a reviewer would (builder fingerprints, comment habits, error handling, the shape of the copy) and returns a percentage with every piece of evidence it used.</p>
+      <p class="disclaimer">It will not prove anything. Automated detection of AI-generated source performs near chance in peer-reviewed benchmarks, so this shows its working and expects you to read it. Do not accuse anyone of anything on the strength of a number. <a href="#provenance">This site was vibecoded too</a>, and its own detector cannot tell.</p>
+    </section>
+
+    <div class="panel" id="analyzer">
+      <div class="tabs" role="tablist" aria-label="What to analyse">
+        <button class="tab" role="tab" id="tab-url" aria-controls="panel-url" aria-selected="true" type="button">Live page</button>
+        <button class="tab" role="tab" id="tab-code" aria-controls="panel-code" aria-selected="false" type="button">Paste code</button>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-url" aria-labelledby="tab-url">
+        <form id="form-url" novalidate>
+          <label class="field" for="url">Address of the page to read</label>
+          <input type="url" id="url" name="url" placeholder="example.com" autocomplete="url" spellcheck="false">
+          <div class="actions">
+            <button class="btn" type="submit">Analyse page</button>
+            <span class="spinner" id="spin-url" hidden>reading&hellip;</span>
+          </div>
+          <p class="hint">Fetches the page and up to four of its own stylesheets and scripts. Nothing else is requested, nothing is stored.</p>
+        </form>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-code" aria-labelledby="tab-code" hidden>
+        <form id="form-code" novalidate>
+          <label class="field" for="code">Source to read &mdash; any language, the longer the better</label>
+          <textarea id="code" name="code" spellcheck="false" placeholder="Paste a file here. Several hundred lines gives a far steadier reading than twenty."></textarea>
+          <div class="actions">
+            <button class="btn" type="submit">Analyse code</button>
+            <span class="spinner" id="spin-code" hidden>reading&hellip;</span>
+          </div>
+          <p class="hint">Sent to the server, read once, and discarded. It is never written to disk or logged.</p>
+        </form>
+      </div>
+
+      <div id="error" class="error" hidden role="alert"></div>
+    </div>
+
+    <section id="results" hidden aria-live="polite">
+      <div class="panel">
+        <div class="subject" id="r-subject"></div>
+        <div class="meter"><div class="meter-fill" id="r-meter" style="width:0"></div></div>
+        <div class="meter-scale"><span>hand-written</span><span>inconclusive</span><span>AI-generated</span></div>
+
+        <div class="verdict">
+          <div class="score" id="r-score">0<span>%</span></div>
+          <div>
+            <p class="eyebrow">Verdict</p>
+            <h2 id="r-verdict"></h2>
+            <p id="r-summary"></p>
+            <div class="meta-row">
+              <span id="r-confidence"></span>
+              <span id="r-counts"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="evidence">
+          <h3>What it found</h3>
+          <div id="r-signals"></div>
+        </div>
+
+        <div class="notes">
+          <p class="eyebrow">Read this before repeating the number</p>
+          <ul id="r-notes"></ul>
+        </div>
+
+        <div class="cert-bar">
+          <a class="btn" id="r-cert" href="#">Download certificate (PDF)</a>
+          <p>A signed one-page PDF stating the reading, the evidence and the caveats. Anyone can check it at <a href="verify.php">/verify</a>.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="band" id="method">
+      <div class="prose">
+        <p class="eyebrow">Method</p>
+        <h2>How the number is arrived at</h2>
+        <p>Every signal carries a weight in log-odds, and the weights are summed against a starting assumption that a given page is <em>not</em> generated. The result goes through a logistic curve to become a percentage. That is the whole trick, and it matters far less than which signals are weighted how.</p>
+
+        <h3>Evidence is not equal, so it is not weighted equally</h3>
+        <ol class="ladder">
+          <li><strong>Platform fingerprints</strong><span>A builder's own runtime, badge, upload path or generator tag. This is a positive identification and it settles the question by itself.</span></li>
+          <li><strong>Structural signals</strong><span>Uniform comment density, the same problem solved four ways, fully-built code wired to nothing. Hard to produce by accident, hard to fake.</span></li>
+          <li><strong>Code-style tells</strong><span>What-not-why comments, blanket try/catch, swallowed exceptions, tests that assert nothing, emoji in comments.</span></li>
+          <li><strong>Content and security</strong><span>Statistically generic testimonials, placeholder secrets, textbook-insecure defaults. The security profile decays slowest of all the tells.</span></li>
+          <li><strong>Aesthetics</strong><span>Indigo gradients, the default icon set, three identical cards. Counted, capped, and never enough on their own to reach a verdict.</span></li>
+        </ol>
+
+        <h3>Rules the scoring will not break</h3>
+        <ul>
+          <li>Aesthetic evidence is capped as a group. A purple page with no other tells cannot score above 55%.</li>
+          <li>A reading never reaches 0% or 100%. Certainty is not available here.</li>
+          <li>Short input is explicitly discounted rather than quietly guessed at.</li>
+          <li>Signals pointing at human authorship subtract, and they are weighted as heavily as the ones pointing the other way.</li>
+        </ul>
+
+        <p>The full catalogue, with every signal, its weight, and why it earns that weight, is in <a href="<?= h(VCD_REPO_URL) ?>/blob/main/docs/SIGNALS.md" rel="noopener">docs/SIGNALS.md</a>.</p>
+      </div>
+    </section>
+
+    <section class="band" id="limits">
+      <div class="prose">
+        <p class="eyebrow">Limits</p>
+        <h2>Where this is wrong</h2>
+
+        <h3>Signs run in one direction only</h3>
+        <p>Finding a fingerprint identifies a builder. Finding none proves nothing at all, because agentic editors write into an ordinary repository and leave nothing behind in the served page.</p>
+
+        <h3>The tells overlap with good practice</h3>
+        <p>Tailwind, semantic HTML, thorough error handling, descriptive names and consistent formatting are what careful developers do. That is the central false-positive risk and no amount of weighting removes it.</p>
+
+        <h3>Masking is cheap</h3>
+        <p>Renaming variables, stripping comments or running the file through a formatter erases most of what this reads. Minified bundles are excluded from code-level analysis for exactly this reason: the signal has already been normalised away.</p>
+
+        <h3>What it cannot see</h3>
+        <p>The strongest structural signal available is repository history: one enormous initial commit followed by a trail of micro-fixes. That lives in git, not in a served page or a pasted file, so this tool never sees it. If you have the repo, read the history first and treat this as a footnote.</p>
+
+        <h3>The better question</h3>
+        <p>Authorship is usually not what anyone actually needs to know. Reviewed, tested, understood AI code is just code. The useful question is whether anyone understands this system and can secure it, which is why the security signals are here, and why they are the ones that will still work in five years.</p>
+      </div>
+    </section>
+
+    <section class="band" id="provenance">
+      <div class="prose">
+        <p class="eyebrow">Provenance</p>
+        <h2>This site was vibecoded</h2>
+
+        <p>All of it. The detection engine, the page you are reading, the PDF writer, the logo, the test suite: generated by an AI agent in a single sitting, from a research brief. A vibecoded app for detecting vibecoded apps.</p>
+
+        <p>Which makes it a worked example of its own blind spot. Point the detector at this site and it returns <strong id="self-score">55%, inconclusive</strong>. That is a false negative on a codebase that is entirely generated, and the reasons are both listed above rather than discovered here:</p>
+
+        <ul>
+          <li><strong>Nothing to fingerprint.</strong> Agentic editors write into an ordinary repository. No badge, no builder subdomain, no injected runtime. Signs run in one direction only, and this site is the direction they do not run in.</li>
+          <li><strong>The tells were avoided on purpose.</strong> No what-comments, no docblock on every trivial function, no indigo gradient, no Inter, no three-card grid. That is masking, and masking is cheap. It took no particular effort.</li>
+        </ul>
+
+        <p>The result stands at 55% because the aesthetic cap holds it there: some stylistic signals fired, no structural ones did, and the scoring refuses to reach a verdict on stylistic evidence alone. It is doing exactly what it was built to do, and it is still wrong about the thing it is sitting on.</p>
+
+        <p>None of that is an argument against the tool, and none of it is hidden. The score is the least interesting thing on the results page; the evidence underneath it is the point. If reading this makes you trust the number less, that is the correct response, and it is why the number was shown to you at all.</p>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer class="colophon">
+  <div class="shell colophon-grid">
+    <div>
+      <p><strong>Vibe Code Detector</strong> is free, open source, and keeps nothing. No account, no tracking, no database, no record of what you analysed.</p>
+      <p>Built to run on ordinary shared hosting: plain PHP, no dependencies, no build step.</p>
+      <p><a href="#provenance">This site was itself vibecoded</a>, and scores 55% on its own detector.</p>
+    </div>
+    <div class="links">
+      <a href="<?= h(VCD_REPO_URL) ?>" rel="noopener">Source and issue tracker &rarr;</a>
+      <a href="<?= h(VCD_REPO_URL) ?>/issues/new?template=false_positive.yml" rel="noopener">Report a wrong reading &rarr;</a>
+      <a href="<?= h(VCD_REPO_URL) ?>/blob/main/docs/SIGNALS.md" rel="noopener">The signal catalogue &rarr;</a>
+      <a href="verify.php">Verify a certificate &rarr;</a>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/js/app.js?v=<?= h(VCD_VERSION) ?>" defer></script>
+</body>
+</html>

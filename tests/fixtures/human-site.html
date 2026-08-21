@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Boulangerie Marchand – Pain au levain depuis 1978</title>
+<link rel="stylesheet" href="/style.css?v=14">
+<script src="/js/jquery-1.11.3.min.js"></script>
+</head>
+<body>
+<div id="wrapper">
+
+<div id="header">
+<img src="/images/logo_marchand.jpg" alt="Boulangerie Marchand" width="240">
+<ul id="nav">
+<li><a href="/">Accueil</a></li>
+<li><a href="/pains.html">Nos pains</a></li>
+<li><a href="/horaires.html">Horaires</a></li>
+<li><a href="/contact.html">Contact</a></li>
+</ul>
+</div>
+
+<div id="content">
+<h1>Pain au levain cuit au feu de bois</h1>
+
+<p>La boulangerie est ouverte du mardi au dimanche, 6h30 – 13h30 et 15h00 – 19h30.
+Fermeture annuelle du 3 au 24 août.</p>
+
+<p>Nous sommes installés au 14 rue des Capucins, 69001 Lyon, depuis 1978.
+Téléphone : 04 78 28 41 03.</p>
+
+<table cellpadding="4" cellspacing="0" border="0">
+<tr><td>Tourte de meule 1kg</td><td>5,80 €</td></tr>
+<tr><td>Baguette tradition</td><td>1,30 €</td></tr>
+<tr><td>Pain aux noix 500g</td><td>4,20 €</td></tr>
+<tr><td>Brioche feuilletée</td><td>3,90 €</td></tr>
+</table>
+
+<img src="/images/fournil.jpg" alt="Le fournil" width="480">
+<img src="/images/tourte-2019.JPG" width="480">
+<img src="/photos/equipe.png" alt="L'équipe">
+<img src="/images/devanture.webp" alt="La devanture rue des Capucins">
+<img src="/images/levain.jpg" alt="Le levain chef" width="320">
+
+<p>Le levain chef a été lancé par Georges Marchand en 1978 et n'a jamais été remplacé.</p>
+
+</div>
+
+<div id="footer">
+<p>Boulangerie Marchand &copy; 2026 &ndash; <a href="/mentions.html">Mentions légales</a></p>
+</div>
+
+</div>
+<script>
+$(document).ready(function(){
+  $('#nav a').each(function(){
+    if (this.href == window.location.href) { $(this).addClass('on'); }
+  });
+});
+</script>
+</body>
+</html>

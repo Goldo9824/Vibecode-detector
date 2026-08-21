@@ -1,0 +1,96 @@
+name: Wrong reading (false positive or false negative)
+description: The detector scored something wrongly. This is the most useful report there is.
+title: "[Reading] "
+labels: ["wrong reading", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the report that improves the tool most, so thank you.
+
+        A wrong reading is not embarrassing — the entire premise is that detection
+        near chance is what the research finds, and the value is in the evidence
+        being legible enough that you can tell when it is wrong.
+
+        **Please do not report someone else's site as "obviously AI" without
+        evidence.** Accusations are what this project exists to discourage.
+
+  - type: dropdown
+    id: direction
+    attributes:
+      label: Which way was it wrong?
+      options:
+        - Scored too high — this is hand-written and it said AI
+        - Scored too low — this is generated and it said human
+        - The score was reasonable but a specific signal fired incorrectly
+        - Inconclusive when the answer is clear-cut
+    validations:
+      required: true
+
+  - type: input
+    id: score
+    attributes:
+      label: What score did it give?
+      placeholder: "83%"
+    validations:
+      required: true
+
+  - type: input
+    id: subject
+    attributes:
+      label: What did you analyse?
+      description: >
+        A public URL, or a short description of the code. If it was code you cannot
+        share, say so — a description of the style is still useful.
+      placeholder: https://example.com/  —  or  "a 300-line Go HTTP handler"
+    validations:
+      required: true
+
+  - type: textarea
+    id: truth
+    attributes:
+      label: How do you know what the real answer is?
+      description: >
+        The strongest evidence is repository history. "I wrote it myself" is
+        perfectly good evidence too.
+      placeholder: |
+        I wrote this over about three weeks. The git history has 60-odd commits
+        and you can see me getting the pagination wrong twice.
+    validations:
+      required: true
+
+  - type: textarea
+    id: signals
+    attributes:
+      label: Which signals fired, and which are wrong?
+      description: >
+        Expand the signals on the results page and paste the list. Say which ones
+        you think are unfair and why. This is the part that turns into a fix.
+      placeholder: |
+        Fired:
+          - Comments explain what the code does, not why  (strong)
+          - Every function carries a docblock  (moderate)
+          - Formal, grammatically complete error messages  (moderate)
+
+        The docblock one is unfair — our house style requires a docblock on every
+        public method, it is in the linter config.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: sample
+    attributes:
+      label: A representative excerpt, if you can share one
+      description: Twenty or thirty lines is plenty. Redact anything sensitive.
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: This is my own code or a site I am entitled to discuss publicly.
+          required: true
+        - label: I am not asking for someone to be judged on this reading.
+          required: true

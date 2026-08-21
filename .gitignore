@@ -1,0 +1,23 @@
+# Runtime state. The signing key in particular must never be committed:
+# it is what makes a certificate from this installation verifiable.
+/data/secret.key
+/data/rate/
+
+# Local scratch
+*.log
+/tmp/
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*~
+
+# Nothing here uses Composer or npm, and adding them is a design change,
+# not a convenience. These entries exist so an accidental install is caught.
+/vendor/
+/node_modules/
+composer.lock
+package-lock.json

@@ -13,6 +13,7 @@ $checked = ($payload !== '' || $sig !== '');
 
 $subjectKinds = array(
     'url'  => 'live page',
+    'site' => 'whole site',
     'code' => 'pasted source file',
     'git'  => 'repository history',
 );

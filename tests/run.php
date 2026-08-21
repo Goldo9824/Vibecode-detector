@@ -15,6 +15,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__) . '/lib/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/Fetcher.php';
 require_once dirname(__DIR__) . '/lib/Certificate.php';
+require_once dirname(__DIR__) . '/lib/Crawler.php';
 
 $passed = 0;
 $failed = 0;
@@ -242,6 +243,293 @@ ok($r->has('cd.emoji_logging'), 'catches emoji in log output');
 ok($r->has('cd.defensive_chaining'), 'catches optional chaining on everything');
 ok($r->has('cd.over_symmetric_branches'), 'catches an else for every if');
 ok($r->has('st.file_header_block'), 'catches the explanatory file-header block');
+
+// ------------------------------------------------------------- whole site
+
+group('Whole-site survey');
+
+/**
+ * Build a set of pages without going near the network. The crawler's own
+ * fetching is covered separately; what matters here is what the survey makes of
+ * several pages once it has them.
+ *
+ * @return array<int,array<string,mixed>>
+ */
+function pageSet(array $bodies): array
+{
+    $out = array();
+    foreach ($bodies as $path => $body) {
+        $out[] = array('url' => 'https://example.com' . $path, 'body' => $body, 'assets' => array(), 'status' => 200);
+    }
+    return $out;
+}
+
+// One template, different words: the shape every page shares is the finding.
+$stamped = array();
+foreach (array('/', '/about', '/pricing', '/contact', '/features') as $i => $path) {
+    $stamped[$path] = '<!DOCTYPE html><html lang="en"><head><title>Page</title></head><body>'
+        . '<nav class="nav flex items-center"><a href="/">Home</a><a href="/about">About</a></nav>'
+        . '<section class="hero py-24 text-center"><h1 class="text-6xl font-bold">Heading ' . $i . '</h1></section>'
+        . '<section class="grid grid-cols-3 gap-8">'
+        . '<div class="rounded-2xl shadow-lg p-6"><h3>One</h3><p>' . str_repeat('word' . $i . ' ', 22) . '</p></div>'
+        . '<div class="rounded-2xl shadow-lg p-6"><h3>Two</h3><p>' . str_repeat('word' . $i . ' ', 22) . '</p></div>'
+        . '<div class="rounded-2xl shadow-lg p-6"><h3>Three</h3><p>' . str_repeat('word' . $i . ' ', 22) . '</p></div>'
+        . '</section><footer class="py-24"><p>&copy; 2026</p></footer></body></html>';
+}
+$r = (new SiteSurvey('https://example.com/', pageSet($stamped)))->analyze();
+$a = $r->toArray();
+
+ok($r->has('xs.template_uniformity'), 'catches five pages stamped from one template');
+ok($r->has('xs.uniform_page_size'), 'catches every page being the same weight');
+ok(!$r->has('xs.varied_pages'), 'does not also claim the pages vary');
+ok(isset($a['stats']['templateSimilarity']) && $a['stats']['templateSimilarity'] > 0.9,
+   'reports the structural similarity it measured',
+   (string) ($a['stats']['templateSimilarity'] ?? 'missing'));
+ok(count($a['stats']['perPage']) === 5, 'reports every page it read');
+between($a['score'], 56, 97, 'a stamped site scores above the line');
+
+// A site that grew: different eras, different shapes, one page with real writing.
+$grown = array(
+    '/' => '<!DOCTYPE html><html lang="en"><head><title>Home</title></head><body><div id="wrapper">'
+         . '<table><tr><td>Menu</td></tr></table><h1>Welcome</h1><p>' . str_repeat('sentence about the shop ', 30) . '</p>'
+         . '</div></body></html>',
+    '/history' => '<!DOCTYPE html><html lang="en"><head><title>History</title></head><body><article class="post">'
+         . '<h1>Our history</h1>' . str_repeat('<p>' . str_repeat('a genuinely long paragraph of real writing ', 20) . '</p>', 14)
+         . '</article></body></html>',
+    '/contact' => '<!DOCTYPE html><html lang="en"><head><title>Contact</title></head><body>'
+         . '<section class="contact"><h2>Contact</h2><p>14 rue des Capucins, 69001 Lyon. 04 78 28 41 03.</p></section></body></html>',
+    '/gallery' => '<!DOCTYPE html><html lang="en"><head><title>Gallery</title></head><body><ul class="gal">'
+         . str_repeat('<li><img src="/p.jpg" alt="a"></li>', 18) . '</ul></body></html>',
+);
+$r = (new SiteSurvey('https://example.com/', pageSet($grown)))->analyze();
+$a = $r->toArray();
+
+ok($r->has('xs.style_drift'), 'catches pages built in different eras');
+ok($r->has('xs.varied_pages'), 'catches pages that genuinely differ in shape');
+ok($r->has('xs.deep_content'), 'catches the page somebody actually wrote');
+ok(!$r->has('xs.template_uniformity'), 'does not call a grown site a template');
+between($a['score'], 3, 45, 'a grown site scores in the human band');
+
+// Corroboration: a signal on one page out of six is not a site property.
+$mixedPages = array();
+foreach (range(1, 6) as $i) {
+    $body = '<!DOCTYPE html><html lang="en"><head><title>P</title></head><body>'
+          . '<div class="a"><p>' . str_repeat('ordinary body copy here ', 30 + $i * 9) . '</p></div>';
+    if ($i === 1) {
+        $body .= '<p>Lorem ipsum dolor sit amet</p>'; // placeholder copy, one page only
+    }
+    $mixedPages['/p' . $i] = $body . '</body></html>';
+}
+$r = (new SiteSurvey('https://example.com/', pageSet($mixedPages)))->analyze();
+ok(!$r->has('ct.placeholder_copy'), 'a signal on one page in six is not counted site-wide');
+
+$allPages = array();
+foreach (range(1, 6) as $i) {
+    $allPages['/q' . $i] = '<!DOCTYPE html><html lang="en"><head><title>P</title></head><body>'
+        . '<div class="a"><p>Lorem ipsum dolor sit amet, ' . str_repeat('filler ', 30 + $i * 9) . '</p></div></body></html>';
+}
+$r = (new SiteSurvey('https://example.com/', pageSet($allPages)))->analyze();
+ok($r->has('ct.placeholder_copy'), 'the same signal on every page is counted');
+$ev = '';
+foreach ($r->signals() as $s) {
+    if ($s->id === 'ct.placeholder_copy') $ev = implode(' ', $s->evidence);
+}
+ok(strpos($ev, 'of 6 pages') !== false, 'and says how many pages carried it', $ev);
+
+// A fingerprint only has to be true once.
+$onePrint = array(
+    '/'  => '<!DOCTYPE html><html><head><title>a</title></head><body><p>' . str_repeat('x ', 60) . '</p></body></html>',
+    '/b' => '<!DOCTYPE html><html><head><title>b</title></head><body><p>' . str_repeat('y ', 60) . '</p></body></html>',
+    '/c' => '<!DOCTYPE html><html><head><title>c</title></head><body><script src="https://cdn.gpteng.co/gptengineer.js"></script></body></html>',
+    '/d' => '<!DOCTYPE html><html><head><title>d</title></head><body><p>' . str_repeat('z ', 60) . '</p></body></html>',
+);
+$r = (new SiteSurvey('https://example.com/', pageSet($onePrint)))->analyze();
+ok($r->hasFingerprint(), 'a fingerprint on a single page still identifies the site');
+ok($r->toArray()['verdict']['code'] === 'builder_identified', 'and carries the verdict');
+
+// A one-page crawl degrades to the single-page reading rather than inventing.
+$single = (new SiteSurvey('https://example.com/', pageSet(array('/' => $stamped['/']))))->analyze();
+ok(!$single->has('xs.template_uniformity'), 'one page cannot support a site-wide comparison');
+ok(!$single->has('xs.uniform_page_size'), 'nor a size comparison');
+
+// ------------------------------------------------------- crawler mechanics
+
+group('Crawler mechanics');
+
+$c = new Crawler();
+$abs = new ReflectionMethod('Crawler', 'absolute');
+$abs->setAccessible(true);
+$canon = new ReflectionMethod('Crawler', 'canonical');
+$canon->setAccessible(true);
+$links = new ReflectionMethod('Crawler', 'linksFrom');
+$links->setAccessible(true);
+
+ok($abs->invoke($c, '/about', 'https://example.com/x/y') === 'https://example.com/about', 'root-relative links resolve');
+ok($abs->invoke($c, 'b.html', 'https://example.com/x/y.html') === 'https://example.com/x/b.html', 'document-relative links resolve');
+ok($abs->invoke($c, '../up', 'https://example.com/x/y/z.html') === 'https://example.com/x/up', 'parent traversal resolves');
+ok($abs->invoke($c, 'https://example.com/p#frag', 'https://example.com/') === 'https://example.com/p', 'fragments are stripped');
+ok($abs->invoke($c, '#top', 'https://example.com/') === null, 'a bare fragment is not a page');
+ok($abs->invoke($c, 'javascript:void(0)', 'https://example.com/') === null, 'javascript hrefs are refused');
+ok($abs->invoke($c, 'mailto:a@b.c', 'https://example.com/') === null, 'mailto is refused');
+
+ok($canon->invoke($c, 'https://example.com/a/') === $canon->invoke($c, 'https://example.com/a'),
+   'a trailing slash is the same page');
+ok($canon->invoke($c, 'https://example.com/index.html') === $canon->invoke($c, 'https://example.com/'),
+   'index.html is the same page as the root');
+ok($canon->invoke($c, 'https://EXAMPLE.com/A') === $canon->invoke($c, 'https://example.com/A'),
+   'the host is case-insensitive');
+
+$html = '<a href="/ok">a</a><a href="/img.png">b</a><a href="/doc.pdf">c</a>'
+      . '<a href="https://elsewhere.example/x">d</a><a href="/logout">e</a><a href="/fine/page">f</a>';
+$found = $links->invoke($c, $html, 'https://example.com/', 'https://example.com');
+ok(in_array('https://example.com/ok', $found, true), 'follows an ordinary link');
+ok(in_array('https://example.com/fine/page', $found, true), 'follows a nested link');
+ok(!in_array('https://example.com/img.png', $found, true), 'skips images');
+ok(!in_array('https://example.com/doc.pdf', $found, true), 'skips documents that are not pages');
+ok(!in_array('https://elsewhere.example/x', $found, true), 'never leaves the origin');
+ok(!in_array('https://example.com/logout', $found, true), 'does not click things that do things');
+
+// robots.txt is parsed for the wildcard group and ours, and obeyed.
+$robots = new ReflectionMethod('Crawler', 'allowedByRobots');
+$robots->setAccessible(true);
+$disallow = new ReflectionProperty('Crawler', 'disallow');
+$disallow->setAccessible(true);
+$disallow->setValue($c, array('/private', '/admin'));
+
+ok($robots->invoke($c, 'https://example.com/public', 'https://example.com') === true, 'allowed paths are crawled');
+ok($robots->invoke($c, 'https://example.com/private/x', 'https://example.com') === false, 'disallowed prefixes are obeyed');
+ok($robots->invoke($c, 'https://example.com/admin', 'https://example.com') === false, 'an exact disallow is obeyed');
+
+ok(Crawler::MAX_PAGES <= 10, 'the page ceiling stays polite', (string) Crawler::MAX_PAGES);
+ok(Crawler::BUDGET_SECONDS < 30, 'the crawl finishes inside a shared-hosting request',
+   (string) Crawler::BUDGET_SECONDS);
+
+// ------------------------------------------------------- crawl, end to end
+
+group('Crawling a whole site');
+
+/**
+ * A site in memory.
+ *
+ * The guard correctly refuses to fetch localhost, so a real server cannot be
+ * used here — which is the guard working, not a gap. This substitutes the two
+ * fetch methods and leaves every check in place for production.
+ */
+class StubFetcher extends Fetcher
+{
+    /** @var array<string,string> */
+    public $site;
+    /** @var int */
+    public $calls = 0;
+
+    public function __construct(array $site)
+    {
+        $this->site = $site;
+    }
+
+    public function fetchSite(string $url): array
+    {
+        $doc = $this->fetchDocument($url);
+        $doc['assets'] = array();
+        return $doc;
+    }
+
+    public function fetchDocument(string $url, int $maxBytes = 0, int $timeout = 0): array
+    {
+        $this->calls++;
+        $path = (string) parse_url($url, PHP_URL_PATH);
+        if ($path === '') {
+            $path = '/';
+        }
+        if (!isset($this->site[$path])) {
+            throw new FetchError('404 ' . $path);
+        }
+        return array(
+            'url' => $url, 'body' => $this->site[$path], 'status' => 200,
+            'contentType' => 'text/html', 'assets' => array(),
+        );
+    }
+}
+
+function stubPage(string $name, string $extra = ''): string
+{
+    return '<!DOCTYPE html><html lang="en"><head><title>' . $name . '</title></head><body>'
+        . '<nav><a href="/">Home</a><a href="/about">About</a><a href="/pricing">Pricing</a>'
+        . '<a href="/contact">Contact</a><a href="/secret">Secret</a><a href="/about">About again</a>'
+        . '<a href="https://elsewhere.example/away">Away</a></nav>'
+        . '<main><h1>' . $name . '</h1><p>' . str_repeat($name . ' filler ', 40) . '</p></main>'
+        . $extra . '</body></html>';
+}
+
+$site = array(
+    '/robots.txt' => "User-agent: *\nDisallow: /secret\n",
+    '/'           => stubPage('home'),
+    '/about'      => stubPage('about'),
+    '/pricing'    => stubPage('pricing'),
+    '/contact'    => stubPage('contact'),
+    '/secret'     => stubPage('secret'),
+);
+
+$stub = new StubFetcher($site);
+$crawler = new Crawler($stub);
+$started = microtime(true);
+$pages = $crawler->crawl('https://example.com/');
+$took = microtime(true) - $started;
+
+ok(count($pages) === 4, 'reads every linked page it is allowed to', count($pages) . ' pages');
+$urls = array();
+foreach ($pages as $p) {
+    $urls[] = (string) parse_url($p['url'], PHP_URL_PATH);
+}
+sort($urls);
+ok($urls === array('/', '/about', '/contact', '/pricing'), 'and exactly those', implode(' ', $urls));
+ok(!in_array('/secret', $urls, true), 'robots.txt Disallow is obeyed against a live crawl');
+ok(strpos(implode(' ', $crawler->notes()), 'robots.txt') !== false, 'and the report says a page was skipped');
+ok($took < 5.0, 'a small site crawls quickly', sprintf('%.2fs', $took));
+
+// Repeated links must not turn into repeated fetches.
+ok($stub->calls <= 6, 'each page is fetched once, plus robots.txt', $stub->calls . ' fetches');
+
+// The page ceiling holds on a site with more pages than the limit.
+$big = array('/robots.txt' => "User-agent: *\n");
+$links = '';
+for ($i = 1; $i <= 30; $i++) {
+    $links .= '<a href="/p' . $i . '">p' . $i . '</a>';
+}
+$big['/'] = '<!DOCTYPE html><html lang="en"><head><title>i</title></head><body>' . $links . '</body></html>';
+for ($i = 1; $i <= 30; $i++) {
+    $big['/p' . $i] = stubPage('p' . $i);
+}
+$capped = new Crawler(new StubFetcher($big));
+$got = $capped->crawl('https://example.com/');
+ok(count($got) === Crawler::MAX_PAGES, 'never reads more pages than the ceiling', count($got) . ' pages');
+
+// A site with no links still yields the entry page and says why.
+$lonely = new Crawler(new StubFetcher(array(
+    '/robots.txt' => "User-agent: *\n",
+    '/' => '<!DOCTYPE html><html lang="en"><head><title>x</title></head><body><p>alone</p></body></html>',
+)));
+$one = $lonely->crawl('https://example.com/');
+ok(count($one) === 1, 'a site with no links yields just the entry page');
+ok(strpos(implode(' ', $lonely->notes()), 'Only one page') !== false, 'and explains what that means');
+
+// A dead link mid-crawl must not abort the whole thing.
+$broken = array(
+    '/robots.txt' => "User-agent: *\n",
+    '/' => '<!DOCTYPE html><html lang="en"><head><title>i</title></head><body>'
+         . '<a href="/gone">gone</a><a href="/here">here</a></body></html>',
+    '/here' => stubPage('here'),
+);
+$resilient = new Crawler(new StubFetcher($broken));
+$survived = $resilient->crawl('https://example.com/');
+ok(count($survived) === 2, 'a broken link is skipped rather than fatal', count($survived) . ' pages');
+
+// And the whole path, crawl through survey, produces a scored report.
+$full = (new SiteSurvey('https://example.com/', $pages, $crawler->notes()))->analyze()->toArray();
+ok($full['mode'] === 'site', 'the survey reports site mode');
+ok($full['stats']['pages'] === 4, 'and how many pages it read');
+ok(count($full['stats']['perPage']) === 4, 'with a per-page breakdown for the UI');
+ok(isset($full['score']) && $full['score'] >= 3 && $full['score'] <= 97, 'and a bounded score');
 
 // ------------------------------------------------------------ git history
 

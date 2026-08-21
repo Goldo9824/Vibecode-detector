@@ -115,6 +115,7 @@
     var body = new FormData();
     body.append('mode', 'url');
     body.append('url', value);
+    if ($('crawl').checked) body.append('crawl', '1');
     send(this, $('spin-url'), body);
   });
 
@@ -187,10 +188,12 @@
     $('r-confidence').textContent = 'Confidence: ' + data.confidence.label;
 
     var counts = data.counts.converging + ' converging signal' + (data.counts.converging === 1 ? '' : 's');
+    if (data.stats && data.stats.pages > 1) counts = data.stats.pages + ' pages · ' + counts;
     if (data.counts.human) counts += ' · ' + data.counts.human + ' pointing the other way';
     $('r-counts').textContent = counts;
 
     renderSignals(data.signals);
+    renderPages(data);
     renderNotes(data);
 
     var cert = $('r-cert');
@@ -238,6 +241,32 @@
       wrap.appendChild(body);
       host.appendChild(wrap);
     });
+  }
+
+  function renderPages(data) {
+    var host = $('r-pages');
+    var list = $('r-pages-list');
+    var pages = (data.stats && data.stats.perPage) || [];
+
+    list.textContent = '';
+    if (pages.length < 2) {
+      host.hidden = true;
+      return;
+    }
+
+    pages.forEach(function (p) {
+      var li = el('li');
+      var path = p.url;
+      try { path = new URL(p.url).pathname || '/'; } catch (e) { /* keep the full url */ }
+
+      li.appendChild(el('span', 'page-path', path));
+      li.appendChild(el('span', 'page-words', p.words + ' words'));
+
+      var score = el('span', 'page-score ' + band(p.score), p.score + '%');
+      li.appendChild(score);
+      list.appendChild(li);
+    });
+    host.hidden = false;
   }
 
   function renderNotes(data) {

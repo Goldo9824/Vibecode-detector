@@ -21,6 +21,7 @@ require_once __DIR__ . '/Text.php';
 require_once __DIR__ . '/CodeAnalyzer.php';
 require_once __DIR__ . '/SiteAnalyzer.php';
 require_once __DIR__ . '/GitAnalyzer.php';
+require_once __DIR__ . '/SiteSurvey.php';
 
 /**
  * The public base URL of this installation.

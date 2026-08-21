@@ -64,11 +64,15 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
         <form id="form-url" novalidate>
           <label class="field" for="url">Address of the page to read</label>
           <input type="url" id="url" name="url" placeholder="example.com" autocomplete="url" spellcheck="false">
+          <label class="check" for="crawl">
+            <input type="checkbox" id="crawl" name="crawl" value="1">
+            <span><strong>Read the whole site</strong> &mdash; follows links from this page and reads up to ten of them, then compares them against each other. Takes longer, and finds things one page cannot.</span>
+          </label>
           <div class="actions">
             <button class="btn" type="submit">Analyse page</button>
             <span class="spinner" id="spin-url" hidden>reading&hellip;</span>
           </div>
-          <p class="hint">Fetches the page and up to four of its own stylesheets and scripts. Nothing else is requested, nothing is stored.</p>
+          <p class="hint">Fetches the page and up to four of its own stylesheets and scripts. Nothing else is requested, nothing is stored. Whole-site reads honour robots.txt and stop after ten pages.</p>
         </form>
       </div>
 
@@ -123,6 +127,11 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
         <div class="evidence">
           <h3>What it found</h3>
           <div id="r-signals"></div>
+        </div>
+
+        <div class="pages" id="r-pages" hidden>
+          <p class="eyebrow">Pages read</p>
+          <ol id="r-pages-list"></ol>
         </div>
 
         <div class="notes">

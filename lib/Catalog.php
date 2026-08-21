@@ -17,6 +17,7 @@ final class Catalog
 {
     const CAT_FINGERPRINT = 'fingerprint';
     const CAT_HISTORY     = 'history';
+    const CAT_SITEWIDE    = 'sitewide';
     const CAT_STRUCTURE   = 'structure';
     const CAT_CODE        = 'code';
     const CAT_CONTENT     = 'content';
@@ -33,6 +34,7 @@ final class Catalog
         return array(
             self::CAT_FINGERPRINT => 'Platform fingerprint',
             self::CAT_HISTORY     => 'Repository history',
+            self::CAT_SITEWIDE    => 'Site-wide',
             self::CAT_STRUCTURE   => 'Structural',
             self::CAT_CODE        => 'Code style',
             self::CAT_CONTENT     => 'Content',
@@ -80,6 +82,7 @@ final class Catalog
 
         $f = self::CAT_FINGERPRINT;
         $g = self::CAT_HISTORY;
+        $w = self::CAT_SITEWIDE;
         $s = self::CAT_STRUCTURE;
         $c = self::CAT_CODE;
         $t = self::CAT_CONTENT;
@@ -139,6 +142,24 @@ final class Catalog
                 'Issue numbers and ticket keys in the subjects, linking the code to a conversation happening somewhere else.'),
             'gh.human_mess' => self::mk($g, $hu, 0.7, 'Visible frustration in the log',
                 '"oops", "actually fix it this time", "why". The residue of a person losing an argument with their own code.'),
+
+            // ---- Site-wide ---------------------------------------------------
+            // Only available when more than one page has been read. A single
+            // page cannot tell you whether a site was built or accreted; ten
+            // pages usually can.
+            'xs.template_uniformity' => self::mk($w, $ai, 1.2, 'Every page is one template with the words swapped',
+                'The same structure, the same class fingerprints and the same section order across the whole site. Generated sites are stamped from one mould; sites that grew have pages that remember when they were made.'),
+            'xs.placeholder_pages' => self::mk($w, $ai, 0.9, 'Pages built and linked but never filled',
+                'Routes that exist, appear in the navigation, and carry almost nothing. The scaffolding was generated along with everything else and nobody came back to write the content.'),
+            'xs.uniform_page_size' => self::mk($w, $ai, 0.7, 'Every page is the same weight',
+                'Pages within a few percent of each other in size and element count. Real sites are lumpy because real content is lumpy: an About page is not the same length as a pricing table.'),
+
+            'xs.style_drift' => self::mk($w, $hu, 1.0, 'Pages from different eras',
+                'One page on an older stack, another rebuilt more recently; inconsistent markup conventions between sections. Drift like this is what accretion looks like, and it is expensive to fake.'),
+            'xs.varied_pages' => self::mk($w, $hu, 0.8, 'Pages genuinely differ in shape',
+                'Substantial variation in length, structure and density from one page to the next, in the way that follows from pages having different jobs.'),
+            'xs.deep_content' => self::mk($w, $hu, 0.7, 'Somebody wrote a lot of this',
+                'At least one page carrying substantially more prose than the rest — an article, a manual, a history. Volume of specific writing is the least automatable thing on a website.'),
 
             // ---- Structural ------------------------------------------------
             'st.section_comments' => self::mk($s, $ai, 1.1, 'Navigational section comments survive in production',

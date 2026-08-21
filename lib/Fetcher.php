@@ -19,7 +19,16 @@ final class FetchError extends Exception
  * followed by hand with the same check applied at each hop, and a hard cap on
  * both size and time.
  */
-final class Fetcher
+/**
+ * Not final, only so the crawler tests can substitute a double.
+ *
+ * The guard cannot be tested end to end against a real server, because it
+ * correctly refuses to fetch localhost — which is the point of it. Overriding
+ * the two public fetch methods in a test lets the crawl loop, the budget, the
+ * robots handling and the deduplication be exercised without any of that
+ * touching the network or relaxing a single check in production.
+ */
+class Fetcher
 {
     const UA = 'VibeCodeDetector/1.0 (+https://vibecodedetector.fanficnow.com; page analysis on user request)';
     const MAX_BYTES = 3145728;   // 3 MB
@@ -50,6 +59,21 @@ final class Fetcher
 
         $doc['assets'] = $this->fetchAssets($doc['url'], $doc['body']);
         return $doc;
+    }
+
+    /**
+     * One document, without its assets.
+     *
+     * Used by the crawler for pages after the first: the entry page has already
+     * paid for the stylesheet and the bundle, and refetching them for every
+     * inner page would spend the whole budget on files that barely differ.
+     *
+     * @return array{url:string,body:string,status:int,contentType:string,assets:array<string,string>}
+     * @throws FetchError
+     */
+    public function fetchDocument(string $url, int $maxBytes = self::MAX_BYTES, int $timeout = self::TIMEOUT): array
+    {
+        return $this->get($this->normalize($url), $maxBytes, $timeout);
     }
 
     /** @return array<string,string> */

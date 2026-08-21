@@ -10,12 +10,13 @@ weight of each signal found, positive for AI, negative for human. The total goes
 a logistic curve to become the percentage. As a rough guide, a weight of 0.7 doubles the
 odds; 4.5 ends the argument.
 
-There are **78 signals** across 8 categories.
+There are **84 signals** across 9 categories.
 
 | Category | Signals | Direction |
 |---|---|---|
 | [Platform fingerprint](#platform-fingerprint) | 7 | raises the score |
 | [Repository history](#repository-history) | 11 | raises the score |
+| [Site-wide](#site-wide) | 6 | raises the score |
 | [Structural](#structural) | 9 | raises the score |
 | [Code style](#code-style) | 17 | raises the score |
 | [Content](#content) | 7 | raises the score |
@@ -141,6 +142,47 @@ Work that went in, came out again, or arrived from a branch. Evidence of a proce
 `gh.generic_messages` · weight **0.6** (moderate)
 
 "update", "changes", "fix", "wip" over and over, carrying no information about what happened.
+
+
+## Site-wide
+
+What only becomes visible once several pages have been read together. A single page cannot tell you whether a site was built in one pass or accreted over years; ten pages usually can. Available in whole-site mode.
+
+### Every page is one template with the words swapped
+
+`xs.template_uniformity` · weight **1.2** (strong)
+
+The same structure, the same class fingerprints and the same section order across the whole site. Generated sites are stamped from one mould; sites that grew have pages that remember when they were made.
+
+### Pages from different eras
+
+`xs.style_drift` · weight **1** (strong)
+
+One page on an older stack, another rebuilt more recently; inconsistent markup conventions between sections. Drift like this is what accretion looks like, and it is expensive to fake.
+
+### Pages built and linked but never filled
+
+`xs.placeholder_pages` · weight **0.9** (moderate)
+
+Routes that exist, appear in the navigation, and carry almost nothing. The scaffolding was generated along with everything else and nobody came back to write the content.
+
+### Pages genuinely differ in shape
+
+`xs.varied_pages` · weight **0.8** (moderate)
+
+Substantial variation in length, structure and density from one page to the next, in the way that follows from pages having different jobs.
+
+### Somebody wrote a lot of this
+
+`xs.deep_content` · weight **0.7** (moderate)
+
+At least one page carrying substantially more prose than the rest — an article, a manual, a history. Volume of specific writing is the least automatable thing on a website.
+
+### Every page is the same weight
+
+`xs.uniform_page_size` · weight **0.7** (moderate)
+
+Pages within a few percent of each other in size and element count. Real sites are lumpy because real content is lumpy: an About page is not the same length as a pricing table.
 
 
 ## Structural

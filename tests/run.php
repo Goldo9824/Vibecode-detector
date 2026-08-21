@@ -879,6 +879,44 @@ $onDisk = (string) file_get_contents(dirname(__DIR__) . '/assets/img/logo.svg');
 ok(strpos($onDisk, Brand::markSvg(120, 'currentColor', '#b8402e', 'role="img" aria-label="Vibe Code Detector"')) !== false,
    'assets/img/logo.svg matches lib/Brand.php (run tools/build-assets.php)');
 
+// ---------------------------------------------------------- public base url
+
+group('Where the app thinks it lives');
+
+// This shipped wrong. The base path was derived by subtracting DOCUMENT_ROOT
+// from the app directory, which assumes the two differ only by the URL
+// subdirectory. On the live host the app sits in a folder named after its own
+// domain while DOCUMENT_ROOT reports the parent, so the domain name became a
+// path segment and every certificate said example.com/example.com/verify.
+
+// Served from a domain root, app directory named after the domain.
+ok(vcd_url_base('/index.php', 0) === '', 'a domain root gives no path at all',
+   vcd_url_base('/index.php', 0));
+ok(vcd_url_base('/api/certificate.php', 1) === '', 'nor does a script one level down',
+   vcd_url_base('/api/certificate.php', 1));
+ok(vcd_url_base('/verify.php', 0) === '', 'nor the verify page');
+
+// Served from a subdirectory.
+ok(vcd_url_base('/tools/vcd/index.php', 0) === '/tools/vcd', 'a subdirectory install keeps its prefix',
+   vcd_url_base('/tools/vcd/index.php', 0));
+ok(vcd_url_base('/tools/vcd/api/certificate.php', 1) === '/tools/vcd',
+   'and the prefix is the same from one level down',
+   vcd_url_base('/tools/vcd/api/certificate.php', 1));
+
+// Degenerate inputs must not invent segments.
+ok(vcd_url_base('/', 0) === '', 'a bare slash gives nothing');
+ok(vcd_url_base('/api/certificate.php', 5) === '', 'an over-deep script cannot go negative');
+ok(vcd_url_base('/a/b/c/d.php', 2) === '/a', 'levels are stripped from the end');
+
+// The whole point: the domain must never appear twice.
+$base = vcd_url_base('/api/certificate.php', 1);
+ok(strpos('vibecodedetector.fanficnow.com' . $base, 'fanficnow.com/vibecodedetector') === false,
+   'the host cannot end up doubled in a certificate URL',
+   'vibecodedetector.fanficnow.com' . $base);
+
+// Depth is measured against this project's own layout, which is knowable.
+ok(vcd_script_depth() >= 0, 'script depth is never negative');
+
 // ------------------------------------------------------- bounded scanning
 
 group('Bounded scanning');

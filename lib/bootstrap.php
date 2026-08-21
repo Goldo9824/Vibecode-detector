@@ -50,16 +50,65 @@ function vcd_site_url(): string
     $https = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
         || (isset($_SERVER['SERVER_PORT']) && (int) $_SERVER['SERVER_PORT'] === 443);
 
-    // Works when the app lives in a subdirectory as well as at the domain root.
-    $path = '';
-    $docRoot = isset($_SERVER['DOCUMENT_ROOT']) ? realpath((string) $_SERVER['DOCUMENT_ROOT']) : false;
-    $appRoot = realpath(VCD_ROOT);
-    if ($docRoot !== false && $appRoot !== false && strpos($appRoot, $docRoot) === 0) {
-        $path = str_replace('\\', '/', substr($appRoot, strlen($docRoot)));
-        $path = rtrim('/' . trim($path, '/'), '/');
-    }
+    $scriptName = isset($_SERVER['SCRIPT_NAME']) ? (string) $_SERVER['SCRIPT_NAME'] : '';
+    $path = $scriptName === '' ? '' : vcd_url_base($scriptName, vcd_script_depth());
 
     return $cached = ($https ? 'https://' : 'http://') . $host . $path;
+}
+
+/**
+ * How many directory levels below the app root the running script sits.
+ *
+ * api/certificate.php is one; index.php is zero. This is a filesystem fact
+ * about the project's own layout, which is knowable and stable, unlike where
+ * the host has decided to put its document root.
+ */
+function vcd_script_depth(): int
+{
+    $script = isset($_SERVER['SCRIPT_FILENAME']) ? realpath((string) $_SERVER['SCRIPT_FILENAME']) : false;
+    $appRoot = realpath(VCD_ROOT);
+    if ($script === false || $appRoot === false) {
+        return 0;
+    }
+
+    $dir  = rtrim(str_replace('\\', '/', dirname($script)), '/');
+    $root = rtrim(str_replace('\\', '/', $appRoot), '/');
+    if ($dir === $root) {
+        return 0;
+    }
+    if (strpos($dir, $root . '/') !== 0) {
+        return 0;
+    }
+
+    $relative = trim(substr($dir, strlen($root)), '/');
+    return $relative === '' ? 0 : substr_count($relative, '/') + 1;
+}
+
+/**
+ * The URL directory the app is mounted at.
+ *
+ * Derived from the request path rather than from DOCUMENT_ROOT, because the
+ * two are not related in the way the earlier version assumed. On this host the
+ * app lives in a directory named after its own domain while DOCUMENT_ROOT
+ * reports the parent, so subtracting one from the other produced a path
+ * segment out of the domain name and every certificate went out saying
+ * "example.com/example.com/verify".
+ *
+ * SCRIPT_NAME is the URL the request actually arrived on, so it cannot
+ * disagree with reality. Strip the levels the script sits below the app root
+ * and what remains is where the app is mounted: nothing at a domain root,
+ * "/tools/vcd" for a subdirectory install.
+ */
+function vcd_url_base(string $scriptName, int $depth): string
+{
+    $dir = str_replace('\\', '/', dirname($scriptName));
+    $segments = array_values(array_filter(explode('/', $dir), 'strlen'));
+
+    if ($depth > 0) {
+        $segments = array_slice($segments, 0, max(0, count($segments) - $depth));
+    }
+
+    return $segments ? '/' . implode('/', $segments) : '';
 }
 
 /**

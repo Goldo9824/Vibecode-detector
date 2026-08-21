@@ -879,6 +879,47 @@ $onDisk = (string) file_get_contents(dirname(__DIR__) . '/assets/img/logo.svg');
 ok(strpos($onDisk, Brand::markSvg(120, 'currentColor', '#b8402e', 'role="img" aria-label="Vibe Code Detector"')) !== false,
    'assets/img/logo.svg matches lib/Brand.php (run tools/build-assets.php)');
 
+// ------------------------------------------------------------ rate budgets
+
+group('Request budgets');
+
+ok(VCD_LIMIT_CRAWL === array(10, 180), 'whole-site reads are ten every three minutes',
+   implode('/', VCD_LIMIT_CRAWL));
+
+// A crawl spends from the url bucket too, so url must be roomy enough that it
+// never becomes the real crawl limit. At 20/600 it was: ten crawls every three
+// minutes is about thirty-three per ten, and the url bucket would have stopped
+// them at twenty while blaming the wrong thing.
+$crawlsPerUrlWindow = (int) ceil(VCD_LIMIT_CRAWL[0] / VCD_LIMIT_CRAWL[1] * VCD_LIMIT_URL[1]);
+ok(VCD_LIMIT_URL[0] >= $crawlsPerUrlWindow,
+   'the url bucket cannot become the binding constraint on crawls',
+   sprintf('url allows %d per %ds, crawls need %d', VCD_LIMIT_URL[0], VCD_LIMIT_URL[1], $crawlsPerUrlWindow));
+
+foreach (array('VCD_LIMIT_URL' => VCD_LIMIT_URL, 'VCD_LIMIT_CRAWL' => VCD_LIMIT_CRAWL,
+               'VCD_LIMIT_CODE' => VCD_LIMIT_CODE, 'VCD_LIMIT_GIT' => VCD_LIMIT_GIT) as $name => $budget) {
+    ok(count($budget) === 2 && $budget[0] > 0 && $budget[1] > 0, $name . ' is a sane budget');
+}
+
+// And the throttle itself has to actually enforce a limit, not just hold one.
+$bucket = 'test' . bin2hex(random_bytes(4));
+$allowed = 0;
+for ($i = 0; $i < 8; $i++) {
+    if (vcd_rate_limit($bucket, 5, 600)) {
+        $allowed++;
+    }
+}
+$writable = is_dir(VCD_DATA . '/rate') && is_writable(VCD_DATA . '/rate');
+if ($writable) {
+    ok($allowed === 5, 'the throttle allows exactly its limit then stops', $allowed . ' of 8 allowed');
+    foreach ((array) glob(VCD_DATA . '/rate/' . $bucket . '-*.txt') as $tmp) {
+        @unlink($tmp);
+    }
+} else {
+    // Documented behaviour: an unwritable data directory fails open rather
+    // than taking the site down.
+    ok($allowed === 8, 'an unwritable data directory fails open', $allowed . ' of 8 allowed');
+}
+
 // ---------------------------------------------------------- public base url
 
 group('Where the app thinks it lives');

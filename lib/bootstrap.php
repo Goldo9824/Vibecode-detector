@@ -15,6 +15,20 @@ define('VCD_DATA', VCD_ROOT . '/data');
 define('VCD_SITE_URL', 'https://vibecodedetector.fanficnow.com');
 define('VCD_REPO_URL', 'https://github.com/goldo9824/vibecode-detector');
 
+/**
+ * Per-IP request budgets, as [requests, window in seconds].
+ *
+ * Named rather than written inline at the call sites because they are coupled:
+ * a crawl spends from the url bucket as well as its own, so url has to be
+ * roomy enough that it never becomes the real crawl limit. VCD_LIMIT_URL is
+ * sized against VCD_LIMIT_CRAWL for exactly that reason, and a test asserts
+ * the relationship still holds.
+ */
+define('VCD_LIMIT_URL',   array(40, 600));
+define('VCD_LIMIT_CRAWL', array(10, 180));
+define('VCD_LIMIT_CODE',  array(60, 600));
+define('VCD_LIMIT_GIT',   array(60, 600));
+
 require_once __DIR__ . '/Catalog.php';
 require_once __DIR__ . '/Report.php';
 require_once __DIR__ . '/Text.php';

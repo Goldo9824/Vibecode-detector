@@ -17,16 +17,17 @@ $mode = isset($_POST['mode']) ? (string) $_POST['mode'] : '';
 if ($mode === 'url') {
     $crawl = !empty($_POST['crawl']);
 
-    // A crawl is up to fifty times the work of a visit, so it gets its own,
-    // much tighter budget. Both buckets are checked for a crawl: it is still a
-    // page fetch, and it should not be a way around the page limit. Three per
-    // ten minutes keeps the load one user can put on somebody else's server in
-    // roughly the same place it was when a crawl meant ten pages.
-    if (!vcd_rate_limit('url', 20, 600)) {
+    // A crawl spends from both buckets: it is still a page fetch, and its own
+    // budget should not be a way around the page limit. VCD_LIMIT_URL is sized
+    // so that it never becomes the binding constraint on the crawl rate.
+    if (!vcd_rate_limit('url', VCD_LIMIT_URL[0], VCD_LIMIT_URL[1])) {
         vcd_fail('That is a lot of pages in ten minutes. Give it a moment.', 429);
     }
-    if ($crawl && !vcd_rate_limit('crawl', 3, 600)) {
-        vcd_fail('Whole-site reads are limited to three every ten minutes, because they cost the site being read as well as this one.', 429);
+    if ($crawl && !vcd_rate_limit('crawl', VCD_LIMIT_CRAWL[0], VCD_LIMIT_CRAWL[1])) {
+        vcd_fail(sprintf(
+            'Whole-site reads are limited to %d every %d minutes, because they cost the site being read as well as this one.',
+            VCD_LIMIT_CRAWL[0], (int) round(VCD_LIMIT_CRAWL[1] / 60)
+        ), 429);
     }
 
     $url = isset($_POST['url']) ? (string) $_POST['url'] : '';
@@ -58,7 +59,7 @@ if ($mode === 'url') {
     }
 
 } elseif ($mode === 'code') {
-    if (!vcd_rate_limit('code', 60, 600)) {
+    if (!vcd_rate_limit('code', VCD_LIMIT_CODE[0], VCD_LIMIT_CODE[1])) {
         vcd_fail('Slow down a little.', 429);
     }
 
@@ -81,7 +82,7 @@ if ($mode === 'url') {
     $result = $analyzer->analyze()->toArray();
 
 } elseif ($mode === 'git') {
-    if (!vcd_rate_limit('git', 60, 600)) {
+    if (!vcd_rate_limit('git', VCD_LIMIT_GIT[0], VCD_LIMIT_GIT[1])) {
         vcd_fail('Slow down a little.', 429);
     }
 

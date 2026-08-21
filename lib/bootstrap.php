@@ -29,6 +29,24 @@ define('VCD_LIMIT_CRAWL', array(10, 180));
 define('VCD_LIMIT_CODE',  array(60, 600));
 define('VCD_LIMIT_GIT',   array(60, 600));
 
+/**
+ * Global cap on url-mode fetches in flight at once, across every visitor.
+ *
+ * vcd_rate_limit() bounds one IP's own use of the tool; it does nothing
+ * against a flood of slow requests spread across many different addresses,
+ * each comfortably under its own limit, arriving at the same time. On shared
+ * hosting the scarce resource is the worker pool itself — a handful of
+ * PHP-FPM children — and a url-mode fetch that blocks on a slow or
+ * unresponsive site for several seconds holds one of them hostage. This is
+ * sized well under a typical shared-hosting worker count, so a saturated
+ * fetch queue fails a request with a plain "try again" rather than the whole
+ * site, code and git tabs included, going unresponsive with it.
+ */
+define('VCD_MAX_CONCURRENT_FETCHES', 8);
+
+/** How long a slot is honoured for before it is treated as abandoned. */
+define('VCD_SLOT_TTL', 40);
+
 require_once __DIR__ . '/Catalog.php';
 require_once __DIR__ . '/Report.php';
 require_once __DIR__ . '/Text.php';
@@ -320,4 +338,104 @@ function vcd_rate_limit(string $bucket, int $limit, int $windowSeconds): bool
     }
 
     return $allowed;
+}
+
+/**
+ * Claim one slot in the global fetch concurrency cap, or refuse.
+ *
+ * Returns a token to hand back to vcd_release_fetch_slot(), an empty string
+ * if the data directory would not cooperate (fails open, same as
+ * vcd_rate_limit()), or null if the cap is already full.
+ *
+ * Entries older than VCD_SLOT_TTL are dropped before counting, so a slot
+ * whose request died without releasing it — a killed worker, a fatal error
+ * outside any shutdown handler — cannot wedge the cap shut permanently.
+ */
+function vcd_acquire_fetch_slot(): ?string
+{
+    if (!is_dir(VCD_DATA) && !@mkdir(VCD_DATA, 0755, true)) {
+        return '';
+    }
+    $file = VCD_DATA . '/inflight.txt';
+    $now  = time();
+
+    $fh = @fopen($file, 'c+');
+    if ($fh === false) {
+        return '';
+    }
+    if (!flock($fh, LOCK_EX)) {
+        fclose($fh);
+        return '';
+    }
+
+    $slots = array();
+    $raw = (string) stream_get_contents($fh);
+    foreach (explode("\n", $raw) as $line) {
+        $parts = explode('|', $line, 2);
+        if (count($parts) !== 2) {
+            continue;
+        }
+        $ts = (int) $parts[1];
+        if ($parts[0] !== '' && $ts > 0 && $now - $ts < VCD_SLOT_TTL) {
+            $slots[$parts[0]] = $ts;
+        }
+    }
+
+    $token = null;
+    if (count($slots) < VCD_MAX_CONCURRENT_FETCHES) {
+        $token = bin2hex(random_bytes(8));
+        $slots[$token] = $now;
+    }
+
+    $lines = array();
+    foreach ($slots as $tok => $ts) {
+        $lines[] = $tok . '|' . $ts;
+    }
+
+    ftruncate($fh, 0);
+    rewind($fh);
+    fwrite($fh, implode("\n", $lines));
+    fflush($fh);
+    flock($fh, LOCK_UN);
+    fclose($fh);
+
+    return $token;
+}
+
+/** Release a slot claimed by vcd_acquire_fetch_slot(). Safe to call with '' or twice. */
+function vcd_release_fetch_slot(string $token): void
+{
+    if ($token === '') {
+        return;
+    }
+    $file = VCD_DATA . '/inflight.txt';
+    $fh = @fopen($file, 'c+');
+    if ($fh === false) {
+        return;
+    }
+    if (!flock($fh, LOCK_EX)) {
+        fclose($fh);
+        return;
+    }
+
+    $now = time();
+    $lines = array();
+    $raw = (string) stream_get_contents($fh);
+    foreach (explode("\n", $raw) as $line) {
+        $parts = explode('|', $line, 2);
+        if (count($parts) !== 2 || $parts[0] === $token) {
+            continue;
+        }
+        $ts = (int) $parts[1];
+        if ($parts[0] !== '' && $ts > 0 && $now - $ts < VCD_SLOT_TTL) {
+            $lines[] = $line;
+        }
+    }
+
+    ftruncate($fh, 0);
+    rewind($fh);
+    fwrite($fh, implode("\n", $lines));
+    fflush($fh);
+    flock($fh, LOCK_UN);
+    fclose($fh);
 }

@@ -66,13 +66,21 @@ foreach ($order as $cat) {
     $rows = array();
     foreach ($all as $id => $meta) {
         if ($meta['category'] === $cat) {
+            $meta['id'] = $id;
             $rows[$id] = $meta;
         }
     }
     if (!$rows) {
         continue;
     }
+    // Heaviest first, id breaking ties. Without the tiebreaker this file is not
+    // reproducible: sorts are stable only from PHP 8.0, most weights are shared
+    // by several signals, and --check then fails on 7.4 against a doc generated
+    // on 8.x purely because of tie ordering.
     uasort($rows, function ($a, $b) {
+        if ($a['weight'] === $b['weight']) {
+            return strcmp($a['id'], $b['id']);
+        }
         return $b['weight'] <=> $a['weight'];
     });
 

@@ -496,6 +496,61 @@ if (is_readable($social)) {
 }
 ok(strpos($page, 'og:image') !== false, 'the page advertises a link-preview image');
 
+// ------------------------------------------------------------ determinism
+
+group('Version-independent ordering');
+
+// Sorts are stable only from PHP 8.0, and most weights are shared by several
+// signals. An unbroken tie orders arbitrarily on 7.4, which silently produced a
+// different docs/SIGNALS.md there and turned CI red against a doc generated on
+// 8.x. Every ordering that reaches a file or a certificate needs a total order.
+
+$idsOf = function (Report $r) {
+    $out = array();
+    foreach ($r->toArray()['signals'] as $s) {
+        $out[] = $s['id'];
+    }
+    return implode(',', $out);
+};
+
+// Same signals, opposite insertion order: the output order must not move.
+$tied = array('cd.lazy_names', 'cd.console_noise', 'cd.helper_pileup', 'cd.todo_placeholders', 'ct.placeholder_copy');
+$forward = new Report('code', 'forward');
+foreach ($tied as $id) {
+    $forward->flag($id, array('x'));
+}
+$backward = new Report('code', 'backward');
+foreach (array_reverse($tied) as $id) {
+    $backward->flag($id, array('x'));
+}
+ok($idsOf($forward) === $idsOf($backward),
+   'equal-weight signals sort identically whatever order they fired in',
+   $idsOf($forward) . '  vs  ' . $idsOf($backward));
+
+// The generated doc must be reproducible from the catalogue, not merely equal
+// to whatever the last machine happened to write.
+$check = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(dirname(__DIR__) . '/tools/gen-signals-doc.php') . ' --check';
+exec($check . ' 2>&1', $checkOut, $checkStatus);
+ok($checkStatus === 0, 'docs/SIGNALS.md is current (run tools/gen-signals-doc.php)', implode(' ', $checkOut));
+
+// And the generator's own tie-break must survive its input being reordered.
+$order = function (array $catalog) {
+    $rows = array();
+    foreach ($catalog as $id => $m) {
+        $m['id'] = $id;
+        $rows[$id] = $m;
+    }
+    uasort($rows, function ($a, $b) {
+        if ($a['weight'] === $b['weight']) {
+            return strcmp($a['id'], $b['id']);
+        }
+        return $b['weight'] <=> $a['weight'];
+    });
+    return implode(',', array_keys($rows));
+};
+ok($order(Catalog::all()) === $order(array_reverse(Catalog::all(), true)),
+   'the doc ordering is identical when the catalogue is reversed');
+
 // ------------------------------------------------------------------ catalog
 
 group('Catalogue integrity');

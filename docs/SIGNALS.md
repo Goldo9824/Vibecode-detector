@@ -28,11 +28,11 @@ There are **67 signals** across 7 categories.
 
 A builder naming itself. These are positive identifications rather than inferences, so one is enough to settle the question. Their absence means nothing whatsoever: agentic editors write into an ordinary repository and leave none of this behind.
 
-### Lovable build fingerprint
+### Base44 fingerprint
 
-`fp.lovable` · weight **4.5** (decisive)
+`fp.base44` · weight **4.5** (decisive)
 
-The page carries Lovable's own runtime, upload paths or tagger. This is a positive identification of the builder, not an inference.
+The Base44 SDK or deployment host is referenced by the page.
 
 ### Bolt.new build fingerprint
 
@@ -40,17 +40,17 @@ The page carries Lovable's own runtime, upload paths or tagger. This is a positi
 
 Bolt's badge, host or bundle signature is present in the served page.
 
+### Lovable build fingerprint
+
+`fp.lovable` · weight **4.5** (decisive)
+
+The page carries Lovable's own runtime, upload paths or tagger. This is a positive identification of the builder, not an inference.
+
 ### v0 by Vercel fingerprint
 
 `fp.v0` · weight **4.5** (decisive)
 
 A "Built with v0" badge or v0 deployment host identifies the generator directly.
-
-### Base44 fingerprint
-
-`fp.base44` · weight **4.5** (decisive)
-
-The Base44 SDK or deployment host is referenced by the page.
 
 ### Replit Agent fingerprint
 
@@ -58,17 +58,17 @@ The Base44 SDK or deployment host is referenced by the page.
 
 Replit badge or hosting signature. Replit hosts hand-written projects too, so this identifies the host with high but not total confidence.
 
-### AI builder named in the generator meta tag
-
-`fp.generator_meta` · weight **4** (decisive)
-
-The document's own <meta name="generator"> names an AI site builder.
-
 ### Another AI builder's fingerprint
 
 `fp.builder_other` · weight **4** (decisive)
 
 A generator outside the main five identified itself in the page: its SDK, deployment host or badge is present. The specific tool is named in the evidence.
+
+### AI builder named in the generator meta tag
+
+`fp.generator_meta` · weight **4** (decisive)
+
+The document's own <meta name="generator"> names an AI site builder.
 
 
 ## Structural
@@ -81,17 +81,17 @@ The shape of the whole rather than the style of the line. These are the hardest 
 
 Comments like <!-- Hero --> above each block. Models write these to orient themselves. Real build pipelines strip HTML comments, so finding them on a deployed page means the file was hand-deployed exactly as generated.
 
-### Comment density is uniform across the file
-
-`st.uniform_comment_density` · weight **1** (strong)
-
-Humans cluster comments around the parts that were hard. A flat comment rate from top to bottom is the signature of a generator that documents every line equally.
-
 ### The same problem is solved several different ways
 
 `st.multiple_solutions` · weight **1** (strong)
 
 Two HTTP clients, three date helpers, four validation styles. Local perfection with global incoherence: each prompt session solved its own problem in isolation.
+
+### Comment density is uniform across the file
+
+`st.uniform_comment_density` · weight **1** (strong)
+
+Humans cluster comments around the parts that were hard. A flat comment rate from top to bottom is the signature of a generator that documents every line equally.
 
 ### Every function carries a docblock, including trivial ones
 
@@ -105,17 +105,17 @@ Uniform, complete docblocks on getters and one-line helpers alike.
 
 Complete components, routes or helpers that nothing imports or calls.
 
-### Imports are perfectly grouped and alphabetised
-
-`st.import_block_sorted` · weight **0.6** (moderate)
-
-Standard library, third-party, then local, sorted within each group, with no organic accretion.
-
 ### Explanatory file-header block
 
 `st.file_header_block` · weight **0.6** (moderate)
 
 A banner comment at the top of the file restating the filename and describing the module's purpose in prose. Humans write these for libraries other people consume; generators write them for every file including the ones nobody reads.
+
+### Imports are perfectly grouped and alphabetised
+
+`st.import_block_sorted` · weight **0.6** (moderate)
+
+Standard library, third-party, then local, sorted within each group, with no organic accretion.
 
 ### Empty client-rendered shell with a hashed bundle
 
@@ -176,12 +176,6 @@ catch blocks that log and continue, or swallow silently. The blindfold that stop
 
 Banner comments such as # ===== User Authentication ===== used as navigation inside a single file.
 
-### Hyper-verbose identifier names
-
-`cd.verbose_names` · weight **0.6** (moderate)
-
-Names like currentLoggedInUserAuthTokenValue, where a human would have written the same thing in a third of the characters.
-
 ### Formal, grammatically complete error messages
 
 `cd.formal_errors` · weight **0.6** (moderate)
@@ -194,17 +188,11 @@ Names like currentLoggedInUserAuthTokenValue, where a human would have written t
 
 Curly quotes and em dashes in code, comments or markup, which an editor does not produce on its own.
 
-### Optional chaining and fallbacks on everything
+### Hyper-verbose identifier names
 
-`cd.defensive_chaining` · weight **0.5** (weak)
+`cd.verbose_names` · weight **0.6** (moderate)
 
-Every property access guarded and every value given a default, applied uniformly rather than where a value is genuinely optional. The same instinct as the blanket try/catch: nothing can throw, so nothing can be diagnosed.
-
-### Iteration-scar names
-
-`cd.lazy_names` · weight **0.5** (weak)
-
-data2, result_final, handleClick2, newFunction: the residue of re-prompting until something worked.
+Names like currentLoggedInUserAuthTokenValue, where a human would have written the same thing in a third of the characters.
 
 ### Debug logging left in shipped code
 
@@ -212,11 +200,23 @@ data2, result_final, handleClick2, newFunction: the residue of re-prompting unti
 
 Dense, uniform console output that was never cleaned up.
 
+### Optional chaining and fallbacks on everything
+
+`cd.defensive_chaining` · weight **0.5** (weak)
+
+Every property access guarded and every value given a default, applied uniformly rather than where a value is genuinely optional. The same instinct as the blanket try/catch: nothing can throw, so nothing can be diagnosed.
+
 ### Utils / Manager / Handler / Helper pile-up
 
 `cd.helper_pileup` · weight **0.5** (weak)
 
 Layers of ceremony classes stacked without a need that justifies them.
+
+### Iteration-scar names
+
+`cd.lazy_names` · weight **0.5** (weak)
+
+data2, result_final, handleClick2, newFunction: the residue of re-prompting until something worked.
 
 ### TODO and placeholder blocks in shipped code
 
@@ -259,17 +259,17 @@ A rocket for performance, a lightbulb for smart. Emoji do not inherit colour, ad
 
 "Ship faster", "unlock the power of", "everything you need to". Marketing language that tells rather than shows, with no specifics anywhere.
 
-### Round, unsourced statistics
-
-`ct.stat_inflation` · weight **0.5** (weak)
-
-Suspiciously tidy numbers doing persuasive work: 10,000+ users, 99.9% uptime, 10x faster, 2M downloads. Nothing is attributed and the roundness is the tell, because measured figures are rarely this neat.
-
 ### Placeholder copy left in production
 
 `ct.placeholder_copy` · weight **0.5** (weak)
 
 Lorem ipsum, "Coming soon", "Your text here" on a live page.
+
+### Round, unsourced statistics
+
+`ct.stat_inflation` · weight **0.5** (weak)
+
+Suspiciously tidy numbers doing persuasive work: 10,000+ users, 99.9% uptime, 10x faster, 2M downloads. Nothing is attributed and the roundness is the tell, because measured figures are rarely this neat.
 
 ### Navigation that goes nowhere
 
@@ -317,11 +317,11 @@ How it looks. Weak by construction and **capped as a group**, because a purple g
 
 Indigo 500 into violet, on slate. Not a design decision so much as a statistical average of every Tailwind tutorial written between 2019 and 2024.
 
-### Untouched component-kit defaults
+### The gradient-filled headline
 
-`ae.shadcn_defaults` · weight **0.4** (weak)
+`ae.gradient_text` · weight **0.4** (weak)
 
-rounded-2xl, shadow-lg, p-6, pill buttons, cards nested inside cards, every radius identical.
+A heading painted with a clipped background gradient instead of a colour. Almost unheard of in hand-built pages before 2023 and near-universal in generated ones since.
 
 ### The coloured left-border card
 
@@ -329,11 +329,11 @@ rounded-2xl, shadow-lg, p-6, pill buttons, cards nested inside cards, every radi
 
 A 3-4px accent strip down the left edge of a panel, applied to every callout on the page.
 
-### The gradient-filled headline
+### Untouched component-kit defaults
 
-`ae.gradient_text` · weight **0.4** (weak)
+`ae.shadcn_defaults` · weight **0.4** (weak)
 
-A heading painted with a clipped background gradient instead of a colour. Almost unheard of in hand-built pages before 2023 and near-universal in generated ones since.
+rounded-2xl, shadow-lg, p-6, pill buttons, cards nested inside cards, every radius identical.
 
 ### Default icon set, unchanged
 
@@ -347,29 +347,29 @@ Lucide or Heroicons throughout, because the component kit these tools build on s
 
 Backdrop blur over translucent white on every card and bar. One of the handful of effects a model reaches for when asked to make something look modern.
 
-### Rigid symmetry
-
-`ae.three_cards` · weight **0.3** (weak)
-
-Exactly three feature cards, 01/02/03 steps, descriptions of near-identical length. Human pages are lumpier because human content is lumpier.
-
 ### The default display typeface
 
 `ae.inter_font` · weight **0.3** (weak)
 
 Inter, or its replacements Geist, Poppins, Space Grotesk and Manrope, doing all the typographic work.
 
-### Uniform generous spacing
+### Rigid symmetry
 
-`ae.uniform_whitespace` · weight **0.25** (weak)
+`ae.three_cards` · weight **0.3** (weak)
 
-The same large vertical padding on every section: the safest way to guarantee a responsive layout never overlaps.
+Exactly three feature cards, 01/02/03 steps, descriptions of near-identical length. Human pages are lumpier because human content is lumpier.
 
 ### No real photography
 
 `ae.no_real_images` · weight **0.25** (weak)
 
 Gradients, abstract shapes and generated faces instead of pictures of anything that exists.
+
+### Uniform generous spacing
+
+`ae.uniform_whitespace` · weight **0.25** (weak)
+
+The same large vertical padding on every section: the safest way to guarantee a responsive layout never overlaps.
 
 
 ## Human authorship
@@ -382,23 +382,17 @@ Evidence of a human having been present: outside context a generator has no acce
 
 References to a standard, an audit, an outage or a decision. This is knowledge the code cannot contain and a generator has no access to.
 
-### References to tickets, issues, dates or people
-
-`hu.ticket_refs` · weight **0.9** (moderate)
-
-Links into a tracker, issue numbers, dated notes, names of colleagues.
-
 ### Informal, exasperated or profane commentary
 
 `hu.informal` · weight **0.9** (moderate)
 
 HACK, XXX, "do not touch this", "no idea why this works". Models are relentlessly polite.
 
-### Misspellings in the copy
+### References to tickets, issues, dates or people
 
-`hu.typos` · weight **0.7** (moderate)
+`hu.ticket_refs` · weight **0.9** (moderate)
 
-Models do not typo. A page carrying "recieve" or "seperate" was typed by somebody, and typos are one of the few tells that masking makes worse rather than better, since cleaning them up is exactly what nobody bothers to do.
+Links into a tracker, issue numbers, dated notes, names of colleagues.
 
 ### Built on a classic CMS or site builder
 
@@ -406,11 +400,11 @@ Models do not typo. A page carrying "recieve" or "seperate" was typed by somebod
 
 WordPress, Wix, Squarespace, Webflow, Shopify. These predate the current generation of tools and are a different phenomenon entirely, not evidence of it.
 
-### Signs of a business actually operating
+### Misspellings in the copy
 
-`hu.operational_stack` · weight **0.6** (moderate)
+`hu.typos` · weight **0.7** (moderate)
 
-A cookie banner, legal and privacy pages, a tag manager, a real analytics property, a newsletter provider. Accumulated obligations rather than generated features.
+Models do not typo. A page carrying "recieve" or "seperate" was typed by somebody, and typos are one of the few tells that masking makes worse rather than better, since cleaning them up is exactly what nobody bothers to do.
 
 ### Inconsistent formatting
 
@@ -418,11 +412,11 @@ A cookie banner, legal and privacy pages, a tag manager, a real analytics proper
 
 Mixed tabs and spaces, drifting indentation, irregular line lengths. Small inconsistency is the human default.
 
-### Copy with specifics
+### Signs of a business actually operating
 
-`hu.long_tail_copy` · weight **0.5** (weak)
+`hu.operational_stack` · weight **0.6** (moderate)
 
-Real prices, dates, addresses, named people, opening hours: details that had to come from somewhere.
+A cookie banner, legal and privacy pages, a tag manager, a real analytics property, a newsletter provider. Accumulated obligations rather than generated features.
 
 ### Commented-out code left behind
 
@@ -436,11 +430,11 @@ Old implementations kept around just in case, which generators do not produce.
 
 jQuery, table layouts, hand-written includes, vendor-prefixed CSS: an accretion history rather than a single generation.
 
-### A footer that has fallen out of date
+### Copy with specifics
 
-`hu.dated_copyright` · weight **0.4** (weak)
+`hu.long_tail_copy` · weight **0.5** (weak)
 
-A copyright year or "last updated" date already in the past. Generated pages are current by construction; drift means the page has been sitting there.
+Real prices, dates, addresses, named people, opening hours: details that had to come from somewhere.
 
 ### Abbreviated, idiomatic identifiers
 
@@ -453,6 +447,12 @@ authSvc, cfg, mgr, activeSub. Shorthand that assumes a reader who already has th
 `hu.build_stripped` · weight **0.4** (weak)
 
 Minified, comment-stripped, content-hashed assets: someone set up a toolchain and ran it.
+
+### A footer that has fallen out of date
+
+`hu.dated_copyright` · weight **0.4** (weak)
+
+A copyright year or "last updated" date already in the past. Generated pages are current by construction; drift means the page has been sitting there.
 
 ### Real and varied media
 

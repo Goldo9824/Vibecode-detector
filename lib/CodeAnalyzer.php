@@ -57,6 +57,8 @@ final class CodeAnalyzer
         }
 
         $this->checkComments();
+        $this->checkAssistantTraces();
+        $this->checkConventions();
         $this->checkErrorHandling();
         $this->checkNaming();
         $this->checkTests();
@@ -238,6 +240,138 @@ final class CodeAnalyzer
         }
     }
 
+    /**
+     * Things the assistant said, left in the file.
+     *
+     * The strongest code-level family there is, because unlike a naming habit
+     * or a comment style these have no innocent explanation: nobody types
+     * "Sure! Here's a robust user service" into an editor. It is one side of a
+     * conversation that was pasted in and never read back.
+     */
+    private function checkAssistantTraces(): void
+    {
+        $chatter = array();
+
+        $phrases = '~(?:'
+            . 'sure[,!]|certainly[,!]|of course[,!]|absolutely[,!]|great question|'
+            . 'here\'?s (?:a|the|how|an) |here is (?:a|the|an) |'
+            . 'let\'?s (?:start|begin|create|build|add|make|fetch|define|write|go|dive|take a look)|'
+            . 'i\'?(?:ve|ll) (?:added|created|updated|refactored|implemented|assumed|used)|'
+            . 'feel free to|hope this helps|let me know if|'
+            . 'you (?:can|should|may want to|might want to) (?:adjust|replace|customi|modify|change)|'
+            . '(?:comprehensive|production-ready|fully functional|robust) (?:solution|implementation|example|service)|'
+            . 'as (?:an? )?(?:ai|assistant|language model)'
+            . ')~i';
+
+        foreach ($this->commentLines() as $ln => $text) {
+            if (preg_match($phrases, $text)) {
+                $chatter[] = 'line ' . ($ln + 1) . ': ' . $text;
+            }
+        }
+        if ($chatter) {
+            $this->r->flag('cd.assistant_chatter', $chatter);
+        }
+
+        // Endpoints that were never filled in.
+        $stubs = array();
+        $endpointPatterns = array(
+            '~https?://(?:api\.)?(?:example|yourdomain|your-domain|yoursite|mysite)\.(?:com|org|net)[^\s"\'`<]*~i',
+            '~["\'`](?:https?://)?(?:YOUR|MY)[_-]?(?:API|BASE|SERVER)?[_-]?(?:URL|ENDPOINT|DOMAIN|HOST)[^"\'`]*["\'`]~',
+            '~<(?:YOUR|MY)[_-][A-Z_]+>~',
+            '~(?://|#)\s*(?:TODO:?\s*)?(?:add|replace|put|insert)\s+your\s+(?:api\s+)?(?:endpoint|url|key|token|domain)~i',
+        );
+        foreach ($endpointPatterns as $re) {
+            if (preg_match_all($re, $this->src, $m)) {
+                foreach ($m[0] as $hit) {
+                    $stubs[] = trim($hit);
+                }
+            }
+        }
+        if ($stubs) {
+            $this->r->flag('cd.placeholder_endpoint', $stubs);
+        }
+
+        // Documentation that spells the parameter's own name back at you.
+        $tautological = array();
+        if (preg_match_all('~@param\s+(?:\{[^}]*\}\s+)?\$?(\w+)\s*[-:]?\s*([^\n*]{4,90})~i', $this->src, $m, PREG_SET_ORDER)) {
+            foreach ($m as $hit) {
+                $desc = strtolower(trim($hit[2]));
+                $descWords = preg_split('~[^a-z0-9]+~', $desc) ?: array();
+                $nameWords = preg_split('~[^a-z0-9]+~', strtolower(Text::splitIdentifiers($hit[1]))) ?: array();
+
+                $restates = false;
+                foreach ($nameWords as $w) {
+                    if (strlen($w) > 2 && in_array($w, $descWords, true)) {
+                        $restates = true;
+                    }
+                }
+                $filler = (bool) preg_match(
+                    '~^(?:the |a |an )?(?:first |second |third |input |given |provided )?(?:number|string|value|object|array|item|param|parameter|argument|data)\b~',
+                    $desc
+                );
+
+                if ($restates || $filler) {
+                    $tautological[] = '@param ' . $hit[1] . ' - ' . trim($hit[2]);
+                }
+            }
+        }
+        if (count($tautological) >= 2) {
+            $this->r->flag('cd.tautological_params', $tautological);
+        }
+    }
+
+    /**
+     * Two conventions meeting inside one file.
+     *
+     * A codebase drifting over years is a human signal and is handled
+     * elsewhere. This is the narrower thing: incompatible conventions in a
+     * single file, which is what the seam between two generated fragments
+     * looks like.
+     */
+    private function checkConventions(): void
+    {
+        $evidence = array();
+
+        $camel = array();
+        $snake = array();
+        if (preg_match_all('~\b([a-z]+[A-Z][a-zA-Z0-9]*)\b~', $this->src, $m)) {
+            $camel = array_values(array_unique($m[1]));
+        }
+        if (preg_match_all('~\b([a-z]+_[a-z][a-z0-9_]*)\b~', $this->src, $m)) {
+            $snake = array_values(array_unique($m[1]));
+        }
+        // Languages whose whole ecosystem is snake_case are not mixing anything.
+        $snakeNative = in_array($this->lang, array('python', 'php', 'sql'), true);
+        if (!$snakeNative && count($camel) >= 3 && count($snake) >= 2) {
+            $evidence[] = 'camelCase (' . implode(', ', array_slice($camel, 0, 3)) . ')'
+                . ' beside snake_case (' . implode(', ', array_slice($snake, 0, 3)) . ')';
+        }
+
+        // Bracket and dot access to the same object.
+        if (preg_match_all('~(\w+)\[["\'](\w+)["\']\]~', $this->src, $m, PREG_SET_ORDER)) {
+            foreach ($m as $hit) {
+                if (preg_match('~\b' . preg_quote($hit[1], '~') . '\.\w~', $this->src)) {
+                    $evidence[] = $hit[1] . '["' . $hit[2] . '"] alongside ' . $hit[1] . '.' . $hit[2];
+                    break;
+                }
+            }
+        }
+
+        // Mixed quoting, where the language treats both alike.
+        if (in_array($this->lang, array('javascript', 'typescript', 'jsx'), true)) {
+            $single = preg_match_all('~(?<![\\\\\w])\'[^\'\n]{2,40}\'~', $this->src);
+            $double = preg_match_all('~(?<![\\\\\w])"[^"\n]{2,40}"~', $this->src);
+            $total = $single + $double;
+            if ($total >= 8 && min($single, $double) / max(1, $total) > 0.25) {
+                $evidence[] = sprintf('%d single-quoted and %d double-quoted strings in one file', $single, $double);
+            }
+        }
+
+        if (count($evidence) >= 2) {
+            $this->r->flag('cd.mixed_conventions', $evidence);
+        }
+    }
+
     // ----------------------------------------------------------- error handling
 
     private function checkErrorHandling(): void
@@ -368,6 +502,35 @@ final class CodeAnalyzer
             $this->r->flag('cd.lazy_names', $lazy);
         }
 
+        // Vocabulary that names no business.
+        //
+        // Distinct from the iteration scars above: those are the residue of
+        // re-prompting, these are names that were never chosen at all. If the
+        // identifier cannot be swapped for a word from the product — invoice,
+        // trip, booking — then nobody has decided what the thing is.
+        $vague = array('data', 'item', 'items', 'result', 'results', 'obj', 'value',
+                       'values', 'element', 'entry', 'record', 'output', 'input',
+                       'response', 'payload', 'params', 'options', 'config', 'temp');
+        $present = array();
+        foreach ($vague as $word) {
+            if (preg_match('~(?:\b(?:const|let|var|function|def|\$)\s*)' . $word . '\b~i', $this->src)
+                || preg_match('~\b(?:for|foreach)\s*\(\s*(?:const|let|var)?\s*' . $word . '\b~i', $this->src)) {
+                $present[] = $word;
+            }
+        }
+        $vagueFns = array();
+        if (preg_match_all('~\b(?:function|def|const)\s+(process|handle|manage|do|get|set|transform|convert)(Data|Item|Stuff|Things?|Result|Object|Info|Values?)\b~i', $this->src, $m, PREG_SET_ORDER)) {
+            foreach ($m as $hit) {
+                $vagueFns[] = $hit[1] . $hit[2] . '()';
+            }
+        }
+        if (count($present) >= 3 || ($vagueFns && count($present) >= 1)) {
+            $this->r->flag('cd.generic_domain_names', array_merge(
+                $vagueFns,
+                array('names carrying no domain: ' . implode(', ', array_slice($present, 0, 6)))
+            ));
+        }
+
         // Ceremony classes with nothing to justify them.
         $helpers = array();
         if (preg_match_all('~\b(?:class|interface|abstract\s+class)\s+(\w*(?:Utils?|Manager|Handler|Helper|Service|Factory|Provider|Wrapper|Adapter)\w*)~', $this->src, $m)) {
@@ -375,6 +538,40 @@ final class CodeAnalyzer
         }
         if (count($helpers) >= 3) {
             $this->r->flag('cd.helper_pileup', $helpers);
+        }
+
+        // A pattern deployed on a problem that did not need one.
+        //
+        // The tell is not the factory; it is the factory whose entire product
+        // is a boolean. Generated code reaches for a pattern because patterns
+        // are what it has seen, not because this problem called for one.
+        $ceremony = array();
+        if (preg_match_all('~\b(?:const|function|class)\s+(create\w*(?:Factory|Provider|Builder|Manager)|\w*Factory|\w*Provider)\b~i', $this->src, $m)) {
+            foreach (array_unique($m[1]) as $name) {
+                // Look at what it actually produces: a toggle, a flag, a single value.
+                // Scoped tightly: a wide window bleeds into the next function
+                // and picks up its keywords, which silently disqualifies the
+                // very thing being looked for.
+                $body = '';
+                $at = strpos($this->src, $name);
+                if ($at !== false) {
+                    $body = substr($this->src, $at, 300);
+                    // Stop at the next top-level declaration.
+                    if (preg_match('~\n(?:export |const |function |class )~', $body, $m2, PREG_OFFSET_CAPTURE, 1)) {
+                        $body = substr($body, 0, $m2[0][1]);
+                    }
+                }
+                if (preg_match('~\b(?:true|false|!\s*\w+|toggle|isEnabled|enabled|visible|open)\b~i', $body)
+                    && !preg_match('~\b(?:switch|case|extends|implements|async|await|fetch|query)\b~i', $body)) {
+                    $ceremony[] = $name . ' exists to hold a boolean';
+                }
+            }
+        }
+        if (preg_match('~useMemo\s*\(\s*\(\s*\)\s*=>\s*(?:!|\w+\s*===|\w+\s*!==|true|false)~', $this->src)) {
+            $ceremony[] = 'useMemo wrapped around a boolean expression';
+        }
+        if ($ceremony) {
+            $this->r->flag('cd.ceremony_for_nothing', $ceremony);
         }
 
         // Abbreviated, idiomatic names pull the other way.

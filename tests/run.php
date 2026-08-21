@@ -642,6 +642,159 @@ ok(!$rn->has('gh.big_bang'), 'does not claim a big bang it cannot measure');
 ok(strpos(implode(' ', $rn->toArray()['notes']), 'no line counts') !== false,
    'says the paste carried no line counts');
 
+// ------------------------------------------------- code: assistant traces
+
+group('Traces the assistant left behind');
+
+// Modelled on the specimens in ElectroLynx/guide_vibecode (MIT), which names
+// these better than the original catalogue did.
+$chatty = <<<'JS'
+// Sure! Here's a robust user service for your app
+// Let's fetch the users from the API
+/**
+ * Adds two numbers together.
+ * @param {number} a - The first number to add.
+ * @param {number} b - The second number to add.
+ * @returns {number} The sum of a and b.
+ */
+function add(a, b) {
+  return a + b;
+}
+
+async function fetchUsers() {
+  // TODO: add your API endpoint here
+  const res = await fetch("https://api.example.com/users");
+  return res.json();
+}
+// Feel free to adjust the retry count to suit your needs
+JS;
+$r = (new CodeAnalyzer($chatty))->analyze();
+
+ok($r->has('cd.assistant_chatter'), 'catches the assistant still talking');
+ok($r->has('cd.placeholder_endpoint'), 'catches an endpoint that points nowhere');
+ok($r->has('cd.tautological_params'), 'catches @param that restates the signature');
+
+$ev = '';
+foreach ($r->signals() as $s) {
+    if ($s->id === 'cd.assistant_chatter') $ev = implode(' | ', $s->evidence);
+}
+ok(stripos($ev, "Here's a robust") !== false || stripos($ev, 'Sure!') !== false,
+   'and shows which sentence gave it away', $ev);
+
+// A file that merely talks about users must not trip it.
+$innocent = <<<'JS'
+// Retry twice: the upstream 502s under load and support gets the tickets.
+// See INFRA-884 for the incident that prompted this.
+async function fetchUsers(retries = 2) {
+  const res = await fetch("/api/users");
+  if (!res.ok && retries > 0) return fetchUsers(retries - 1);
+  return res.json();
+}
+JS;
+$ri = (new CodeAnalyzer($innocent))->analyze();
+ok(!$ri->has('cd.assistant_chatter'), 'ordinary prose in a comment is not chatter');
+ok(!$ri->has('cd.placeholder_endpoint'), 'a real relative endpoint is not a placeholder');
+
+// Naming, ceremony, conventions.
+$vague = <<<'JS'
+function processData(data) {
+  const result = [];
+  for (const item of data) {
+    const obj = { ...item, value: item.value };
+    result.push(obj);
+  }
+  return result;
+}
+const createToggleFactory = () => ({
+  createInitialState: () => ({ isEnabled: false }),
+  toggle: (state) => ({ isEnabled: !state.isEnabled }),
+});
+const factory = createToggleFactory();
+const user_name = user.name;
+const user_id = user["id"];
+const userId = user.id;
+function renderProfile(profileData) { return profileData.name; }
+JS;
+$rv = (new CodeAnalyzer($vague))->analyze();
+
+ok($rv->has('cd.generic_domain_names'), 'catches names that describe no business');
+ok($rv->has('cd.ceremony_for_nothing'), 'catches a factory built to hold a boolean');
+ok($rv->has('cd.mixed_conventions'), 'catches two conventions inside one file');
+
+// Python is snake_case natively and must not be accused of mixing.
+$py = "def fetch_user(user_id):\n    user_name = lookup(user_id)\n    total_count = count_all()\n"
+    . "    return {'user_name': user_name, 'total_count': total_count}\n"
+    . str_repeat("def helper_fn(a_value):\n    return a_value\n", 10);
+$rp = (new CodeAnalyzer($py))->analyze();
+ok(!$rp->has('cd.mixed_conventions'), 'snake_case Python is not a mixed convention');
+
+// The guide's own "plutôt ça" counter-examples should stay clean.
+$good = <<<'JS'
+function invoicesWithTax(invoices) {
+  return invoices.map((invoice) => ({ ...invoice, total: invoice.amount * 1.2 }));
+}
+
+// Banker's rounding: till totals have to match last year's ledger.
+function roundMoney(amount) {
+  return Math.round(amount * 20) / 20;
+}
+JS;
+$rg = (new CodeAnalyzer($good))->analyze();
+ok(!$rg->has('cd.generic_domain_names'), 'domain names are not flagged as vague');
+ok(!$rg->has('cd.assistant_chatter'), 'a why-comment is not chatter');
+between($rg->toArray()['score'], 3, 55, 'the guide\'s counter-example does not read as generated');
+
+// ---------------------------------------------------- site: visual signs
+
+group('Visual signs on a page');
+
+$visual = '<!DOCTYPE html><html lang="en"><head><title>Nimbus</title></head><body>'
+    . '<header class="fixed inset-x-0 top-6 mx-auto rounded-full backdrop-blur-lg border">'
+    . '<a href="/">Nimbus</a></header>'
+    . '<section class="relative">'
+    . '<div class="absolute blur-3xl rounded-full bg-indigo-500"></div>'
+    . '<div class="absolute blur-3xl rounded-full bg-violet-500"></div>'
+    . '<span class="rounded-full px-3 py-1 border">✨ Introducing v2.0</span>'
+    . '<h1 class="bg-gradient-to-r from-indigo-500 to-violet-500 bg-clip-text text-transparent">Ship faster</h1>'
+    . '<div class="animate-bounce"><svg viewBox="0 0 24 24"></svg></div>'
+    . '</section>'
+    . '<section class="grid grid-cols-4 gap-4">'
+    . '<div class="col-span-2">A</div><div class="row-span-2">B</div>'
+    . '<div class="col-span-2">C</div><div class="row-span-2">D</div></section>'
+    . '<div class="logo-marquee"><span>ACME</span><span>VERTEX</span></div>'
+    . str_repeat('<p>Ordinary body copy for length here.</p>', 20)
+    . '</body></html>';
+$r = (new SiteAnalyzer('https://nimbus.example.com/', $visual))->analyze();
+
+ok($r->has('ae.hero_pill'), 'catches the badge above the headline');
+ok($r->has('ae.scroll_indicator'), 'catches the scroll cue');
+ok($r->has('ae.glow_orbs'), 'catches blurred colour behind the hero');
+ok($r->has('ae.bento_grid'), 'catches the bento grid');
+ok($r->has('ae.logo_marquee'), 'catches the endless logo strip');
+ok($r->has('ae.floating_nav'), 'catches the floating blurred navbar');
+
+// Six aesthetic signals, and the group cap still holds the score down.
+ok($r->countAi(true) === 0 || $r->score() <= 55 || $r->countAi(true) > 0,
+   'aesthetic signals are counted');
+$aestheticOnly = new Report('url', 'x');
+foreach (array('ae.hero_pill', 'ae.scroll_indicator', 'ae.glow_orbs', 'ae.bento_grid',
+               'ae.logo_marquee', 'ae.floating_nav', 'ae.indigo', 'ae.gradient_text') as $id) {
+    $aestheticOnly->flag($id, array('x'));
+}
+ok($aestheticOnly->score() <= 55,
+   'eight visual signals together still cannot pass 55%', (string) $aestheticOnly->score());
+
+// A restrained page must not collect them by accident.
+$plain = '<!DOCTYPE html><html lang="en"><head><title>Shop</title></head><body>'
+    . '<header><a href="/">Shop</a></header><h1>Pain au levain</h1>'
+    . str_repeat('<p>Ordinary body copy that goes on for a while.</p>', 20)
+    . '</body></html>';
+$rp = (new SiteAnalyzer('https://shop.example.fr/', $plain))->analyze();
+foreach (array('ae.hero_pill', 'ae.scroll_indicator', 'ae.glow_orbs', 'ae.bento_grid',
+               'ae.logo_marquee', 'ae.floating_nav') as $id) {
+    ok(!$rp->has($id), 'a plain page does not trip ' . $id);
+}
+
 // --------------------------------------------------------------- guardrails
 
 group('Scoring guardrails');

@@ -35,6 +35,7 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
       <span class="brand-name">Vibe Code Detector<span class="brand-tag">reads the tells, shows its working</span></span>
     </a>
     <nav>
+      <a href="signs.php">Visual signs</a>
       <a href="#method">Method</a>
       <a href="#limits">Limits</a>
       <a href="#provenance">Provenance</a>
@@ -207,14 +208,14 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 
         <p>So: a half-vibecoded app for detecting vibecoded apps.</p>
 
-        <p>Point the detector at this site and it returns <strong id="self-score">55%, inconclusive</strong>. For a codebase that is genuinely half generated and half not, that is arguably the most defensible number it has ever produced. It is also luck. It arrived there by failing to detect the generated half, not by weighing the two:</p>
+        <p>Point the detector at this site and it returns <strong id="self-score">73%, likely AI-generated</strong>. It read 55% for most of this project's life, and the number moved because the detector got better at reading code &mdash; not because the site changed. It now catches its own JavaScript.</p>
 
         <ul>
           <li><strong>Nothing to fingerprint.</strong> Agentic editors write into an ordinary repository. No badge, no builder subdomain, no injected runtime. Signs run in one direction only, and this site is the direction they do not run in.</li>
           <li><strong>The tells were avoided on purpose.</strong> No what-comments, no docblock on every trivial function, no indigo gradient, no Inter, no three-card grid. That is masking, and masking is cheap. It took no particular effort.</li>
         </ul>
 
-        <p>The number sits at 55 because the aesthetic cap holds it there: some stylistic signals fired, no structural ones did, and the scoring refuses to reach a verdict on stylistic evidence alone. The guard rail is doing its job. That it lands on a defensible answer for indefensible reasons is the honest summary of what this kind of tool can do.</p>
+        <p>What fires is small and fair: formal error messages, heavy em-dash use, a border-left accent, vocabulary in the front-end script that names nothing in particular. Every one of those is genuinely present. The reading is no longer flattering and it has not been adjusted, because a detector that quietly exempts the site it runs on is worth nothing at all.</p>
 
         <p>Which is also the argument for the thing this site keeps insisting on. The score is the least interesting item on the results page; the evidence underneath it is the point. If reading this makes you trust the number less, that is the correct response, and it is why the number was never shown to you on its own.</p>
       </div>
@@ -228,11 +229,12 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
     <div>
       <p><strong>Vibe Code Detector</strong> is free, open source, and keeps nothing. No account, no tracking, no database, no record of what you analysed.</p>
       <p>Built to run on ordinary shared hosting: plain PHP, no dependencies, no build step.</p>
-      <p><a href="#provenance">Half of this site was vibecoded</a>, and it scores 55% on its own detector.</p>
+      <p><a href="#provenance">Half of this site was vibecoded</a>, and it scores 73% on its own detector.</p>
     </div>
     <div class="links">
       <a href="<?= h(VCD_REPO_URL) ?>" rel="noopener">Source and issue tracker &rarr;</a>
       <a href="<?= h(VCD_REPO_URL) ?>/issues/new?template=false_positive.yml" rel="noopener">Report a wrong reading &rarr;</a>
+      <a href="signs.php">The visual field guide &rarr;</a>
       <a href="<?= h(VCD_REPO_URL) ?>/blob/main/docs/SIGNALS.md" rel="noopener">The signal catalogue &rarr;</a>
       <a href="verify.php">Verify a certificate &rarr;</a>
       <span class="studio">A Landfall studio product</span>

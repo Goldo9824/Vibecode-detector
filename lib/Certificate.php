@@ -18,7 +18,7 @@ final class Certificate
     const MARGIN = 54.0;
 
     /** Height of the fixed caveat panel above the footer. */
-    const CAVEAT_H = 100.0;
+    const CAVEAT_H = 84.0;
 
     /** Clearance the evidence list keeps above that panel. */
     const CAVEAT_GAP = 24.0;
@@ -240,17 +240,11 @@ final class Certificate
               . 'human developers adopt the same tools. Absence of signals proves nothing: agentic editors '
               . 'leave no fingerprint at all. Do not use this document to accuse anyone of anything.';
 
-        $ty = $this->pdf->paragraph($tx, $ty, $tw, $body, 'F1', 8.4, 11.2, Brand::GREY);
-
-        // Stated on the certificate itself, not only in the documentation. The
-        // tool scores 55% on its own detector, which is the clearest available
-        // demonstration of how far the number should be trusted.
-        $this->pdf->paragraph(
-            $tx, $ty + 3, $tw,
-            'The tool that issued this certificate was itself half AI-generated, and its own '
-          . 'detector cannot tell which half.',
-            'F3', 8.4, 11.2, Brand::INK
-        );
+        // The caveat is about the limits of the method, not about this tool's
+        // own provenance. That belongs on the site, where there is room to
+        // explain it, rather than on a document someone is handing to a third
+        // party as a finding.
+        $this->pdf->paragraph($tx, $ty, $tw, $body, 'F1', 8.4, 11.2, Brand::GREY);
     }
 
     private function footer(): void

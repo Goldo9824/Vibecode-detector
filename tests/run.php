@@ -352,7 +352,9 @@ $crowded = array_merge($cert, array('g' => array_keys(Catalog::all())));
 $long = (new Certificate($crowded))->render();
 ok(strlen($long) > 1200, 'renders with the whole catalogue as evidence');
 
-$caveatTop = Pdf::A4_H - 54.0 - 40.0 - 100.0;
+// Derived, not duplicated: a hardcoded copy here silently stops testing the
+// real panel the moment CAVEAT_H changes.
+$caveatTop = Pdf::A4_H - Certificate::MARGIN - 40.0 - Certificate::CAVEAT_H;
 $lowest = 0.0;
 preg_match_all('~stream\n(.*?)\nendstream~s', $long, $streams);
 foreach ($streams[1] as $s) {
@@ -476,6 +478,23 @@ ok(substr_count((string) ($ladderHtml[1] ?? ''), '<span>') === $items,
 
 ok(strpos($page, 'A Landfall studio product') !== false, 'the studio credit is in the footer');
 ok(strpos($css, '.colophon .studio') !== false, 'the studio credit is styled');
+
+// The certificate is a finding handed to a third party. It states the limits of
+// the method; it does not editorialise about the tool's own provenance.
+$certSrc = (string) file_get_contents(dirname(__DIR__) . '/lib/Certificate.php');
+$selfReferential = preg_match('~(?:was itself|its own detector|cannot tell which half|AI-generated, and)~i', $certSrc);
+ok($selfReferential === 0, 'the certificate carries no self-referential provenance claim');
+
+// Social preview card.
+$social = dirname(__DIR__) . '/assets/img/social-preview.png';
+ok(is_readable($social), 'the social preview exists (run tools/build-social.php)');
+if (is_readable($social)) {
+    $dim = getimagesize($social);
+    ok($dim !== false && $dim[0] === 1280 && $dim[1] === 640,
+       'the social preview is 1280x640',
+       $dim ? "{$dim[0]}x{$dim[1]}" : 'unreadable');
+}
+ok(strpos($page, 'og:image') !== false, 'the page advertises a link-preview image');
 
 // ------------------------------------------------------------------ catalog
 

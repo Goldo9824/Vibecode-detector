@@ -49,7 +49,7 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 
     <section class="hero">
       <h1>Was this written by a person, or generated?</h1>
-      <p>Give it a URL or paste some code. It reads the same tells a reviewer would (builder fingerprints, comment habits, error handling, the shape of the copy) and returns a percentage with every piece of evidence it used.</p>
+      <p>Give it a URL, paste some code, or paste a <code>git log</code>. It reads the same tells a reviewer would (builder fingerprints, commit patterns, comment habits, error handling, the shape of the copy) and returns a percentage with every piece of evidence it used.</p>
       <p class="disclaimer">It will not prove anything. Automated detection of AI-generated source performs near chance in peer-reviewed benchmarks, so this shows its working and expects you to read it. Do not accuse anyone of anything on the strength of a number. <a href="#provenance">This site is half vibecoded too</a>, and its own detector cannot tell which half.</p>
     </section>
 
@@ -57,17 +57,22 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
       <div class="tabs" role="tablist" aria-label="What to analyse">
         <button class="tab" role="tab" id="tab-url" aria-controls="panel-url" aria-selected="true" type="button">Live page</button>
         <button class="tab" role="tab" id="tab-code" aria-controls="panel-code" aria-selected="false" type="button">Paste code</button>
+        <button class="tab" role="tab" id="tab-git" aria-controls="panel-git" aria-selected="false" type="button">Git history</button>
       </div>
 
       <div class="tabpanel" role="tabpanel" id="panel-url" aria-labelledby="tab-url">
         <form id="form-url" novalidate>
           <label class="field" for="url">Address of the page to read</label>
           <input type="url" id="url" name="url" placeholder="example.com" autocomplete="url" spellcheck="false">
+          <label class="check" for="crawl">
+            <input type="checkbox" id="crawl" name="crawl" value="1">
+            <span><strong>Read the whole site</strong> &mdash; follows links from this page and reads up to ten of them, then compares them against each other. Takes longer, and finds things one page cannot.</span>
+          </label>
           <div class="actions">
             <button class="btn" type="submit">Analyse page</button>
             <span class="spinner" id="spin-url" hidden>reading&hellip;</span>
           </div>
-          <p class="hint">Fetches the page and up to four of its own stylesheets and scripts. Nothing else is requested, nothing is stored.</p>
+          <p class="hint">Fetches the page and up to four of its own stylesheets and scripts. Nothing else is requested, nothing is stored. Whole-site reads honour robots.txt and stop after ten pages.</p>
         </form>
       </div>
 
@@ -80,6 +85,20 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
             <span class="spinner" id="spin-code" hidden>reading&hellip;</span>
           </div>
           <p class="hint">Sent to the server, read once, and discarded. It is never written to disk or logged.</p>
+        </form>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-git" aria-labelledby="tab-git" hidden>
+        <form id="form-git" novalidate>
+          <label class="field" for="gitlog">Output of <code>git log</code> &mdash; the strongest signal there is</label>
+          <p class="hint hint-top">Run this in the repository and paste everything it prints:</p>
+          <pre class="command" id="git-command"><code>git log --numstat --pretty=format:'%H|%at|%an|%s'</code></pre>
+          <textarea id="gitlog" name="log" spellcheck="false" placeholder="Paste the output here. Plain `git log` and `git log --oneline` also work, with less to go on."></textarea>
+          <div class="actions">
+            <button class="btn" type="submit">Analyse history</button>
+            <span class="spinner" id="spin-git" hidden>reading&hellip;</span>
+          </div>
+          <p class="hint">Nothing leaves your machine except the log itself, and it is read once and discarded. Commit messages can carry private information &mdash; check what you are pasting.</p>
         </form>
       </div>
 
@@ -110,6 +129,11 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
           <div id="r-signals"></div>
         </div>
 
+        <div class="pages" id="r-pages" hidden>
+          <p class="eyebrow">Pages read</p>
+          <ol id="r-pages-list"></ol>
+        </div>
+
         <div class="notes">
           <p class="eyebrow">Read this before repeating the number</p>
           <ul id="r-notes"></ul>
@@ -131,6 +155,7 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
         <h3>Evidence is not equal, so it is not weighted equally</h3>
         <ol class="ladder">
           <li><strong>Platform fingerprints</strong><span>A builder's own runtime, badge, upload path or generator tag. This is a positive identification and it settles the question by itself.</span></li>
+          <li><strong>Repository history</strong><span>One enormous opening commit, hundreds of lines in minutes, a trail of one-line fixes behind it. The hardest thing to fake after the fact, and the reason the third tab exists.</span></li>
           <li><strong>Structural signals</strong><span>Uniform comment density, the same problem solved four ways, fully-built code wired to nothing. Hard to produce by accident, hard to fake.</span></li>
           <li><strong>Code-style tells</strong><span>What-not-why comments, blanket try/catch, swallowed exceptions, tests that assert nothing, emoji in comments.</span></li>
           <li><strong>Content and security</strong><span>Statistically generic testimonials, placeholder secrets, textbook-insecure defaults. The security profile decays slowest of all the tells.</span></li>
@@ -164,8 +189,9 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
         <h3>Masking is cheap</h3>
         <p>Renaming variables, stripping comments or running the file through a formatter erases most of what this reads. Minified bundles are excluded from code-level analysis for exactly this reason: the signal has already been normalised away.</p>
 
-        <h3>What it cannot see</h3>
-        <p>The strongest structural signal available is repository history: one enormous initial commit followed by a trail of micro-fixes. That lives in git, not in a served page or a pasted file, so this tool never sees it. If you have the repo, read the history first and treat this as a footnote.</p>
+        <h3>What it can only see if you show it</h3>
+        <p>The strongest signal available is repository history: one enormous opening commit followed by a trail of micro-fixes. That lives in git, not in a served page, so the URL tab cannot reach it &mdash; you have to paste a <code>git log</code> into the third tab, which means having the repository in the first place. When you do have it, start there and treat the other two tabs as corroboration.</p>
+        <p>Even then it reads the shape of the work rather than who did it. A developer who commits carefully while an agent writes the code produces a history that looks entirely human, because in every respect that git records, it is.</p>
 
         <h3>The better question</h3>
         <p>Authorship is usually not what anyone actually needs to know. Reviewed, tested, understood AI code is just code. The useful question is whether anyone understands this system and can secure it, which is why the security signals are here, and why they are the ones that will still work in five years.</p>

@@ -10,11 +10,13 @@ weight of each signal found, positive for AI, negative for human. The total goes
 a logistic curve to become the percentage. As a rough guide, a weight of 0.7 doubles the
 odds; 4.5 ends the argument.
 
-There are **67 signals** across 7 categories.
+There are **84 signals** across 9 categories.
 
 | Category | Signals | Direction |
 |---|---|---|
 | [Platform fingerprint](#platform-fingerprint) | 7 | raises the score |
+| [Repository history](#repository-history) | 11 | raises the score |
+| [Site-wide](#site-wide) | 6 | raises the score |
 | [Structural](#structural) | 9 | raises the score |
 | [Code style](#code-style) | 17 | raises the score |
 | [Content](#content) | 7 | raises the score |
@@ -69,6 +71,118 @@ A generator outside the main five identified itself in the page: its SDK, deploy
 `fp.generator_meta` · weight **4** (decisive)
 
 The document's own <meta name="generator"> names an AI site builder.
+
+
+## Repository history
+
+How the code arrived, rather than what it looks like. The strongest evidence available short of a fingerprint, and the hardest to fake after the fact: a convincing forged history means inventing plausible timestamps, authors, mistakes and reverts for every commit. Read from a pasted `git log`.
+
+### The repository arrives fully formed
+
+`gh.big_bang` · weight **1.4** (strong)
+
+An opening commit carrying most of the codebase at once. Hand-built projects start small and accrete; a first commit with hundreds of lines across dozens of files is a generated tree being put under version control after the fact.
+
+### More code than anyone types
+
+`gh.velocity` · weight **1.2** (strong)
+
+Hundreds of lines landing within minutes. Not proof by itself — a paste, a vendored library or a generated file does this too — but combined with the rest it is the shape of accepting output rather than writing it.
+
+### A large drop followed by a trail of one-line fixes
+
+`gh.micro_fix_trail` · weight **1.1** (strong)
+
+"fix typo", "fix import", "add missing dependency" in a run after a huge commit. The signature of code that was never read before it was committed, then corrected as each error surfaced at runtime.
+
+### Work spread across real time
+
+`gh.steady_cadence` · weight **1.1** (strong)
+
+Commits over weeks or months, on many separate days. This is the hardest property to manufacture and the most informative single thing about a repository.
+
+### More than one person committed
+
+`gh.multiple_authors` · weight **1** (strong)
+
+Several distinct authors in the history. Collaboration is expensive to fake and generators do not produce it.
+
+### Commit messages that read like the prompt
+
+`gh.prompt_messages` · weight **1** (strong)
+
+Subjects such as "add REST API for user management with JWT authentication": a complete specification in the imperative, describing what was asked for rather than what changed.
+
+### The entire history is one sitting
+
+`gh.single_session` · weight **0.9** (moderate)
+
+Every commit inside a few hours, with nothing before and nothing after. Real projects have evenings, weekends and abandonment in them.
+
+### Commits tied to tracked work
+
+`gh.issue_refs` · weight **0.8** (moderate)
+
+Issue numbers and ticket keys in the subjects, linking the code to a conversation happening somewhere else.
+
+### Branches, merges and reverts
+
+`gh.merges_and_reverts` · weight **0.8** (moderate)
+
+Work that went in, came out again, or arrived from a branch. Evidence of a process with second thoughts in it.
+
+### Visible frustration in the log
+
+`gh.human_mess` · weight **0.7** (moderate)
+
+"oops", "actually fix it this time", "why". The residue of a person losing an argument with their own code.
+
+### Interchangeable commit messages
+
+`gh.generic_messages` · weight **0.6** (moderate)
+
+"update", "changes", "fix", "wip" over and over, carrying no information about what happened.
+
+
+## Site-wide
+
+What only becomes visible once several pages have been read together. A single page cannot tell you whether a site was built in one pass or accreted over years; ten pages usually can. Available in whole-site mode.
+
+### Every page is one template with the words swapped
+
+`xs.template_uniformity` · weight **1.2** (strong)
+
+The same structure, the same class fingerprints and the same section order across the whole site. Generated sites are stamped from one mould; sites that grew have pages that remember when they were made.
+
+### Pages from different eras
+
+`xs.style_drift` · weight **1** (strong)
+
+One page on an older stack, another rebuilt more recently; inconsistent markup conventions between sections. Drift like this is what accretion looks like, and it is expensive to fake.
+
+### Pages built and linked but never filled
+
+`xs.placeholder_pages` · weight **0.9** (moderate)
+
+Routes that exist, appear in the navigation, and carry almost nothing. The scaffolding was generated along with everything else and nobody came back to write the content.
+
+### Pages genuinely differ in shape
+
+`xs.varied_pages` · weight **0.8** (moderate)
+
+Substantial variation in length, structure and density from one page to the next, in the way that follows from pages having different jobs.
+
+### Somebody wrote a lot of this
+
+`xs.deep_content` · weight **0.7** (moderate)
+
+At least one page carrying substantially more prose than the rest — an article, a manual, a history. Volume of specific writing is the least automatable thing on a website.
+
+### Every page is the same weight
+
+`xs.uniform_page_size` · weight **0.7** (moderate)
+
+Pages within a few percent of each other in size and element count. Real sites are lumpy because real content is lumpy: an About page is not the same length as a pricing table.
 
 
 ## Structural

@@ -19,7 +19,16 @@ final class FetchError extends Exception
  * followed by hand with the same check applied at each hop, and a hard cap on
  * both size and time.
  */
-final class Fetcher
+/**
+ * Not final, only so the crawler tests can substitute a double.
+ *
+ * The guard cannot be tested end to end against a real server, because it
+ * correctly refuses to fetch localhost — which is the point of it. Overriding
+ * the two public fetch methods in a test lets the crawl loop, the budget, the
+ * robots handling and the deduplication be exercised without any of that
+ * touching the network or relaxing a single check in production.
+ */
+class Fetcher
 {
     const UA = 'VibeCodeDetector/1.0 (+https://vibecodedetector.fanficnow.com; page analysis on user request)';
     const MAX_BYTES = 3145728;   // 3 MB
@@ -50,6 +59,21 @@ final class Fetcher
 
         $doc['assets'] = $this->fetchAssets($doc['url'], $doc['body']);
         return $doc;
+    }
+
+    /**
+     * One document, without its assets.
+     *
+     * Used by the crawler for pages after the first: the entry page has already
+     * paid for the stylesheet and the bundle, and refetching them for every
+     * inner page would spend the whole budget on files that barely differ.
+     *
+     * @return array{url:string,body:string,status:int,contentType:string,assets:array<string,string>}
+     * @throws FetchError
+     */
+    public function fetchDocument(string $url, int $maxBytes = self::MAX_BYTES, int $timeout = self::TIMEOUT): array
+    {
+        return $this->get($this->normalize($url), $maxBytes, $timeout);
     }
 
     /** @return array<string,string> */
@@ -105,7 +129,7 @@ final class Fetcher
     {
         $seen = array();
         for ($hop = 0; $hop <= self::MAX_REDIRECTS; $hop++) {
-            $this->assertSafe($url);
+            $pinned = $this->assertSafe($url);
 
             if (in_array($url, $seen, true)) {
                 throw new FetchError('The site is redirecting in a loop.');
@@ -113,7 +137,7 @@ final class Fetcher
             $seen[] = $url;
 
             $res = function_exists('curl_init')
-                ? $this->curlGet($url, $maxBytes, $timeout)
+                ? $this->curlGet($url, $maxBytes, $timeout, $pinned)
                 : $this->streamGet($url, $maxBytes, $timeout);
 
             if ($res['status'] >= 300 && $res['status'] < 400 && $res['location'] !== '') {
@@ -136,10 +160,27 @@ final class Fetcher
         throw new FetchError('Too many redirects.');
     }
 
-    /** @return array{status:int,body:string,contentType:string,location:string} */
-    private function curlGet(string $url, int $maxBytes, int $timeout): array
+    /**
+     * @param string[] $pinned addresses assertSafe() already vetted for this host
+     * @return array{status:int,body:string,contentType:string,location:string}
+     */
+    private function curlGet(string $url, int $maxBytes, int $timeout, array $pinned = array()): array
     {
         $ch = curl_init($url);
+
+        // Pin the connection to the addresses that were actually checked.
+        //
+        // Without this the guard is decorative: assertSafe() resolves the host
+        // and approves the answer, then cURL resolves it again independently
+        // when it connects. A DNS server under the target's control can return
+        // a public address for the first lookup and 127.0.0.1 for the second,
+        // and the check has approved a request it never saw. CURLOPT_RESOLVE
+        // closes that window by telling cURL the answer up front.
+        $resolve = $this->resolveOverrides($url, $pinned);
+        if ($resolve) {
+            curl_setopt($ch, CURLOPT_RESOLVE, $resolve);
+        }
+
         curl_setopt_array($ch, array(
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => false, // we vet every hop ourselves
@@ -235,11 +276,48 @@ final class Fetcher
     }
 
     /**
+     * Build the CURLOPT_RESOLVE entries that pin a host to vetted addresses.
+     *
+     * @param string[] $pinned
+     * @return string[]
+     */
+    private function resolveOverrides(string $url, array $pinned): array
+    {
+        if (!$pinned) {
+            return array();
+        }
+        $p = parse_url($url);
+        if (!$p || empty($p['host'])) {
+            return array();
+        }
+        $host = strtolower(trim($p['host'], '[]'));
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            return array(); // already an address; nothing to resolve
+        }
+
+        $port = isset($p['port'])
+            ? (int) $p['port']
+            : (strtolower((string) $p['scheme']) === 'https' ? 443 : 80);
+
+        // cURL wants literal IPv6 in brackets.
+        $addrs = array();
+        foreach ($pinned as $ip) {
+            $addrs[] = strpos($ip, ':') !== false ? '[' . $ip . ']' : $ip;
+        }
+
+        return array($host . ':' . $port . ':' . implode(',', $addrs));
+    }
+
+    /**
      * Reject anything that is not a public web address.
      *
+     * Returns the addresses it approved, so the caller can pin the connection
+     * to exactly those rather than letting the resolver be asked twice.
+     *
+     * @return string[]
      * @throws FetchError
      */
-    private function assertSafe(string $url): void
+    private function assertSafe(string $url): array
     {
         $p = parse_url($url);
         if (!$p || empty($p['scheme']) || empty($p['host'])) {
@@ -287,6 +365,8 @@ final class Fetcher
                 throw new FetchError('That address is on a private or reserved network and will not be fetched.');
             }
         }
+
+        return array_values(array_unique($ips));
     }
 
     private function isPublicIp(string $ip): bool

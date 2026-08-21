@@ -92,7 +92,7 @@ final class Certificate
         $this->pdf->text($this->x0, $y, 'SUBJECT', 'F2', 8, Brand::GREY, 1.4);
         $y += 16;
 
-        $isUrl = ($this->c['m'] === 'url');
+        $mode = (string) $this->c['m'];
         $target = (string) $this->c['t'];
 
         // A long URL is cut rather than wrapped: a broken line in a monospaced
@@ -107,7 +107,8 @@ final class Certificate
             $y += 15;
         }
 
-        $kind = $isUrl ? 'Live page' : 'Pasted source';
+        $kinds = array('url' => 'Live page', 'site' => 'Whole site', 'code' => 'Pasted source', 'git' => 'Repository history');
+        $kind = isset($kinds[$mode]) ? $kinds[$mode] : 'Subject';
         $extra = trim((string) ($this->c['n'] ?? ''));
         $this->pdf->text($this->x0, $y + 2, $kind . ($extra !== '' ? '  ·  ' . $extra : ''), 'F1', 9, Brand::GREY);
 

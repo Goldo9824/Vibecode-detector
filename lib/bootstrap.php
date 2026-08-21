@@ -20,15 +20,9 @@ require_once __DIR__ . '/Report.php';
 require_once __DIR__ . '/Text.php';
 require_once __DIR__ . '/CodeAnalyzer.php';
 require_once __DIR__ . '/SiteAnalyzer.php';
+require_once __DIR__ . '/GitAnalyzer.php';
+require_once __DIR__ . '/SiteSurvey.php';
 
-/**
- * The key that signs certificates.
- *
- * Written once to data/ on first use. If that directory is not writable (some
- * shared hosts mount the docroot read-only), fall back to a value derived from
- * this installation so certificates still verify against themselves — weaker,
- * but a broken download is worse than a weaker signature on a novelty PDF.
- */
 /**
  * The public base URL of this installation.
  *
@@ -68,6 +62,14 @@ function vcd_site_url(): string
     return $cached = ($https ? 'https://' : 'http://') . $host . $path;
 }
 
+/**
+ * The key that signs certificates.
+ *
+ * Written once to data/ on first use. If that directory is not writable (some
+ * shared hosts mount the docroot read-only), fall back to a value derived from
+ * this installation so certificates still verify against themselves — weaker,
+ * but a broken download is worse than a weaker signature on a novelty PDF.
+ */
 function vcd_secret(): string
 {
     static $cached = null;

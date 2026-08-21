@@ -15,6 +15,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__) . '/lib/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/Fetcher.php';
 require_once dirname(__DIR__) . '/lib/Certificate.php';
+require_once dirname(__DIR__) . '/lib/Crawler.php';
 
 $passed = 0;
 $failed = 0;
@@ -243,6 +244,377 @@ ok($r->has('cd.defensive_chaining'), 'catches optional chaining on everything');
 ok($r->has('cd.over_symmetric_branches'), 'catches an else for every if');
 ok($r->has('st.file_header_block'), 'catches the explanatory file-header block');
 
+// ------------------------------------------------------------- whole site
+
+group('Whole-site survey');
+
+/**
+ * Build a set of pages without going near the network. The crawler's own
+ * fetching is covered separately; what matters here is what the survey makes of
+ * several pages once it has them.
+ *
+ * @return array<int,array<string,mixed>>
+ */
+function pageSet(array $bodies): array
+{
+    $out = array();
+    foreach ($bodies as $path => $body) {
+        $out[] = array('url' => 'https://example.com' . $path, 'body' => $body, 'assets' => array(), 'status' => 200);
+    }
+    return $out;
+}
+
+// One template, different words: the shape every page shares is the finding.
+$stamped = array();
+foreach (array('/', '/about', '/pricing', '/contact', '/features') as $i => $path) {
+    $stamped[$path] = '<!DOCTYPE html><html lang="en"><head><title>Page</title></head><body>'
+        . '<nav class="nav flex items-center"><a href="/">Home</a><a href="/about">About</a></nav>'
+        . '<section class="hero py-24 text-center"><h1 class="text-6xl font-bold">Heading ' . $i . '</h1></section>'
+        . '<section class="grid grid-cols-3 gap-8">'
+        . '<div class="rounded-2xl shadow-lg p-6"><h3>One</h3><p>' . str_repeat('word' . $i . ' ', 22) . '</p></div>'
+        . '<div class="rounded-2xl shadow-lg p-6"><h3>Two</h3><p>' . str_repeat('word' . $i . ' ', 22) . '</p></div>'
+        . '<div class="rounded-2xl shadow-lg p-6"><h3>Three</h3><p>' . str_repeat('word' . $i . ' ', 22) . '</p></div>'
+        . '</section><footer class="py-24"><p>&copy; 2026</p></footer></body></html>';
+}
+$r = (new SiteSurvey('https://example.com/', pageSet($stamped)))->analyze();
+$a = $r->toArray();
+
+ok($r->has('xs.template_uniformity'), 'catches five pages stamped from one template');
+ok($r->has('xs.uniform_page_size'), 'catches every page being the same weight');
+ok(!$r->has('xs.varied_pages'), 'does not also claim the pages vary');
+ok(isset($a['stats']['templateSimilarity']) && $a['stats']['templateSimilarity'] > 0.9,
+   'reports the structural similarity it measured',
+   (string) ($a['stats']['templateSimilarity'] ?? 'missing'));
+ok(count($a['stats']['perPage']) === 5, 'reports every page it read');
+between($a['score'], 56, 97, 'a stamped site scores above the line');
+
+// A site that grew: different eras, different shapes, one page with real writing.
+$grown = array(
+    '/' => '<!DOCTYPE html><html lang="en"><head><title>Home</title></head><body><div id="wrapper">'
+         . '<table><tr><td>Menu</td></tr></table><h1>Welcome</h1><p>' . str_repeat('sentence about the shop ', 30) . '</p>'
+         . '</div></body></html>',
+    '/history' => '<!DOCTYPE html><html lang="en"><head><title>History</title></head><body><article class="post">'
+         . '<h1>Our history</h1>' . str_repeat('<p>' . str_repeat('a genuinely long paragraph of real writing ', 20) . '</p>', 14)
+         . '</article></body></html>',
+    '/contact' => '<!DOCTYPE html><html lang="en"><head><title>Contact</title></head><body>'
+         . '<section class="contact"><h2>Contact</h2><p>14 rue des Capucins, 69001 Lyon. 04 78 28 41 03.</p></section></body></html>',
+    '/gallery' => '<!DOCTYPE html><html lang="en"><head><title>Gallery</title></head><body><ul class="gal">'
+         . str_repeat('<li><img src="/p.jpg" alt="a"></li>', 18) . '</ul></body></html>',
+);
+$r = (new SiteSurvey('https://example.com/', pageSet($grown)))->analyze();
+$a = $r->toArray();
+
+ok($r->has('xs.style_drift'), 'catches pages built in different eras');
+ok($r->has('xs.varied_pages'), 'catches pages that genuinely differ in shape');
+ok($r->has('xs.deep_content'), 'catches the page somebody actually wrote');
+ok(!$r->has('xs.template_uniformity'), 'does not call a grown site a template');
+between($a['score'], 3, 45, 'a grown site scores in the human band');
+
+// Corroboration: a signal on one page out of six is not a site property.
+$mixedPages = array();
+foreach (range(1, 6) as $i) {
+    $body = '<!DOCTYPE html><html lang="en"><head><title>P</title></head><body>'
+          . '<div class="a"><p>' . str_repeat('ordinary body copy here ', 30 + $i * 9) . '</p></div>';
+    if ($i === 1) {
+        $body .= '<p>Lorem ipsum dolor sit amet</p>'; // placeholder copy, one page only
+    }
+    $mixedPages['/p' . $i] = $body . '</body></html>';
+}
+$r = (new SiteSurvey('https://example.com/', pageSet($mixedPages)))->analyze();
+ok(!$r->has('ct.placeholder_copy'), 'a signal on one page in six is not counted site-wide');
+
+$allPages = array();
+foreach (range(1, 6) as $i) {
+    $allPages['/q' . $i] = '<!DOCTYPE html><html lang="en"><head><title>P</title></head><body>'
+        . '<div class="a"><p>Lorem ipsum dolor sit amet, ' . str_repeat('filler ', 30 + $i * 9) . '</p></div></body></html>';
+}
+$r = (new SiteSurvey('https://example.com/', pageSet($allPages)))->analyze();
+ok($r->has('ct.placeholder_copy'), 'the same signal on every page is counted');
+$ev = '';
+foreach ($r->signals() as $s) {
+    if ($s->id === 'ct.placeholder_copy') $ev = implode(' ', $s->evidence);
+}
+ok(strpos($ev, 'of 6 pages') !== false, 'and says how many pages carried it', $ev);
+
+// A fingerprint only has to be true once.
+$onePrint = array(
+    '/'  => '<!DOCTYPE html><html><head><title>a</title></head><body><p>' . str_repeat('x ', 60) . '</p></body></html>',
+    '/b' => '<!DOCTYPE html><html><head><title>b</title></head><body><p>' . str_repeat('y ', 60) . '</p></body></html>',
+    '/c' => '<!DOCTYPE html><html><head><title>c</title></head><body><script src="https://cdn.gpteng.co/gptengineer.js"></script></body></html>',
+    '/d' => '<!DOCTYPE html><html><head><title>d</title></head><body><p>' . str_repeat('z ', 60) . '</p></body></html>',
+);
+$r = (new SiteSurvey('https://example.com/', pageSet($onePrint)))->analyze();
+ok($r->hasFingerprint(), 'a fingerprint on a single page still identifies the site');
+ok($r->toArray()['verdict']['code'] === 'builder_identified', 'and carries the verdict');
+
+// A one-page crawl degrades to the single-page reading rather than inventing.
+$single = (new SiteSurvey('https://example.com/', pageSet(array('/' => $stamped['/']))))->analyze();
+ok(!$single->has('xs.template_uniformity'), 'one page cannot support a site-wide comparison');
+ok(!$single->has('xs.uniform_page_size'), 'nor a size comparison');
+
+// ------------------------------------------------------- crawler mechanics
+
+group('Crawler mechanics');
+
+$c = new Crawler();
+$abs = new ReflectionMethod('Crawler', 'absolute');
+$abs->setAccessible(true);
+$canon = new ReflectionMethod('Crawler', 'canonical');
+$canon->setAccessible(true);
+$links = new ReflectionMethod('Crawler', 'linksFrom');
+$links->setAccessible(true);
+
+ok($abs->invoke($c, '/about', 'https://example.com/x/y') === 'https://example.com/about', 'root-relative links resolve');
+ok($abs->invoke($c, 'b.html', 'https://example.com/x/y.html') === 'https://example.com/x/b.html', 'document-relative links resolve');
+ok($abs->invoke($c, '../up', 'https://example.com/x/y/z.html') === 'https://example.com/x/up', 'parent traversal resolves');
+ok($abs->invoke($c, 'https://example.com/p#frag', 'https://example.com/') === 'https://example.com/p', 'fragments are stripped');
+ok($abs->invoke($c, '#top', 'https://example.com/') === null, 'a bare fragment is not a page');
+ok($abs->invoke($c, 'javascript:void(0)', 'https://example.com/') === null, 'javascript hrefs are refused');
+ok($abs->invoke($c, 'mailto:a@b.c', 'https://example.com/') === null, 'mailto is refused');
+
+ok($canon->invoke($c, 'https://example.com/a/') === $canon->invoke($c, 'https://example.com/a'),
+   'a trailing slash is the same page');
+ok($canon->invoke($c, 'https://example.com/index.html') === $canon->invoke($c, 'https://example.com/'),
+   'index.html is the same page as the root');
+ok($canon->invoke($c, 'https://EXAMPLE.com/A') === $canon->invoke($c, 'https://example.com/A'),
+   'the host is case-insensitive');
+
+$html = '<a href="/ok">a</a><a href="/img.png">b</a><a href="/doc.pdf">c</a>'
+      . '<a href="https://elsewhere.example/x">d</a><a href="/logout">e</a><a href="/fine/page">f</a>';
+$found = $links->invoke($c, $html, 'https://example.com/', 'https://example.com');
+ok(in_array('https://example.com/ok', $found, true), 'follows an ordinary link');
+ok(in_array('https://example.com/fine/page', $found, true), 'follows a nested link');
+ok(!in_array('https://example.com/img.png', $found, true), 'skips images');
+ok(!in_array('https://example.com/doc.pdf', $found, true), 'skips documents that are not pages');
+ok(!in_array('https://elsewhere.example/x', $found, true), 'never leaves the origin');
+ok(!in_array('https://example.com/logout', $found, true), 'does not click things that do things');
+
+// robots.txt is parsed for the wildcard group and ours, and obeyed.
+$robots = new ReflectionMethod('Crawler', 'allowedByRobots');
+$robots->setAccessible(true);
+$disallow = new ReflectionProperty('Crawler', 'disallow');
+$disallow->setAccessible(true);
+$disallow->setValue($c, array('/private', '/admin'));
+
+ok($robots->invoke($c, 'https://example.com/public', 'https://example.com') === true, 'allowed paths are crawled');
+ok($robots->invoke($c, 'https://example.com/private/x', 'https://example.com') === false, 'disallowed prefixes are obeyed');
+ok($robots->invoke($c, 'https://example.com/admin', 'https://example.com') === false, 'an exact disallow is obeyed');
+
+ok(Crawler::MAX_PAGES <= 10, 'the page ceiling stays polite', (string) Crawler::MAX_PAGES);
+ok(Crawler::BUDGET_SECONDS < 30, 'the crawl finishes inside a shared-hosting request',
+   (string) Crawler::BUDGET_SECONDS);
+
+// ------------------------------------------------------- crawl, end to end
+
+group('Crawling a whole site');
+
+/**
+ * A site in memory.
+ *
+ * The guard correctly refuses to fetch localhost, so a real server cannot be
+ * used here — which is the guard working, not a gap. This substitutes the two
+ * fetch methods and leaves every check in place for production.
+ */
+class StubFetcher extends Fetcher
+{
+    /** @var array<string,string> */
+    public $site;
+    /** @var int */
+    public $calls = 0;
+
+    public function __construct(array $site)
+    {
+        $this->site = $site;
+    }
+
+    public function fetchSite(string $url): array
+    {
+        $doc = $this->fetchDocument($url);
+        $doc['assets'] = array();
+        return $doc;
+    }
+
+    public function fetchDocument(string $url, int $maxBytes = 0, int $timeout = 0): array
+    {
+        $this->calls++;
+        $path = (string) parse_url($url, PHP_URL_PATH);
+        if ($path === '') {
+            $path = '/';
+        }
+        if (!isset($this->site[$path])) {
+            throw new FetchError('404 ' . $path);
+        }
+        return array(
+            'url' => $url, 'body' => $this->site[$path], 'status' => 200,
+            'contentType' => 'text/html', 'assets' => array(),
+        );
+    }
+}
+
+function stubPage(string $name, string $extra = ''): string
+{
+    return '<!DOCTYPE html><html lang="en"><head><title>' . $name . '</title></head><body>'
+        . '<nav><a href="/">Home</a><a href="/about">About</a><a href="/pricing">Pricing</a>'
+        . '<a href="/contact">Contact</a><a href="/secret">Secret</a><a href="/about">About again</a>'
+        . '<a href="https://elsewhere.example/away">Away</a></nav>'
+        . '<main><h1>' . $name . '</h1><p>' . str_repeat($name . ' filler ', 40) . '</p></main>'
+        . $extra . '</body></html>';
+}
+
+$site = array(
+    '/robots.txt' => "User-agent: *\nDisallow: /secret\n",
+    '/'           => stubPage('home'),
+    '/about'      => stubPage('about'),
+    '/pricing'    => stubPage('pricing'),
+    '/contact'    => stubPage('contact'),
+    '/secret'     => stubPage('secret'),
+);
+
+$stub = new StubFetcher($site);
+$crawler = new Crawler($stub);
+$started = microtime(true);
+$pages = $crawler->crawl('https://example.com/');
+$took = microtime(true) - $started;
+
+ok(count($pages) === 4, 'reads every linked page it is allowed to', count($pages) . ' pages');
+$urls = array();
+foreach ($pages as $p) {
+    $urls[] = (string) parse_url($p['url'], PHP_URL_PATH);
+}
+sort($urls);
+ok($urls === array('/', '/about', '/contact', '/pricing'), 'and exactly those', implode(' ', $urls));
+ok(!in_array('/secret', $urls, true), 'robots.txt Disallow is obeyed against a live crawl');
+ok(strpos(implode(' ', $crawler->notes()), 'robots.txt') !== false, 'and the report says a page was skipped');
+ok($took < 5.0, 'a small site crawls quickly', sprintf('%.2fs', $took));
+
+// Repeated links must not turn into repeated fetches.
+ok($stub->calls <= 6, 'each page is fetched once, plus robots.txt', $stub->calls . ' fetches');
+
+// The page ceiling holds on a site with more pages than the limit.
+$big = array('/robots.txt' => "User-agent: *\n");
+$links = '';
+for ($i = 1; $i <= 30; $i++) {
+    $links .= '<a href="/p' . $i . '">p' . $i . '</a>';
+}
+$big['/'] = '<!DOCTYPE html><html lang="en"><head><title>i</title></head><body>' . $links . '</body></html>';
+for ($i = 1; $i <= 30; $i++) {
+    $big['/p' . $i] = stubPage('p' . $i);
+}
+$capped = new Crawler(new StubFetcher($big));
+$got = $capped->crawl('https://example.com/');
+ok(count($got) === Crawler::MAX_PAGES, 'never reads more pages than the ceiling', count($got) . ' pages');
+
+// A site with no links still yields the entry page and says why.
+$lonely = new Crawler(new StubFetcher(array(
+    '/robots.txt' => "User-agent: *\n",
+    '/' => '<!DOCTYPE html><html lang="en"><head><title>x</title></head><body><p>alone</p></body></html>',
+)));
+$one = $lonely->crawl('https://example.com/');
+ok(count($one) === 1, 'a site with no links yields just the entry page');
+ok(strpos(implode(' ', $lonely->notes()), 'Only one page') !== false, 'and explains what that means');
+
+// A dead link mid-crawl must not abort the whole thing.
+$broken = array(
+    '/robots.txt' => "User-agent: *\n",
+    '/' => '<!DOCTYPE html><html lang="en"><head><title>i</title></head><body>'
+         . '<a href="/gone">gone</a><a href="/here">here</a></body></html>',
+    '/here' => stubPage('here'),
+);
+$resilient = new Crawler(new StubFetcher($broken));
+$survived = $resilient->crawl('https://example.com/');
+ok(count($survived) === 2, 'a broken link is skipped rather than fatal', count($survived) . ' pages');
+
+// And the whole path, crawl through survey, produces a scored report.
+$full = (new SiteSurvey('https://example.com/', $pages, $crawler->notes()))->analyze()->toArray();
+ok($full['mode'] === 'site', 'the survey reports site mode');
+ok($full['stats']['pages'] === 4, 'and how many pages it read');
+ok(count($full['stats']['perPage']) === 4, 'with a per-page breakdown for the UI');
+ok(isset($full['score']) && $full['score'] >= 3 && $full['score'] <= 97, 'and a bounded score');
+
+// ------------------------------------------------------------ git history
+
+group('A generated repository history');
+
+$t0 = strtotime('2026-03-04 14:02:00 UTC');
+$genLog = '';
+$genLog .= "a1b2c3d|" . $t0 . "|Sam Rivera|initial commit\n1840\t0\tsrc/app.jsx\n420\t0\tsrc/index.css\n96\t0\tpackage.json\n\n";
+$genLog .= "b2c3d4e|" . ($t0 + 240) . "|Sam Rivera|add dashboard page with charts and responsive layout\n610\t2\tsrc/Dashboard.jsx\n\n";
+$genLog .= "c3d4e5f|" . ($t0 + 520) . "|Sam Rivera|implement authentication flow with JWT and refresh tokens\n380\t4\tsrc/auth.js\n\n";
+$genLog .= "d4e5f6a|" . ($t0 + 900) . "|Sam Rivera|fix typo\n1\t1\tsrc/app.jsx\n\n";
+$genLog .= "e5f6a7b|" . ($t0 + 960) . "|Sam Rivera|fix missing import\n2\t0\tsrc/Dashboard.jsx\n\n";
+$genLog .= "f6a7b8c|" . ($t0 + 1020) . "|Sam Rivera|fix build error\n1\t1\tsrc/auth.js\n\n";
+$genLog .= "a7b8c9d|" . ($t0 + 1200) . "|Sam Rivera|update\n3\t1\tREADME.md\n";
+
+$g = new GitAnalyzer($genLog);
+$r = $g->analyze();
+$a = $r->toArray();
+
+ok(count($g->commits()) === 7, 'parses the documented format', (string) count($g->commits()));
+ok($g->commits()[0]['subject'] === 'initial commit', 'orders oldest first');
+between($a['score'], 70, 97, 'a generated history scores in the AI band');
+ok($r->has('gh.big_bang'), 'catches the repository arriving fully formed');
+ok($r->has('gh.velocity'), 'catches more code than anyone types');
+ok($r->has('gh.micro_fix_trail'), 'catches the trail of one-line fixes');
+ok($r->has('gh.prompt_messages'), 'catches commit messages that read like the prompt');
+ok($r->has('gh.single_session'), 'catches a history that is one sitting');
+
+// ------------------------------------------------------- git: hand-written
+
+group('A hand-written repository history');
+
+$day = 86400;
+$h0 = strtotime('2025-11-03 09:14:00 UTC');
+$humanLog = '';
+$humanLog .= "1111aaa|" . $h0 . "|Priya Nair|first pass at the importer\n82\t0\timporter.py\n\n";
+$humanLog .= "2222bbb|" . ($h0 + 2 * $day) . "|Priya Nair|handle the empty-file case, closes #214\n24\t3\timporter.py\n\n";
+$humanLog .= "3333ccc|" . ($h0 + 5 * $day) . "|Tom Whelan|Merge branch 'csv-quoting'\n0\t0\t\n\n";
+$humanLog .= "4444ddd|" . ($h0 + 9 * $day) . "|Tom Whelan|why does excel do this\n11\t2\timporter.py\n\n";
+$humanLog .= "5555eee|" . ($h0 + 16 * $day) . "|Priya Nair|Revert \"speed up the parse loop\"\n4\t40\timporter.py\n\n";
+$humanLog .= "6666fff|" . ($h0 + 24 * $day) . "|Priya Nair|actually fix the encoding this time, see #231\n18\t6\timporter.py\n\n";
+$humanLog .= "7777abc|" . ($h0 + 31 * $day) . "|Tom Whelan|oops, forgot the migration\n9\t0\tmigrate.sql\n\n";
+$humanLog .= "8888def|" . ($h0 + 44 * $day) . "|Priya Nair|bump timeout after the Tuesday outage\n2\t2\tconfig.py\n";
+
+$r = (new GitAnalyzer($humanLog))->analyze();
+$a = $r->toArray();
+
+between($a['score'], 3, 35, 'a hand-written history scores in the human band');
+ok($r->has('gh.steady_cadence'), 'catches work spread across real time');
+ok($r->has('gh.multiple_authors'), 'catches more than one committer');
+ok($r->has('gh.merges_and_reverts'), 'catches merges and reverts');
+ok($r->has('gh.issue_refs'), 'catches commits tied to tracked work');
+ok($r->has('gh.human_mess'), 'catches visible frustration in the log');
+ok(!$r->has('gh.big_bang'), 'does not cry big bang at an 82-line opening commit');
+
+// ---------------------------------------------------- git: format handling
+
+group('Git log format handling');
+
+$default = "commit 9f8e7d6c5b4a3210\nAuthor: Dana Cole <dana@example.com>\nDate:   Tue Jan 14 11:02:03 2025 +0000\n\n    tidy up the config loader\n\n"
+         . "commit 1a2b3c4d5e6f7080\nAuthor: Dana Cole <dana@example.com>\nDate:   Mon Jan 13 18:40:11 2025 +0000\n\n    add retry around the flaky upload\n";
+$gd = new GitAnalyzer($default);
+ok(count($gd->commits()) === 2, 'parses default git log output', (string) count($gd->commits()));
+ok($gd->commits()[0]['author'] === 'Dana Cole', 'reads the author');
+ok($gd->commits()[0]['subject'] === 'add retry around the flaky upload', 'reads the subject, oldest first');
+
+$oneline = "3f21a9c tidy the readme\n9c8b7a6 add the licence\n1d2e3f4 initial commit\n";
+$go = new GitAnalyzer($oneline);
+ok(count($go->commits()) === 3, 'parses --oneline output', (string) count($go->commits()));
+$ao = $go->analyze()->toArray();
+ok(strpos(implode(' ', $ao['notes']), 'no timestamps') !== false,
+   'says plainly that --oneline gives it little to work with');
+
+$empty = (new GitAnalyzer("nothing resembling a git log at all\njust prose\n"))->analyze()->toArray();
+ok($empty['confidence']['level'] === 'insufficient', 'unparseable input reports insufficient confidence');
+ok(count($empty['signals']) === 0, 'unparseable input invents no signals');
+
+// A log with no line counts must still read messages, and say what it lost.
+$noStats = "aaa1111|" . $t0 . "|Sam|initial commit\nbbb2222|" . ($t0 + 300) . "|Sam|update\nccc3333|" . ($t0 + 600) . "|Sam|fix\nddd4444|" . ($t0 + 900) . "|Sam|changes\nfff5555|" . ($t0 + 1200) . "|Sam|wip\n";
+$rn = (new GitAnalyzer($noStats))->analyze();
+ok($rn->has('gh.generic_messages'), 'reads message quality without line counts');
+ok(!$rn->has('gh.big_bang'), 'does not claim a big bang it cannot measure');
+ok(strpos(implode(' ', $rn->toArray()['notes']), 'no line counts') !== false,
+   'says the paste carried no line counts');
+
 // --------------------------------------------------------------- guardrails
 
 group('Scoring guardrails');
@@ -433,6 +805,37 @@ foreach ($blocked as $url) {
 
 ok($f->normalize('example.com') === 'https://example.com', 'a bare host gets https://');
 
+// assertSafe must hand back the addresses it approved, and curlGet must pin the
+// connection to them. Without that the guard is decorative: cURL re-resolves on
+// connect, so a DNS server under the target's control can answer once with a
+// public address and once with 127.0.0.1.
+$safe = new ReflectionMethod('Fetcher', 'assertSafe');
+$safe->setAccessible(true);
+$approved = $safe->invoke($f, 'https://example.com/');
+ok(is_array($approved) && $approved !== array(), 'assertSafe returns the addresses it vetted',
+   is_array($approved) ? implode(',', $approved) : gettype($approved));
+
+$overrides = new ReflectionMethod('Fetcher', 'resolveOverrides');
+$overrides->setAccessible(true);
+
+$pin = $overrides->invoke($f, 'https://example.com/some/path', array('93.184.216.34'));
+ok($pin === array('example.com:443:93.184.216.34'), 'https pins to port 443',
+   implode(' ', (array) $pin));
+
+$pin = $overrides->invoke($f, 'http://example.com/', array('93.184.216.34', '93.184.216.35'));
+ok($pin === array('example.com:80:93.184.216.34,93.184.216.35'), 'http pins every vetted address',
+   implode(' ', (array) $pin));
+
+$pin = $overrides->invoke($f, 'https://example.com/', array('2606:2800:220:1:248:1893:25c8:1946'));
+ok($pin === array('example.com:443:[2606:2800:220:1:248:1893:25c8:1946]'),
+   'IPv6 is bracketed the way cURL wants it', implode(' ', (array) $pin));
+
+ok($overrides->invoke($f, 'https://93.184.216.34/', array('93.184.216.34')) === array(),
+   'a literal address needs no override');
+
+$src = (string) file_get_contents(dirname(__DIR__) . '/lib/Fetcher.php');
+ok(strpos($src, 'CURLOPT_RESOLVE') !== false, 'the vetted address is actually pinned on the request');
+
 $rejectedEmpty = false;
 try { $f->normalize('   '); } catch (FetchError $e) { $rejectedEmpty = true; }
 ok($rejectedEmpty, 'refuses an empty URL');
@@ -448,6 +851,44 @@ ok(substr_count($svg, '<path') === 2, 'the mark has both halves of the trace');
 $onDisk = (string) file_get_contents(dirname(__DIR__) . '/assets/img/logo.svg');
 ok(strpos($onDisk, Brand::markSvg(120, 'currentColor', '#b8402e', 'role="img" aria-label="Vibe Code Detector"')) !== false,
    'assets/img/logo.svg matches lib/Brand.php (run tools/build-assets.php)');
+
+// ------------------------------------------------------- bounded scanning
+
+group('Bounded scanning');
+
+// A blind substr can split a UTF-8 character, and every /u pattern run over the
+// result then returns null rather than matching nothing — which reads as "no
+// signals found" instead of an error.
+$multibyte = str_repeat('café — naïve ', 200);
+for ($cut = 20; $cut < 40; $cut++) {
+    $piece = Text::safeCut($multibyte, $cut);
+    if (!preg_match('//u', $piece)) {
+        ok(false, 'safeCut never leaves invalid UTF-8', "broke at {$cut} bytes");
+        break;
+    }
+    if ($cut === 39) {
+        ok(true, 'safeCut never leaves invalid UTF-8 at any offset');
+    }
+}
+ok(strlen(Text::safeCut('abc', 100)) === 3, 'safeCut leaves short input alone');
+ok(Text::safeCut('', 10) === '', 'safeCut handles an empty string');
+
+// A page past the ceiling still analyses, still finds its fingerprint, and says
+// what it did not read.
+$huge = '<!DOCTYPE html><html lang="en"><head><title>Big</title></head><body>'
+      . str_repeat('<p>Filler sentence that exists only to take up room on the page.</p>', 12000)
+      . '<script src="https://cdn.gpteng.co/gptengineer.js"></script></body></html>';
+ok(strlen($huge) > SiteAnalyzer::MAX_SCAN, 'the oversized fixture really is oversized');
+
+$started = microtime(true);
+$rh = (new SiteAnalyzer('https://big.example.com/', $huge))->analyze();
+$elapsed = microtime(true) - $started;
+$ah = $rh->toArray();
+
+ok($rh->hasFingerprint(), 'fingerprints are still found in an oversized page');
+ok(!empty($ah['stats']['scanTruncated']), 'the report records that scanning was bounded');
+ok(strpos(implode(' ', $ah['notes']), 'first') !== false, 'and says so in the notes');
+ok($elapsed < 10.0, 'an oversized page analyses in reasonable time', sprintf('%.1fs', $elapsed));
 
 // ----------------------------------------------------------------- markup
 
@@ -471,10 +912,15 @@ ok(isset($spanRule[1]) && strpos($spanRule[1], 'grid-column: 2') !== false,
 $page = (string) file_get_contents(dirname(__DIR__) . '/index.php');
 ok(substr_count($page, 'class="ladder"') === 1, 'the ladder list is where the test expects it');
 preg_match('~<ol class="ladder">(.*?)</ol>~s', $page, $ladderHtml);
+// The count is not the point — the invariant is. Each rung puts three children
+// into a two-column grid, so a rung whose description is missing, or a stray
+// extra element, is what actually breaks the layout.
 $items = isset($ladderHtml[1]) ? substr_count($ladderHtml[1], '<li>') : 0;
-ok($items === 5, 'the ladder still has five rungs', (string) $items);
+ok($items >= 5, 'the ladder describes the evidence hierarchy', (string) $items . ' rungs');
 ok(substr_count((string) ($ladderHtml[1] ?? ''), '<span>') === $items,
-   'every rung has a description span');
+   'every rung has exactly one description span');
+ok(substr_count((string) ($ladderHtml[1] ?? ''), '<strong>') === $items,
+   'every rung has exactly one term');
 
 ok(strpos($page, 'A Landfall studio product') !== false, 'the studio credit is in the footer');
 ok(strpos($css, '.colophon .studio') !== false, 'the studio credit is styled');

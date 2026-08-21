@@ -23,14 +23,24 @@
 
 ## What it does
 
-Two modes, no account, nothing stored.
+Three modes, no account, nothing stored.
 
 - **Live page** — fetches a URL and up to four of its own stylesheets and scripts,
   then reads it the way you would with View Source open: builder fingerprints
   first, then structure, then the look of the thing.
+- **Whole site** — tick the box and it follows links from that page, reads up to
+  ten of them, and compares them against each other. This is not the page check
+  run ten times: a signal only counts site-wide when enough pages carry it, and
+  whether the pages *resemble* each other is itself evidence no single page can
+  give you. Honours `robots.txt`, stops after ten pages, and finishes inside a
+  shared-hosting request.
 - **Pasted code** — reads a source file in any language for the tells that survive
   in text: comment habits, error handling, naming, dependency incoherence, the
   security profile.
+- **Git history** — paste the output of `git log` and it reads how the code
+  *arrived*: one enormous opening commit, hundreds of lines in minutes, a trail
+  of one-line fixes behind it. This is the strongest evidence the tool has, and
+  the hardest to fake after the fact.
 
 Either way you get a score out of 100, a verdict, a confidence level, and **every
 signal that fired with the excerpt that triggered it**. You can then download a
@@ -66,6 +76,8 @@ Evidence is ranked, because evidence is not equal:
 | Tier | Example | Weight |
 |---|---|---|
 | Platform fingerprint | `cdn.gpteng.co`, a `lovable-tagger` marker, a builder's generator meta tag | 4.5 — decisive |
+| Repository history | a big-bang first commit, 600 lines in four minutes, a run of "fix typo" | 0.6–1.4 |
+| Site-wide | every page one template with the words swapped; or pages from visibly different eras | 0.7–1.2 |
 | Structural | uniform comment density, the same problem solved several ways, code wired to nothing | 0.6–1.1 |
 | Code style | what-not-why comments, swallowed exceptions, tests that assert nothing | 0.4–1.3 |
 | Content & security | generic testimonials, placeholder secrets, textbook-insecure defaults | 0.4–0.9 |
@@ -87,16 +99,21 @@ Six rules the scoring will not break:
    reading without repository history has not earned more than that.
 6. Human signals are first-class and weighted on the same scale as the rest.
 
-All 67 signals, with their weights and reasoning, are in
+All 84 signals, with their weights and reasoning, are in
 **[docs/SIGNALS.md](docs/SIGNALS.md)** — generated from `lib/Catalog.php`, so the
 documentation cannot drift from the code.
 
-### The strongest signal is one this tool cannot see
+### The strongest signal needs you to show it
 
-Repository history. One enormous initial commit followed by a trail of "fix typo"
+Repository history. One enormous opening commit followed by a trail of "fix typo"
 commits is far harder to fake retroactively than anything in a served page or a
-pasted file. If you have the repo, read `git log` first and treat this tool as a
-footnote. Where trust is not adversarial, ask the developer.
+pasted file — which is why the third tab exists. It cannot be reached from a URL,
+so you need the repository in hand. When you have it, start there.
+
+Even then it reads the shape of the work, not who did it: a developer who commits
+carefully while an agent writes the code produces a history that looks entirely
+human, because in every respect git records, it is. Where trust is not
+adversarial, ask the developer.
 
 ## Half of this was vibecoded
 
@@ -143,7 +160,7 @@ php -S localhost:8000
 Then open <http://localhost:8000>. There is nothing to install first.
 
 ```bash
-php tests/run.php                       # the whole suite, ~180 assertions
+php tests/run.php                       # the whole suite, ~300 assertions
 php tools/gen-signals-doc.php           # regenerate docs/SIGNALS.md
 php tools/build-assets.php              # regenerate the SVG files from lib/Brand.php
 php tools/build-social.php              # regenerate the 1280x640 social preview card
@@ -172,6 +189,9 @@ lib/
   Report.php       scoring, verdict bands, guard rails
   SiteAnalyzer.php live-page analysis
   CodeAnalyzer.php source analysis
+  GitAnalyzer.php  repository-history analysis
+  Crawler.php      polite same-origin crawl, robots.txt and a time budget
+  SiteSurvey.php   multi-page aggregation and cross-page comparison
   Fetcher.php      HTTP with SSRF protection
   Pdf.php          a small PDF 1.4 writer
   Brand.php        the mark, as geometry

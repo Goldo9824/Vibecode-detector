@@ -81,6 +81,12 @@ final class Report
      * not accumulated inference, and nothing should hold them back.
      */
     const CATEGORY_CAPS = array(
+        // History is capped highest of the inferential categories: it is the
+        // strongest evidence short of a fingerprint and the hardest to fake.
+        Catalog::CAT_HISTORY    => 3.2,
+        // Site-wide evidence needs several pages to exist at all, so when it
+        // does fire it is already corroborated across them.
+        Catalog::CAT_SITEWIDE   => 2.2,
         Catalog::CAT_STRUCTURE  => 2.6,
         Catalog::CAT_CODE       => 2.8,
         Catalog::CAT_CONTENT    => 1.4,

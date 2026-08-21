@@ -16,6 +16,8 @@ declare(strict_types=1);
 final class Catalog
 {
     const CAT_FINGERPRINT = 'fingerprint';
+    const CAT_HISTORY     = 'history';
+    const CAT_SITEWIDE    = 'sitewide';
     const CAT_STRUCTURE   = 'structure';
     const CAT_CODE        = 'code';
     const CAT_CONTENT     = 'content';
@@ -31,6 +33,8 @@ final class Catalog
     {
         return array(
             self::CAT_FINGERPRINT => 'Platform fingerprint',
+            self::CAT_HISTORY     => 'Repository history',
+            self::CAT_SITEWIDE    => 'Site-wide',
             self::CAT_STRUCTURE   => 'Structural',
             self::CAT_CODE        => 'Code style',
             self::CAT_CONTENT     => 'Content',
@@ -77,6 +81,8 @@ final class Catalog
         }
 
         $f = self::CAT_FINGERPRINT;
+        $g = self::CAT_HISTORY;
+        $w = self::CAT_SITEWIDE;
         $s = self::CAT_STRUCTURE;
         $c = self::CAT_CODE;
         $t = self::CAT_CONTENT;
@@ -107,6 +113,53 @@ final class Catalog
                 'The document\'s own <meta name="generator"> names an AI site builder.'),
             'fp.builder_other' => self::mk($f, $ai, 4.0, 'Another AI builder\'s fingerprint',
                 'A generator outside the main five identified itself in the page: its SDK, deployment host or badge is present. The specific tool is named in the evidence.'),
+
+            // ---- Repository history -----------------------------------------
+            // The strongest evidence available short of a fingerprint, and the
+            // hardest to fake after the fact: rewriting a history to look lived-in
+            // means inventing plausible timestamps, authors, mistakes and reverts
+            // for every commit. Weighted accordingly.
+            'gh.big_bang' => self::mk($g, $ai, 1.4, 'The repository arrives fully formed',
+                'An opening commit carrying most of the codebase at once. Hand-built projects start small and accrete; a first commit with hundreds of lines across dozens of files is a generated tree being put under version control after the fact.'),
+            'gh.velocity' => self::mk($g, $ai, 1.2, 'More code than anyone types',
+                'Hundreds of lines landing within minutes. Not proof by itself — a paste, a vendored library or a generated file does this too — but combined with the rest it is the shape of accepting output rather than writing it.'),
+            'gh.micro_fix_trail' => self::mk($g, $ai, 1.1, 'A large drop followed by a trail of one-line fixes',
+                '"fix typo", "fix import", "add missing dependency" in a run after a huge commit. The signature of code that was never read before it was committed, then corrected as each error surfaced at runtime.'),
+            'gh.prompt_messages' => self::mk($g, $ai, 1.0, 'Commit messages that read like the prompt',
+                'Subjects such as "add REST API for user management with JWT authentication": a complete specification in the imperative, describing what was asked for rather than what changed.'),
+            'gh.single_session' => self::mk($g, $ai, 0.9, 'The entire history is one sitting',
+                'Every commit inside a few hours, with nothing before and nothing after. Real projects have evenings, weekends and abandonment in them.'),
+            'gh.generic_messages' => self::mk($g, $ai, 0.6, 'Interchangeable commit messages',
+                '"update", "changes", "fix", "wip" over and over, carrying no information about what happened.'),
+
+            'gh.steady_cadence' => self::mk($g, $hu, 1.1, 'Work spread across real time',
+                'Commits over weeks or months, on many separate days. This is the hardest property to manufacture and the most informative single thing about a repository.'),
+            'gh.multiple_authors' => self::mk($g, $hu, 1.0, 'More than one person committed',
+                'Several distinct authors in the history. Collaboration is expensive to fake and generators do not produce it.'),
+            'gh.merges_and_reverts' => self::mk($g, $hu, 0.8, 'Branches, merges and reverts',
+                'Work that went in, came out again, or arrived from a branch. Evidence of a process with second thoughts in it.'),
+            'gh.issue_refs' => self::mk($g, $hu, 0.8, 'Commits tied to tracked work',
+                'Issue numbers and ticket keys in the subjects, linking the code to a conversation happening somewhere else.'),
+            'gh.human_mess' => self::mk($g, $hu, 0.7, 'Visible frustration in the log',
+                '"oops", "actually fix it this time", "why". The residue of a person losing an argument with their own code.'),
+
+            // ---- Site-wide ---------------------------------------------------
+            // Only available when more than one page has been read. A single
+            // page cannot tell you whether a site was built or accreted; ten
+            // pages usually can.
+            'xs.template_uniformity' => self::mk($w, $ai, 1.2, 'Every page is one template with the words swapped',
+                'The same structure, the same class fingerprints and the same section order across the whole site. Generated sites are stamped from one mould; sites that grew have pages that remember when they were made.'),
+            'xs.placeholder_pages' => self::mk($w, $ai, 0.9, 'Pages built and linked but never filled',
+                'Routes that exist, appear in the navigation, and carry almost nothing. The scaffolding was generated along with everything else and nobody came back to write the content.'),
+            'xs.uniform_page_size' => self::mk($w, $ai, 0.7, 'Every page is the same weight',
+                'Pages within a few percent of each other in size and element count. Real sites are lumpy because real content is lumpy: an About page is not the same length as a pricing table.'),
+
+            'xs.style_drift' => self::mk($w, $hu, 1.0, 'Pages from different eras',
+                'One page on an older stack, another rebuilt more recently; inconsistent markup conventions between sections. Drift like this is what accretion looks like, and it is expensive to fake.'),
+            'xs.varied_pages' => self::mk($w, $hu, 0.8, 'Pages genuinely differ in shape',
+                'Substantial variation in length, structure and density from one page to the next, in the way that follows from pages having different jobs.'),
+            'xs.deep_content' => self::mk($w, $hu, 0.7, 'Somebody wrote a lot of this',
+                'At least one page carrying substantially more prose than the rest — an article, a manual, a history. Volume of specific writing is the least automatable thing on a website.'),
 
             // ---- Structural ------------------------------------------------
             'st.section_comments' => self::mk($s, $ai, 1.1, 'Navigational section comments survive in production',

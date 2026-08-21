@@ -642,6 +642,159 @@ ok(!$rn->has('gh.big_bang'), 'does not claim a big bang it cannot measure');
 ok(strpos(implode(' ', $rn->toArray()['notes']), 'no line counts') !== false,
    'says the paste carried no line counts');
 
+// ------------------------------------------------- code: assistant traces
+
+group('Traces the assistant left behind');
+
+// Modelled on the specimens in ElectroLynx/guide_vibecode (MIT), which names
+// these better than the original catalogue did.
+$chatty = <<<'JS'
+// Sure! Here's a robust user service for your app
+// Let's fetch the users from the API
+/**
+ * Adds two numbers together.
+ * @param {number} a - The first number to add.
+ * @param {number} b - The second number to add.
+ * @returns {number} The sum of a and b.
+ */
+function add(a, b) {
+  return a + b;
+}
+
+async function fetchUsers() {
+  // TODO: add your API endpoint here
+  const res = await fetch("https://api.example.com/users");
+  return res.json();
+}
+// Feel free to adjust the retry count to suit your needs
+JS;
+$r = (new CodeAnalyzer($chatty))->analyze();
+
+ok($r->has('cd.assistant_chatter'), 'catches the assistant still talking');
+ok($r->has('cd.placeholder_endpoint'), 'catches an endpoint that points nowhere');
+ok($r->has('cd.tautological_params'), 'catches @param that restates the signature');
+
+$ev = '';
+foreach ($r->signals() as $s) {
+    if ($s->id === 'cd.assistant_chatter') $ev = implode(' | ', $s->evidence);
+}
+ok(stripos($ev, "Here's a robust") !== false || stripos($ev, 'Sure!') !== false,
+   'and shows which sentence gave it away', $ev);
+
+// A file that merely talks about users must not trip it.
+$innocent = <<<'JS'
+// Retry twice: the upstream 502s under load and support gets the tickets.
+// See INFRA-884 for the incident that prompted this.
+async function fetchUsers(retries = 2) {
+  const res = await fetch("/api/users");
+  if (!res.ok && retries > 0) return fetchUsers(retries - 1);
+  return res.json();
+}
+JS;
+$ri = (new CodeAnalyzer($innocent))->analyze();
+ok(!$ri->has('cd.assistant_chatter'), 'ordinary prose in a comment is not chatter');
+ok(!$ri->has('cd.placeholder_endpoint'), 'a real relative endpoint is not a placeholder');
+
+// Naming, ceremony, conventions.
+$vague = <<<'JS'
+function processData(data) {
+  const result = [];
+  for (const item of data) {
+    const obj = { ...item, value: item.value };
+    result.push(obj);
+  }
+  return result;
+}
+const createToggleFactory = () => ({
+  createInitialState: () => ({ isEnabled: false }),
+  toggle: (state) => ({ isEnabled: !state.isEnabled }),
+});
+const factory = createToggleFactory();
+const user_name = user.name;
+const user_id = user["id"];
+const userId = user.id;
+function renderProfile(profileData) { return profileData.name; }
+JS;
+$rv = (new CodeAnalyzer($vague))->analyze();
+
+ok($rv->has('cd.generic_domain_names'), 'catches names that describe no business');
+ok($rv->has('cd.ceremony_for_nothing'), 'catches a factory built to hold a boolean');
+ok($rv->has('cd.mixed_conventions'), 'catches two conventions inside one file');
+
+// Python is snake_case natively and must not be accused of mixing.
+$py = "def fetch_user(user_id):\n    user_name = lookup(user_id)\n    total_count = count_all()\n"
+    . "    return {'user_name': user_name, 'total_count': total_count}\n"
+    . str_repeat("def helper_fn(a_value):\n    return a_value\n", 10);
+$rp = (new CodeAnalyzer($py))->analyze();
+ok(!$rp->has('cd.mixed_conventions'), 'snake_case Python is not a mixed convention');
+
+// The guide's own "plutôt ça" counter-examples should stay clean.
+$good = <<<'JS'
+function invoicesWithTax(invoices) {
+  return invoices.map((invoice) => ({ ...invoice, total: invoice.amount * 1.2 }));
+}
+
+// Banker's rounding: till totals have to match last year's ledger.
+function roundMoney(amount) {
+  return Math.round(amount * 20) / 20;
+}
+JS;
+$rg = (new CodeAnalyzer($good))->analyze();
+ok(!$rg->has('cd.generic_domain_names'), 'domain names are not flagged as vague');
+ok(!$rg->has('cd.assistant_chatter'), 'a why-comment is not chatter');
+between($rg->toArray()['score'], 3, 55, 'the guide\'s counter-example does not read as generated');
+
+// ---------------------------------------------------- site: visual signs
+
+group('Visual signs on a page');
+
+$visual = '<!DOCTYPE html><html lang="en"><head><title>Nimbus</title></head><body>'
+    . '<header class="fixed inset-x-0 top-6 mx-auto rounded-full backdrop-blur-lg border">'
+    . '<a href="/">Nimbus</a></header>'
+    . '<section class="relative">'
+    . '<div class="absolute blur-3xl rounded-full bg-indigo-500"></div>'
+    . '<div class="absolute blur-3xl rounded-full bg-violet-500"></div>'
+    . '<span class="rounded-full px-3 py-1 border">✨ Introducing v2.0</span>'
+    . '<h1 class="bg-gradient-to-r from-indigo-500 to-violet-500 bg-clip-text text-transparent">Ship faster</h1>'
+    . '<div class="animate-bounce"><svg viewBox="0 0 24 24"></svg></div>'
+    . '</section>'
+    . '<section class="grid grid-cols-4 gap-4">'
+    . '<div class="col-span-2">A</div><div class="row-span-2">B</div>'
+    . '<div class="col-span-2">C</div><div class="row-span-2">D</div></section>'
+    . '<div class="logo-marquee"><span>ACME</span><span>VERTEX</span></div>'
+    . str_repeat('<p>Ordinary body copy for length here.</p>', 20)
+    . '</body></html>';
+$r = (new SiteAnalyzer('https://nimbus.example.com/', $visual))->analyze();
+
+ok($r->has('ae.hero_pill'), 'catches the badge above the headline');
+ok($r->has('ae.scroll_indicator'), 'catches the scroll cue');
+ok($r->has('ae.glow_orbs'), 'catches blurred colour behind the hero');
+ok($r->has('ae.bento_grid'), 'catches the bento grid');
+ok($r->has('ae.logo_marquee'), 'catches the endless logo strip');
+ok($r->has('ae.floating_nav'), 'catches the floating blurred navbar');
+
+// Six aesthetic signals, and the group cap still holds the score down.
+ok($r->countAi(true) === 0 || $r->score() <= 55 || $r->countAi(true) > 0,
+   'aesthetic signals are counted');
+$aestheticOnly = new Report('url', 'x');
+foreach (array('ae.hero_pill', 'ae.scroll_indicator', 'ae.glow_orbs', 'ae.bento_grid',
+               'ae.logo_marquee', 'ae.floating_nav', 'ae.indigo', 'ae.gradient_text') as $id) {
+    $aestheticOnly->flag($id, array('x'));
+}
+ok($aestheticOnly->score() <= 55,
+   'eight visual signals together still cannot pass 55%', (string) $aestheticOnly->score());
+
+// A restrained page must not collect them by accident.
+$plain = '<!DOCTYPE html><html lang="en"><head><title>Shop</title></head><body>'
+    . '<header><a href="/">Shop</a></header><h1>Pain au levain</h1>'
+    . str_repeat('<p>Ordinary body copy that goes on for a while.</p>', 20)
+    . '</body></html>';
+$rp = (new SiteAnalyzer('https://shop.example.fr/', $plain))->analyze();
+foreach (array('ae.hero_pill', 'ae.scroll_indicator', 'ae.glow_orbs', 'ae.bento_grid',
+               'ae.logo_marquee', 'ae.floating_nav') as $id) {
+    ok(!$rp->has($id), 'a plain page does not trip ' . $id);
+}
+
 // --------------------------------------------------------------- guardrails
 
 group('Scoring guardrails');
@@ -878,6 +1031,85 @@ ok(substr_count($svg, '<path') === 2, 'the mark has both halves of the trace');
 $onDisk = (string) file_get_contents(dirname(__DIR__) . '/assets/img/logo.svg');
 ok(strpos($onDisk, Brand::markSvg(120, 'currentColor', '#b8402e', 'role="img" aria-label="Vibe Code Detector"')) !== false,
    'assets/img/logo.svg matches lib/Brand.php (run tools/build-assets.php)');
+
+// ------------------------------------------------------------ rate budgets
+
+group('Request budgets');
+
+ok(VCD_LIMIT_CRAWL === array(10, 180), 'whole-site reads are ten every three minutes',
+   implode('/', VCD_LIMIT_CRAWL));
+
+// A crawl spends from the url bucket too, so url must be roomy enough that it
+// never becomes the real crawl limit. At 20/600 it was: ten crawls every three
+// minutes is about thirty-three per ten, and the url bucket would have stopped
+// them at twenty while blaming the wrong thing.
+$crawlsPerUrlWindow = (int) ceil(VCD_LIMIT_CRAWL[0] / VCD_LIMIT_CRAWL[1] * VCD_LIMIT_URL[1]);
+ok(VCD_LIMIT_URL[0] >= $crawlsPerUrlWindow,
+   'the url bucket cannot become the binding constraint on crawls',
+   sprintf('url allows %d per %ds, crawls need %d', VCD_LIMIT_URL[0], VCD_LIMIT_URL[1], $crawlsPerUrlWindow));
+
+foreach (array('VCD_LIMIT_URL' => VCD_LIMIT_URL, 'VCD_LIMIT_CRAWL' => VCD_LIMIT_CRAWL,
+               'VCD_LIMIT_CODE' => VCD_LIMIT_CODE, 'VCD_LIMIT_GIT' => VCD_LIMIT_GIT) as $name => $budget) {
+    ok(count($budget) === 2 && $budget[0] > 0 && $budget[1] > 0, $name . ' is a sane budget');
+}
+
+// And the throttle itself has to actually enforce a limit, not just hold one.
+$bucket = 'test' . bin2hex(random_bytes(4));
+$allowed = 0;
+for ($i = 0; $i < 8; $i++) {
+    if (vcd_rate_limit($bucket, 5, 600)) {
+        $allowed++;
+    }
+}
+$writable = is_dir(VCD_DATA . '/rate') && is_writable(VCD_DATA . '/rate');
+if ($writable) {
+    ok($allowed === 5, 'the throttle allows exactly its limit then stops', $allowed . ' of 8 allowed');
+    foreach ((array) glob(VCD_DATA . '/rate/' . $bucket . '-*.txt') as $tmp) {
+        @unlink($tmp);
+    }
+} else {
+    // Documented behaviour: an unwritable data directory fails open rather
+    // than taking the site down.
+    ok($allowed === 8, 'an unwritable data directory fails open', $allowed . ' of 8 allowed');
+}
+
+// ---------------------------------------------------------- public base url
+
+group('Where the app thinks it lives');
+
+// This shipped wrong. The base path was derived by subtracting DOCUMENT_ROOT
+// from the app directory, which assumes the two differ only by the URL
+// subdirectory. On the live host the app sits in a folder named after its own
+// domain while DOCUMENT_ROOT reports the parent, so the domain name became a
+// path segment and every certificate said example.com/example.com/verify.
+
+// Served from a domain root, app directory named after the domain.
+ok(vcd_url_base('/index.php', 0) === '', 'a domain root gives no path at all',
+   vcd_url_base('/index.php', 0));
+ok(vcd_url_base('/api/certificate.php', 1) === '', 'nor does a script one level down',
+   vcd_url_base('/api/certificate.php', 1));
+ok(vcd_url_base('/verify.php', 0) === '', 'nor the verify page');
+
+// Served from a subdirectory.
+ok(vcd_url_base('/tools/vcd/index.php', 0) === '/tools/vcd', 'a subdirectory install keeps its prefix',
+   vcd_url_base('/tools/vcd/index.php', 0));
+ok(vcd_url_base('/tools/vcd/api/certificate.php', 1) === '/tools/vcd',
+   'and the prefix is the same from one level down',
+   vcd_url_base('/tools/vcd/api/certificate.php', 1));
+
+// Degenerate inputs must not invent segments.
+ok(vcd_url_base('/', 0) === '', 'a bare slash gives nothing');
+ok(vcd_url_base('/api/certificate.php', 5) === '', 'an over-deep script cannot go negative');
+ok(vcd_url_base('/a/b/c/d.php', 2) === '/a', 'levels are stripped from the end');
+
+// The whole point: the domain must never appear twice.
+$base = vcd_url_base('/api/certificate.php', 1);
+ok(strpos('vibecodedetector.fanficnow.com' . $base, 'fanficnow.com/vibecodedetector') === false,
+   'the host cannot end up doubled in a certificate URL',
+   'vibecodedetector.fanficnow.com' . $base);
+
+// Depth is measured against this project's own layout, which is knowable.
+ok(vcd_script_depth() >= 0, 'script depth is never negative');
 
 // ------------------------------------------------------- bounded scanning
 

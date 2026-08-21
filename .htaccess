@@ -12,7 +12,7 @@ Options -Indexes -MultiViews
   RewriteEngine On
 
   # Nothing below the document root is servable directly.
-  RewriteRule ^(lib|data|tests|tools|docs|\.github)/ - [F,L]
+  RewriteRule ^(lib|data|tests|tools|docs|specimens|\.github)/ - [F,L]
   RewriteRule (^|/)\.(?!well-known/) - [F,L]
 
   # Pretty paths for the two pages that have them.

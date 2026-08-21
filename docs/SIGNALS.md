@@ -10,7 +10,7 @@ weight of each signal found, positive for AI, negative for human. The total goes
 a logistic curve to become the percentage. As a rough guide, a weight of 0.7 doubles the
 odds; 4.5 ends the argument.
 
-There are **84 signals** across 9 categories.
+There are **96 signals** across 9 categories.
 
 | Category | Signals | Direction |
 |---|---|---|
@@ -18,10 +18,10 @@ There are **84 signals** across 9 categories.
 | [Repository history](#repository-history) | 11 | raises the score |
 | [Site-wide](#site-wide) | 6 | raises the score |
 | [Structural](#structural) | 9 | raises the score |
-| [Code style](#code-style) | 17 | raises the score |
+| [Code style](#code-style) | 23 | raises the score |
 | [Content](#content) | 7 | raises the score |
 | [Security profile](#security-profile) | 3 | raises the score |
-| [Aesthetic](#aesthetic) | 10 | raises the score |
+| [Aesthetic](#aesthetic) | 16 | raises the score |
 | [Human authorship](#human-authorship) | 14 | lowers the score |
 
 ---
@@ -248,6 +248,12 @@ Complete head, full meta and social tags, alt text and ARIA labels everywhere, a
 
 Line-level habits. Individually weak and easy to mask by renaming or reformatting; convincing only when four or more of them converge across a file.
 
+### The assistant is still talking
+
+`cd.assistant_chatter` · weight **1.4** (strong)
+
+Conversational replies left in the file: "Sure!", "Here's a comprehensive solution", "Let's fetch the users", "Feel free to adjust". A sentence that would read naturally pasted into a chat window has no business in a repository, and nobody types these into an editor on purpose.
+
 ### Emoji inside code comments
 
 `cd.emoji_comments` · weight **1.3** (strong)
@@ -278,17 +284,47 @@ Happy-path-only tests, or true == true wearing a costume. No edge cases, no nega
 
 Try/catch around routine, non-throwing code, applied uniformly rather than where failure is actually expected.
 
+### Names that describe no business
+
+`cd.generic_domain_names` · weight **0.8** (moderate)
+
+data, item, result, obj, processData. It compiles and it says nothing. If the name cannot be swapped for a word from the product — invoice, trip, booking, vote — then nobody has decided yet what the thing is.
+
+### Endpoints that point nowhere
+
+`cd.placeholder_endpoint` · weight **0.8** (moderate)
+
+api.example.com, YOUR_API_URL, "add your endpoint here". The shape of the call was generated correctly and the one detail only the author could supply was left blank.
+
 ### Exceptions caught and discarded
 
 `cd.swallowed_errors` · weight **0.8** (moderate)
 
 catch blocks that log and continue, or swallow silently. The blindfold that stops the program crashing so nobody ever learns it is broken.
 
+### Two conventions in one file
+
+`cd.mixed_conventions` · weight **0.7** (moderate)
+
+camelCase beside snake_case, single quotes beside double, bracket access beside dot access, on the same object. Not the drift of a codebase over years — the seam where two generated fragments were joined.
+
 ### Decorative section-header comments
 
 `cd.section_header_comments` · weight **0.7** (moderate)
 
 Banner comments such as # ===== User Authentication ===== used as navigation inside a single file.
+
+### Documentation that restates the signature
+
+`cd.tautological_params` · weight **0.7** (moderate)
+
+@param {number} a - The first number to add. Every parameter described by spelling its own name back, and nothing at all about units, ranges, ownership or what happens at the edges — which is the only part worth writing down.
+
+### Architecture for a light switch
+
+`cd.ceremony_for_nothing` · weight **0.6** (moderate)
+
+A factory, a provider and a memo to hold a boolean. The problem fitted in six lines and the solution takes sixty. Generated code reaches for a pattern because patterns are what it has seen, not because this problem needed one.
 
 ### Formal, grammatically complete error messages
 
@@ -425,11 +461,35 @@ Wide-open CORS, disabled TLS verification, raw string-concatenated queries, unes
 
 How it looks. Weak by construction and **capped as a group**, because a purple gradient and a default icon set are a reason to look closer and never a conclusion.
 
+### The little badge above the headline
+
+`ae.hero_pill` · weight **0.5** (weak)
+
+A small rounded pill sitting over the h1 — "Introducing v2", "Now with AI", usually with a sparkle. Almost every generated landing page has one, and it almost never says anything.
+
 ### The indigo-to-violet default palette
 
 `ae.indigo` · weight **0.45** (weak)
 
 Indigo 500 into violet, on slate. Not a design decision so much as a statistical average of every Tailwind tutorial written between 2019 and 2024.
+
+### A cue telling you to scroll
+
+`ae.scroll_indicator` · weight **0.45** (weak)
+
+A bouncing chevron or an animated mouse outline at the bottom of the first screen. People have known how to scroll for thirty years; this is decoration that has learned to look like affordance.
+
+### The bento grid
+
+`ae.bento_grid` · weight **0.4** (weak)
+
+Feature tiles of deliberately unequal spans arranged into a mosaic. A real 2023 design idea, now the default answer to "show several features at once".
+
+### Blurred colour behind the hero
+
+`ae.glow_orbs` · weight **0.4** (weak)
+
+Large soft gradient blobs, heavily blurred, floating behind the opening section. One of a handful of effects a model reaches for when asked to make something feel premium.
 
 ### The gradient-filled headline
 
@@ -443,11 +503,23 @@ A heading painted with a clipped background gradient instead of a colour. Almost
 
 A 3-4px accent strip down the left edge of a panel, applied to every callout on the page.
 
+### An endless strip of logos
+
+`ae.logo_marquee` · weight **0.4** (weak)
+
+A "trusted by" band scrolling on a loop, often with placeholder or invented marks. The social proof is a component before it is a fact.
+
 ### Untouched component-kit defaults
 
 `ae.shadcn_defaults` · weight **0.4** (weak)
 
 rounded-2xl, shadow-lg, p-6, pill buttons, cards nested inside cards, every radius identical.
+
+### The floating blurred navbar
+
+`ae.floating_nav` · weight **0.35** (weak)
+
+A detached pill-shaped header with a backdrop blur, hovering a little way down from the top of the page rather than sitting on it.
 
 ### Default icon set, unchanged
 

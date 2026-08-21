@@ -386,6 +386,58 @@ final class SiteAnalyzer
             ));
         }
 
+        // The little badge sitting over the headline.
+        if (preg_match('~<(?:div|span|a|p)[^>]*class=["\'][^"\']*\b(?:rounded-full|pill|badge|chip)\b[^"\']*["\'][^>]*>\s*(?:<[^>]+>\s*)*[^<]{3,60}</~i', $this->html, $m)
+            && preg_match('~(?:introducing|announcing|new\b|now (?:with|in|available)|just (?:launched|shipped)|v\d|coming soon|beta|early access|backed by|✨|🎉|🚀)~iu', $m[0])) {
+            $this->r->flag('ae.hero_pill', array(Report::excerpt(strip_tags($m[0]), 90)));
+        }
+
+        // A cue telling you to do the thing you already know how to do.
+        if (preg_match('~class=["\'][^"\']*\b(?:scroll-(?:indicator|down|hint|cue)|mouse-scroll|animate-bounce)\b~i', $this->html)
+            || preg_match('~(?:scroll (?:down|to explore)|explore more)\s*(?:<|$)~i', $this->text)
+            || preg_match('~<svg[^>]*class=["\'][^"\']*animate-bounce~i', $this->html)) {
+            $this->r->flag('ae.scroll_indicator', array('an animated scroll cue sits under the opening section'));
+        }
+
+        // Soft blurred colour floating behind the hero.
+        $orbs = preg_match_all('~class=["\'][^"\']*\b(?:blur-(?:2xl|3xl)|rounded-full)\b[^"\']*\b(?:absolute|fixed)\b[^"\']*["\']~i', $this->html)
+              + preg_match_all('~class=["\'][^"\']*\b(?:absolute|fixed)\b[^"\']*\bblur-(?:2xl|3xl)\b[^"\']*["\']~i', $this->html)
+              + preg_match_all('~filter:\s*blur\((?:6[0-9]|[7-9][0-9]|\d{3,})px\)~i', $css);
+        if ($orbs >= 2) {
+            $this->r->flag('ae.glow_orbs', array(
+                sprintf('%d heavily blurred shapes positioned behind the content', $orbs),
+            ));
+        }
+
+        // The bento grid.
+        $spans = preg_match_all('~\b(?:col|row)-span-[2-6]\b~i', $this->html);
+        if ($spans >= 4 && preg_match('~\bgrid-cols-(?:3|4|6|12)\b~i', $this->html)) {
+            $this->r->flag('ae.bento_grid', array(
+                sprintf('%d unequal tile spans inside one grid', $spans),
+            ));
+        }
+
+        // An endless strip of logos.
+        if (preg_match('~class=["\'][^"\']*\b(?:marquee|animate-marquee|logo-?(?:scroll|ticker|cloud|strip)|infinite-scroll)\b~i', $this->html)
+            || (preg_match('~@keyframes\s+(?:marquee|scroll|ticker)~i', $css)
+                && preg_match('~(?:trusted by|as seen (?:in|on)|used by|powering)~i', $this->text))) {
+            $this->r->flag('ae.logo_marquee', array('a looping "trusted by" logo band'));
+        }
+
+        // The detached, blurred navbar.
+        if (preg_match('~<(?:header|nav)[^>]*class=["\'][^"\']*["\']~i', $this->html, $m)) {
+            $navClasses = '';
+            if (preg_match_all('~<(?:header|nav)[^>]*class=["\']([^"\']+)["\']~i', $this->html, $all)) {
+                $navClasses = implode(' ', $all[1]);
+            }
+            $floating = preg_match('~\b(?:fixed|sticky)\b~i', $navClasses)
+                     && preg_match('~\bbackdrop-blur~i', $navClasses)
+                     && preg_match('~\b(?:rounded-full|rounded-2xl|mx-auto|inset-x-|top-[2-9])~i', $navClasses);
+            if ($floating) {
+                $this->r->flag('ae.floating_nav', array('a detached, blurred header hovering below the top of the page'));
+            }
+        }
+
         // The coloured left-border card.
         if (preg_match('~border-l-(?:2|4|\[\d)~i', $this->html) && preg_match('~\bborder-l-\d?\s*[^"\']*\bborder-(?:indigo|violet|purple|blue|emerald|amber)-\d{3}~i', $this->html)) {
             $this->r->flag('ae.left_border_card', array('accent strip down the left edge of a panel'));

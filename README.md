@@ -100,7 +100,7 @@ Six rules the scoring will not break:
    reading without repository history has not earned more than that.
 6. Human signals are first-class and weighted on the same scale as the rest.
 
-All 84 signals, with their weights and reasoning, are in
+All 96 signals, with their weights and reasoning, are in
 **[docs/SIGNALS.md](docs/SIGNALS.md)** — generated from `lib/Catalog.php`, so the
 documentation cannot drift from the code.
 
@@ -130,10 +130,9 @@ So: **a half-vibecoded app for detecting vibecoded apps.** That is on the [front
 of the site](https://vibecodedetector.fanficnow.com/#provenance), not buried here,
 because it is the most useful thing this project has to say about its own reliability.
 
-Point the detector at this site and it returns **55% — Inconclusive**. For a codebase
-that is genuinely half generated and half not, that is arguably the most defensible
-number it has ever produced. It is also luck: it got there by failing to detect the
-generated half, not by weighing the two.
+Point the detector at this site and it returns **73% — Likely AI-generated**. It read
+55% for most of this project's life; the number moved because the detector got better
+at reading code, not because the site changed. It now catches its own JavaScript.
 
 - **Nothing to fingerprint.** Agentic editors write into an ordinary repository. No
   badge, no builder subdomain, no injected runtime. Signs run in one direction only,
@@ -142,10 +141,10 @@ generated half, not by weighing the two.
   trivial function, no indigo gradient, no Inter, no three-card grid. That is
   masking, and masking is cheap. It took no particular effort.
 
-The number sits at 55 because the aesthetic cap holds it there: some stylistic signals
-fire, no structural ones do, and the scoring refuses to reach a verdict on stylistic
-evidence alone. The guard rail is doing its job. That it lands on a defensible answer
-for indefensible reasons is the honest summary of what this kind of tool can do.
+What fires is small and fair: formal error messages, heavy em-dash use, a `border-left`
+accent, vocabulary in the front-end script that names nothing in particular. Every one
+is genuinely present. The reading is no longer flattering and it has not been adjusted,
+because a detector that quietly exempts the site it runs on is worth nothing at all.
 
 None of it is special-cased away, and a detector that exempted itself would be worth
 less than one that takes the hit.
@@ -161,7 +160,7 @@ php -S localhost:8000
 Then open <http://localhost:8000>. There is nothing to install first.
 
 ```bash
-php tests/run.php                       # the whole suite, ~300 assertions
+php tests/run.php                       # the whole suite, ~360 assertions
 php tools/gen-signals-doc.php           # regenerate docs/SIGNALS.md
 php tools/build-assets.php              # regenerate the SVG files from lib/Brand.php
 php tools/build-social.php              # regenerate the 1280x640 social preview card

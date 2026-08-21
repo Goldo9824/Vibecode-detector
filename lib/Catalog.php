@@ -16,6 +16,7 @@ declare(strict_types=1);
 final class Catalog
 {
     const CAT_FINGERPRINT = 'fingerprint';
+    const CAT_HISTORY     = 'history';
     const CAT_STRUCTURE   = 'structure';
     const CAT_CODE        = 'code';
     const CAT_CONTENT     = 'content';
@@ -31,6 +32,7 @@ final class Catalog
     {
         return array(
             self::CAT_FINGERPRINT => 'Platform fingerprint',
+            self::CAT_HISTORY     => 'Repository history',
             self::CAT_STRUCTURE   => 'Structural',
             self::CAT_CODE        => 'Code style',
             self::CAT_CONTENT     => 'Content',
@@ -77,6 +79,7 @@ final class Catalog
         }
 
         $f = self::CAT_FINGERPRINT;
+        $g = self::CAT_HISTORY;
         $s = self::CAT_STRUCTURE;
         $c = self::CAT_CODE;
         $t = self::CAT_CONTENT;
@@ -107,6 +110,35 @@ final class Catalog
                 'The document\'s own <meta name="generator"> names an AI site builder.'),
             'fp.builder_other' => self::mk($f, $ai, 4.0, 'Another AI builder\'s fingerprint',
                 'A generator outside the main five identified itself in the page: its SDK, deployment host or badge is present. The specific tool is named in the evidence.'),
+
+            // ---- Repository history -----------------------------------------
+            // The strongest evidence available short of a fingerprint, and the
+            // hardest to fake after the fact: rewriting a history to look lived-in
+            // means inventing plausible timestamps, authors, mistakes and reverts
+            // for every commit. Weighted accordingly.
+            'gh.big_bang' => self::mk($g, $ai, 1.4, 'The repository arrives fully formed',
+                'An opening commit carrying most of the codebase at once. Hand-built projects start small and accrete; a first commit with hundreds of lines across dozens of files is a generated tree being put under version control after the fact.'),
+            'gh.velocity' => self::mk($g, $ai, 1.2, 'More code than anyone types',
+                'Hundreds of lines landing within minutes. Not proof by itself — a paste, a vendored library or a generated file does this too — but combined with the rest it is the shape of accepting output rather than writing it.'),
+            'gh.micro_fix_trail' => self::mk($g, $ai, 1.1, 'A large drop followed by a trail of one-line fixes',
+                '"fix typo", "fix import", "add missing dependency" in a run after a huge commit. The signature of code that was never read before it was committed, then corrected as each error surfaced at runtime.'),
+            'gh.prompt_messages' => self::mk($g, $ai, 1.0, 'Commit messages that read like the prompt',
+                'Subjects such as "add REST API for user management with JWT authentication": a complete specification in the imperative, describing what was asked for rather than what changed.'),
+            'gh.single_session' => self::mk($g, $ai, 0.9, 'The entire history is one sitting',
+                'Every commit inside a few hours, with nothing before and nothing after. Real projects have evenings, weekends and abandonment in them.'),
+            'gh.generic_messages' => self::mk($g, $ai, 0.6, 'Interchangeable commit messages',
+                '"update", "changes", "fix", "wip" over and over, carrying no information about what happened.'),
+
+            'gh.steady_cadence' => self::mk($g, $hu, 1.1, 'Work spread across real time',
+                'Commits over weeks or months, on many separate days. This is the hardest property to manufacture and the most informative single thing about a repository.'),
+            'gh.multiple_authors' => self::mk($g, $hu, 1.0, 'More than one person committed',
+                'Several distinct authors in the history. Collaboration is expensive to fake and generators do not produce it.'),
+            'gh.merges_and_reverts' => self::mk($g, $hu, 0.8, 'Branches, merges and reverts',
+                'Work that went in, came out again, or arrived from a branch. Evidence of a process with second thoughts in it.'),
+            'gh.issue_refs' => self::mk($g, $hu, 0.8, 'Commits tied to tracked work',
+                'Issue numbers and ticket keys in the subjects, linking the code to a conversation happening somewhere else.'),
+            'gh.human_mess' => self::mk($g, $hu, 0.7, 'Visible frustration in the log',
+                '"oops", "actually fix it this time", "why". The residue of a person losing an argument with their own code.'),
 
             // ---- Structural ------------------------------------------------
             'st.section_comments' => self::mk($s, $ai, 1.1, 'Navigational section comments survive in production',

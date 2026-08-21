@@ -10,7 +10,9 @@
   --paper-3:  #efe9db;
   --ink:      #17140f;
   --ink-2:    #55503f;
-  --ink-3:    #7d7666;
+  /* Darkened from #7d7666, which measured 3.8:1 on the paper ground and so
+     failed WCAG AA for the hint text and metadata rows that use it. */
+  --ink-3:    #6b6456;
   --rule:     #ded5c2;
   --rule-2:   #c9bfa8;
   --red:      #b8402e;
@@ -251,6 +253,35 @@ input:focus, textarea:focus { border-color: var(--red); outline: none; }
 .btn-quiet:hover { background: transparent; border-color: var(--red); color: var(--red); }
 
 .hint { font-size: .875rem; color: var(--ink-3); margin: .6rem 0 0; }
+.hint-top { margin: 0 0 .5rem; }
+
+.command {
+  margin: 0 0 .75rem;
+  padding: .7rem .8rem;
+  background: var(--ink);
+  color: var(--paper-2);
+  border-radius: 2px;
+  overflow-x: auto;
+  cursor: text;
+}
+.command code {
+  font-family: var(--mono);
+  font-size: .8125rem;
+  white-space: pre;
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+@media (prefers-color-scheme: dark) {
+  .command { background: var(--paper-3); color: var(--ink); border: 1px solid var(--rule); }
+}
+
+label.field code {
+  font-family: var(--mono);
+  font-size: .95em;
+  text-transform: none;
+  letter-spacing: 0;
+}
 
 /* -------------------------------------------------------------------- error */
 

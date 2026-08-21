@@ -15,6 +15,18 @@ require_once __DIR__ . '/CodeAnalyzer.php';
  */
 final class SiteAnalyzer
 {
+    /**
+     * Ceiling on the haystack the pattern checks run over.
+     *
+     * The fetcher will hand back up to 3 MB of document plus four assets, and
+     * roughly sixty patterns run across that. On the shared hosting this
+     * targets — modest CPU, a 30-second limit — the unbounded version can spend
+     * long enough to be killed mid-request. Fingerprint checks still see
+     * everything, because those are the ones worth never missing; the heavier
+     * stylistic scans get a bounded prefix and the report says so.
+     */
+    const MAX_SCAN = 786432;
+
     /** @var string */
     private $html;
     /** @var string */
@@ -27,6 +39,10 @@ final class SiteAnalyzer
     private $r;
     /** @var string */
     private $text;
+    /** @var string|null */
+    private $blob = null;
+    /** @var bool */
+    private $truncated = false;
 
     /**
      * @param array<string,string> $assets same-origin css/js that the page pulls in
@@ -38,7 +54,9 @@ final class SiteAnalyzer
         $this->html   = $html;
         $this->assets = $assets;
         $this->meta   = $meta;
-        $this->text   = Text::visibleText($html);
+        // Bounded, and cut on a character boundary so the /u patterns that read
+        // it keep matching instead of erroring into an empty result.
+        $this->text   = Text::visibleText(Text::safeCut($html, self::MAX_SCAN));
     }
 
     public function analyze(): Report
@@ -67,6 +85,15 @@ final class SiteAnalyzer
         $this->checkMedia();
         $this->checkCms();
         $this->checkAssets();
+
+        if ($this->truncated || strlen($this->html) > self::MAX_SCAN) {
+            $this->r->stat('scanTruncated', true);
+            $this->r->note(sprintf(
+                'This page and its assets run to more than %d KB, so the stylistic scans read the first %d KB of it. Fingerprint checks still saw the whole document.',
+                (int) round((strlen($this->html) + array_sum(array_map('strlen', $this->assets))) / 1024),
+                (int) round(self::MAX_SCAN / 1024)
+            ));
+        }
 
         $this->r->note('Signs run in one direction only. Finding a builder\'s fingerprint identifies it; finding none proves nothing, because agentic editors write into an ordinary repository and leave no trace in the served page.');
 
@@ -251,7 +278,7 @@ final class SiteAnalyzer
 
     private function checkPalette(): void
     {
-        $css = $this->html . "\n" . implode("\n", $this->assets);
+        $css = $this->scanBlob();
 
         $hexes = array('#6366f1', '#615fff', '#4f46e5', '#818cf8', '#8b5cf6', '#8e51ff',
                        '#7c3aed', '#a855f7', '#a78bfa', '#6d28d9', '#c084fc', '#0f172a', '#1e1b4b');
@@ -280,7 +307,7 @@ final class SiteAnalyzer
 
     private function checkTypeAndIcons(): void
     {
-        $css = $this->html . "\n" . implode("\n", $this->assets);
+        $css = $this->scanBlob();
 
         $fonts = array();
         foreach (array('Inter', 'Geist', 'Poppins', 'Space Grotesk', 'Manrope', 'Plus Jakarta Sans', 'DM Sans') as $f) {
@@ -342,7 +369,7 @@ final class SiteAnalyzer
             }
         }
 
-        $css = $this->html . "\n" . implode("\n", $this->assets);
+        $css = $this->scanBlob();
 
         // A heading painted with a clipped gradient rather than a colour.
         if (preg_match('~bg-clip-text[^"\']*text-transparent|text-transparent[^"\']*bg-clip-text~i', $this->html)
@@ -541,12 +568,16 @@ final class SiteAnalyzer
     {
         $text = $this->text;
 
-        // Only meaningful on English copy; other languages would need their own
-        // lists and a wrong guess here would be a false human signal.
-        if (preg_match('~<html[^>]+lang=["\']([a-z]{2})~i', $this->html, $m) && strtolower($m[1]) !== 'en') {
-            $this->r->stat('lang', strtolower($m[1]));
-        } else {
-            $misspellings = array(
+        // Misspelling lists are per-language: applying the English one to French
+        // copy would flag ordinary words and invent a human signal out of nothing.
+        $lang = 'en';
+        if (preg_match('~<html[^>]+lang=["\']([a-z]{2})~i', $this->html, $m)) {
+            $lang = strtolower($m[1]);
+            $this->r->stat('lang', $lang);
+        }
+
+        $lists = array(
+            'en' => array(
                 'recieve', 'seperate', 'occured', 'definately', 'accomodate', 'adress',
                 'buisness', 'thier', 'untill', 'sucessful', 'publically', 'calender',
                 'enviroment', 'neccessary', 'existance', 'maintainance', 'refered',
@@ -554,16 +585,28 @@ final class SiteAnalyzer
                 'independant', 'occurence', 'persistant', 'priviledge', 'recomend',
                 'tommorow', 'wellcome', 'succesful', 'commited', 'appologise',
                 'garantee', 'guarentee', 'proffesional', 'reccomend', 'availabe',
-            );
-            $found = array();
-            foreach ($misspellings as $word) {
-                if (preg_match('~\b' . $word . '\b~i', $text, $hit)) {
-                    $found[] = $hit[0];
-                }
+                'concious', 'embarass', 'goverment', 'harrass', 'noticable',
+                'occassion', 'perseverence', 'questionaire', 'rythm', 'supercede',
+                'threshhold', 'writting', 'usefull', 'carefull', 'succesfully',
+            ),
+            'fr' => array(
+                'acceuil', 'addresse', 'professionel', 'developement', 'developpeur',
+                'malgrés', 'parmis', 'biensur', 'quelquechose', 'apparament',
+                'connection', 'language', 'exemple de code source ici',
+                'entrainement', 'rendez vous', 'anniversaire de la société',
+            ),
+        );
+
+        $misspellings = isset($lists[$lang]) ? $lists[$lang] : $lists['en'];
+
+        $found = array();
+        foreach (array_unique($misspellings) as $word) {
+            if (preg_match('~\b' . preg_quote($word, '~') . '\b~iu', $text, $hit)) {
+                $found[] = $hit[0];
             }
-            if ($found) {
-                $this->r->flag('hu.typos', $found);
-            }
+        }
+        if ($found) {
+            $this->r->flag('hu.typos', $found);
         }
 
         // Obligations accumulate; features get generated.
@@ -609,7 +652,7 @@ final class SiteAnalyzer
                 $exts[strtolower($e[1])] = true;
             }
         }
-        $gradients = preg_match_all('~(?:bg-gradient-to-|linear-gradient\(|radial-gradient\()~i', $this->html . implode('', $this->assets));
+        $gradients = preg_match_all('~(?:bg-gradient-to-|linear-gradient\(|radial-gradient\()~i', $this->scanBlob());
         $svgs = preg_match_all('~<svg\b~i', $this->html);
 
         if ($photos === 0 && ($gradients >= 3 || $svgs >= 5) && strlen($this->html) > 4000) {
@@ -646,9 +689,33 @@ final class SiteAnalyzer
 
         if (preg_match('~jquery(?:\.min)?\.js|jquery-\d~i', $hay)
             || preg_match('~<table[^>]*>\s*<tr~i', $hay)
-            || preg_match('~-webkit-border-radius|filter:\s*progid:~i', $hay . implode('', $this->assets))) {
+            || preg_match('~-webkit-border-radius|filter:\s*progid:~i', $this->scanBlob())) {
             $this->r->flag('hu.legacy_stack', array('jQuery, table layout or vendor-prefixed CSS: markup with an accretion history'));
         }
+    }
+
+    /**
+     * The document plus as much of its assets as the scan ceiling allows,
+     * built once. Five separate concatenations of a multi-megabyte string were
+     * costing more than most of the checks that consumed them.
+     */
+    private function scanBlob(): string
+    {
+        if ($this->blob !== null) {
+            return $this->blob;
+        }
+        $blob = $this->html;
+        foreach ($this->assets as $body) {
+            if (strlen($blob) >= self::MAX_SCAN) {
+                break;
+            }
+            $blob .= "\n" . $body;
+        }
+        if (strlen($blob) > self::MAX_SCAN) {
+            $blob = Text::safeCut($blob, self::MAX_SCAN);
+            $this->truncated = true;
+        }
+        return $this->blob = $blob;
     }
 
     /**

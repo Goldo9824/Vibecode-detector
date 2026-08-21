@@ -14,7 +14,8 @@
 
   var tabs = [
     { tab: $('tab-url'), panel: $('panel-url') },
-    { tab: $('tab-code'), panel: $('panel-code') }
+    { tab: $('tab-code'), panel: $('panel-code') },
+    { tab: $('tab-git'), panel: $('panel-git') }
   ];
 
   function selectTab(index) {
@@ -54,18 +55,37 @@
     spinner.hidden = !on;
   }
 
+  // Fetching a slow site can legitimately take a while, but not forever. Without
+  // a deadline a stalled request leaves the spinner running with no way back.
+  var TIMEOUT_MS = 45000;
+  var inflight = null;
+
   function send(form, spinner, body) {
     hideError();
     busy(form, spinner, true);
 
-    fetch('api/analyze.php', {
+    if (inflight) {
+      inflight.abort();
+    }
+
+    var controller = ('AbortController' in window) ? new AbortController() : null;
+    inflight = controller;
+
+    var timer = window.setTimeout(function () {
+      if (controller) controller.abort();
+    }, TIMEOUT_MS);
+
+    var options = {
       method: 'POST',
       body: body,
       headers: { 'Accept': 'application/json' }
-    })
+    };
+    if (controller) options.signal = controller.signal;
+
+    fetch('api/analyze.php', options)
       .then(function (res) {
         return res.json().catch(function () {
-          throw new Error('The server sent something that was not a result. It may have timed out.');
+          throw new Error('The server sent something that was not a result. It may have run out of time.');
         });
       })
       .then(function (data) {
@@ -73,10 +93,17 @@
         render(data);
       })
       .catch(function (err) {
-        showError(err.message || String(err));
+        if (err && err.name === 'AbortError') {
+          showError('That took longer than ' + Math.round(TIMEOUT_MS / 1000) +
+                    ' seconds, so it was stopped. The site may be slow or refusing to answer. Try again, or use the code tab.');
+        } else {
+          showError((err && err.message) || String(err));
+        }
         results.hidden = true;
       })
       .then(function () {
+        window.clearTimeout(timer);
+        if (inflight === controller) inflight = null;
         busy(form, spinner, false);
       });
   }
@@ -100,6 +127,28 @@
     body.append('code', value);
     send(this, $('spin-code'), body);
   });
+
+  $('form-git').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var value = $('gitlog').value;
+    if (!value.trim()) { showError('Paste the output of git log first.'); return; }
+    var body = new FormData();
+    body.append('mode', 'git');
+    body.append('log', value);
+    send(this, $('spin-git'), body);
+  });
+
+  // Click the command to select it — it is there to be copied.
+  var command = $('git-command');
+  if (command) {
+    command.addEventListener('click', function () {
+      var range = document.createRange();
+      range.selectNodeContents(command);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    });
+  }
 
   // ------------------------------------------------------------------ render
 

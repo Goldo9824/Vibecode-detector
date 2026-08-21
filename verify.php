@@ -11,6 +11,12 @@ $sig     = isset($_GET['s']) ? (string) $_GET['s'] : '';
 $cert    = ($payload !== '' && $sig !== '') ? vcd_cert_open($payload, $sig) : null;
 $checked = ($payload !== '' || $sig !== '');
 
+$subjectKinds = array(
+    'url'  => 'live page',
+    'code' => 'pasted source file',
+    'git'  => 'repository history',
+);
+
 $verdicts = array(
     'builder_identified' => 'Built by an AI site builder',
     'very_likely_ai'     => 'Very likely AI-generated',
@@ -76,7 +82,7 @@ $verdicts = array(
             <p class="eyebrow">Genuine certificate</p>
             <h2><?= h($verdicts[$cert['c']] ?? 'Inconclusive') ?></h2>
             <p>Issued <?= h(gmdate('j F Y \a\t H:i', strtotime((string) $cert['d']) ?: time())) ?> UTC for a
-               <?= $cert['m'] === 'url' ? 'live page' : 'pasted source file' ?>, with
+               <?= h($subjectKinds[$cert['m']] ?? 'subject') ?>, with
                <?= count((array) ($cert['g'] ?? array())) ?> signal(s) on the record.</p>
             <div class="meta-row">
               <span>Certificate <?= h((string) ($cert['id'] ?? '')) ?></span>

@@ -92,6 +92,32 @@ final class Text
         return sqrt($sum / $n);
     }
 
+    /**
+     * Truncate without splitting a UTF-8 character.
+     *
+     * A blind substr can leave a partial sequence at the end, and every /u
+     * pattern run over the result then fails and returns null rather than
+     * matching nothing — which reads as "no signals found" instead of an error.
+     */
+    public static function safeCut(string $s, int $max): string
+    {
+        if ($max <= 0 || strlen($s) <= $max) {
+            return $s;
+        }
+        if (function_exists('mb_substr') && function_exists('mb_strcut')) {
+            return (string) mb_strcut($s, 0, $max, 'UTF-8');
+        }
+        $cut = substr($s, 0, $max);
+        // Walk back off any continuation bytes left dangling at the end.
+        for ($i = 0; $i < 4 && $cut !== ''; $i++) {
+            if (preg_match('//u', $cut)) {
+                return $cut;
+            }
+            $cut = substr($cut, 0, -1);
+        }
+        return $cut;
+    }
+
     /** Strip tags and collapse whitespace, for reading page copy. */
     public static function visibleText(string $html): string
     {

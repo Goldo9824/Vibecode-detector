@@ -57,8 +57,26 @@ if ($mode === 'url') {
     $analyzer = new CodeAnalyzer($code);
     $result = $analyzer->analyze()->toArray();
 
+} elseif ($mode === 'git') {
+    if (!vcd_rate_limit('git', 60, 600)) {
+        vcd_fail('Slow down a little.', 429);
+    }
+
+    $log = isset($_POST['log']) ? (string) $_POST['log'] : '';
+    $log = str_replace("\0", '', $log);
+
+    if (trim($log) === '') {
+        vcd_fail('Paste some git log output first.');
+    }
+    if (strlen($log) > 2097152) {
+        vcd_fail('That is a very large log. Try the most recent few hundred commits.');
+    }
+
+    $analyzer = new GitAnalyzer($log);
+    $result = $analyzer->analyze()->toArray();
+
 } else {
-    vcd_fail('Unknown mode. Use "url" or "code".');
+    vcd_fail('Unknown mode. Use "url", "code" or "git".');
 }
 
 // Nothing about the request is stored. The certificate token is a signature

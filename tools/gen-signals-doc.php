@@ -19,6 +19,7 @@ $path  = dirname(__DIR__) . '/docs/SIGNALS.md';
 
 $order = array(
     Catalog::CAT_FINGERPRINT,
+    Catalog::CAT_HISTORY,
     Catalog::CAT_STRUCTURE,
     Catalog::CAT_CODE,
     Catalog::CAT_CONTENT,
@@ -29,6 +30,7 @@ $order = array(
 
 $blurbs = array(
     Catalog::CAT_FINGERPRINT => 'A builder naming itself. These are positive identifications rather than inferences, so one is enough to settle the question. Their absence means nothing whatsoever: agentic editors write into an ordinary repository and leave none of this behind.',
+    Catalog::CAT_HISTORY     => 'How the code arrived, rather than what it looks like. The strongest evidence available short of a fingerprint, and the hardest to fake after the fact: a convincing forged history means inventing plausible timestamps, authors, mistakes and reverts for every commit. Read from a pasted `git log`.',
     Catalog::CAT_STRUCTURE   => 'The shape of the whole rather than the style of the line. These are the hardest signals to produce by accident and the hardest to remove by editing, which is why they carry the most weight after fingerprints.',
     Catalog::CAT_CODE        => 'Line-level habits. Individually weak and easy to mask by renaming or reformatting; convincing only when four or more of them converge across a file.',
     Catalog::CAT_CONTENT     => 'What the page says, as opposed to how it is built. Placeholder people, house-voice marketing copy and navigation that goes nowhere.',

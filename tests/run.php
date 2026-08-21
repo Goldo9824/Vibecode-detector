@@ -243,6 +243,90 @@ ok($r->has('cd.defensive_chaining'), 'catches optional chaining on everything');
 ok($r->has('cd.over_symmetric_branches'), 'catches an else for every if');
 ok($r->has('st.file_header_block'), 'catches the explanatory file-header block');
 
+// ------------------------------------------------------------ git history
+
+group('A generated repository history');
+
+$t0 = strtotime('2026-03-04 14:02:00 UTC');
+$genLog = '';
+$genLog .= "a1b2c3d|" . $t0 . "|Sam Rivera|initial commit\n1840\t0\tsrc/app.jsx\n420\t0\tsrc/index.css\n96\t0\tpackage.json\n\n";
+$genLog .= "b2c3d4e|" . ($t0 + 240) . "|Sam Rivera|add dashboard page with charts and responsive layout\n610\t2\tsrc/Dashboard.jsx\n\n";
+$genLog .= "c3d4e5f|" . ($t0 + 520) . "|Sam Rivera|implement authentication flow with JWT and refresh tokens\n380\t4\tsrc/auth.js\n\n";
+$genLog .= "d4e5f6a|" . ($t0 + 900) . "|Sam Rivera|fix typo\n1\t1\tsrc/app.jsx\n\n";
+$genLog .= "e5f6a7b|" . ($t0 + 960) . "|Sam Rivera|fix missing import\n2\t0\tsrc/Dashboard.jsx\n\n";
+$genLog .= "f6a7b8c|" . ($t0 + 1020) . "|Sam Rivera|fix build error\n1\t1\tsrc/auth.js\n\n";
+$genLog .= "a7b8c9d|" . ($t0 + 1200) . "|Sam Rivera|update\n3\t1\tREADME.md\n";
+
+$g = new GitAnalyzer($genLog);
+$r = $g->analyze();
+$a = $r->toArray();
+
+ok(count($g->commits()) === 7, 'parses the documented format', (string) count($g->commits()));
+ok($g->commits()[0]['subject'] === 'initial commit', 'orders oldest first');
+between($a['score'], 70, 97, 'a generated history scores in the AI band');
+ok($r->has('gh.big_bang'), 'catches the repository arriving fully formed');
+ok($r->has('gh.velocity'), 'catches more code than anyone types');
+ok($r->has('gh.micro_fix_trail'), 'catches the trail of one-line fixes');
+ok($r->has('gh.prompt_messages'), 'catches commit messages that read like the prompt');
+ok($r->has('gh.single_session'), 'catches a history that is one sitting');
+
+// ------------------------------------------------------- git: hand-written
+
+group('A hand-written repository history');
+
+$day = 86400;
+$h0 = strtotime('2025-11-03 09:14:00 UTC');
+$humanLog = '';
+$humanLog .= "1111aaa|" . $h0 . "|Priya Nair|first pass at the importer\n82\t0\timporter.py\n\n";
+$humanLog .= "2222bbb|" . ($h0 + 2 * $day) . "|Priya Nair|handle the empty-file case, closes #214\n24\t3\timporter.py\n\n";
+$humanLog .= "3333ccc|" . ($h0 + 5 * $day) . "|Tom Whelan|Merge branch 'csv-quoting'\n0\t0\t\n\n";
+$humanLog .= "4444ddd|" . ($h0 + 9 * $day) . "|Tom Whelan|why does excel do this\n11\t2\timporter.py\n\n";
+$humanLog .= "5555eee|" . ($h0 + 16 * $day) . "|Priya Nair|Revert \"speed up the parse loop\"\n4\t40\timporter.py\n\n";
+$humanLog .= "6666fff|" . ($h0 + 24 * $day) . "|Priya Nair|actually fix the encoding this time, see #231\n18\t6\timporter.py\n\n";
+$humanLog .= "7777abc|" . ($h0 + 31 * $day) . "|Tom Whelan|oops, forgot the migration\n9\t0\tmigrate.sql\n\n";
+$humanLog .= "8888def|" . ($h0 + 44 * $day) . "|Priya Nair|bump timeout after the Tuesday outage\n2\t2\tconfig.py\n";
+
+$r = (new GitAnalyzer($humanLog))->analyze();
+$a = $r->toArray();
+
+between($a['score'], 3, 35, 'a hand-written history scores in the human band');
+ok($r->has('gh.steady_cadence'), 'catches work spread across real time');
+ok($r->has('gh.multiple_authors'), 'catches more than one committer');
+ok($r->has('gh.merges_and_reverts'), 'catches merges and reverts');
+ok($r->has('gh.issue_refs'), 'catches commits tied to tracked work');
+ok($r->has('gh.human_mess'), 'catches visible frustration in the log');
+ok(!$r->has('gh.big_bang'), 'does not cry big bang at an 82-line opening commit');
+
+// ---------------------------------------------------- git: format handling
+
+group('Git log format handling');
+
+$default = "commit 9f8e7d6c5b4a3210\nAuthor: Dana Cole <dana@example.com>\nDate:   Tue Jan 14 11:02:03 2025 +0000\n\n    tidy up the config loader\n\n"
+         . "commit 1a2b3c4d5e6f7080\nAuthor: Dana Cole <dana@example.com>\nDate:   Mon Jan 13 18:40:11 2025 +0000\n\n    add retry around the flaky upload\n";
+$gd = new GitAnalyzer($default);
+ok(count($gd->commits()) === 2, 'parses default git log output', (string) count($gd->commits()));
+ok($gd->commits()[0]['author'] === 'Dana Cole', 'reads the author');
+ok($gd->commits()[0]['subject'] === 'add retry around the flaky upload', 'reads the subject, oldest first');
+
+$oneline = "3f21a9c tidy the readme\n9c8b7a6 add the licence\n1d2e3f4 initial commit\n";
+$go = new GitAnalyzer($oneline);
+ok(count($go->commits()) === 3, 'parses --oneline output', (string) count($go->commits()));
+$ao = $go->analyze()->toArray();
+ok(strpos(implode(' ', $ao['notes']), 'no timestamps') !== false,
+   'says plainly that --oneline gives it little to work with');
+
+$empty = (new GitAnalyzer("nothing resembling a git log at all\njust prose\n"))->analyze()->toArray();
+ok($empty['confidence']['level'] === 'insufficient', 'unparseable input reports insufficient confidence');
+ok(count($empty['signals']) === 0, 'unparseable input invents no signals');
+
+// A log with no line counts must still read messages, and say what it lost.
+$noStats = "aaa1111|" . $t0 . "|Sam|initial commit\nbbb2222|" . ($t0 + 300) . "|Sam|update\nccc3333|" . ($t0 + 600) . "|Sam|fix\nddd4444|" . ($t0 + 900) . "|Sam|changes\nfff5555|" . ($t0 + 1200) . "|Sam|wip\n";
+$rn = (new GitAnalyzer($noStats))->analyze();
+ok($rn->has('gh.generic_messages'), 'reads message quality without line counts');
+ok(!$rn->has('gh.big_bang'), 'does not claim a big bang it cannot measure');
+ok(strpos(implode(' ', $rn->toArray()['notes']), 'no line counts') !== false,
+   'says the paste carried no line counts');
+
 // --------------------------------------------------------------- guardrails
 
 group('Scoring guardrails');
@@ -433,6 +517,37 @@ foreach ($blocked as $url) {
 
 ok($f->normalize('example.com') === 'https://example.com', 'a bare host gets https://');
 
+// assertSafe must hand back the addresses it approved, and curlGet must pin the
+// connection to them. Without that the guard is decorative: cURL re-resolves on
+// connect, so a DNS server under the target's control can answer once with a
+// public address and once with 127.0.0.1.
+$safe = new ReflectionMethod('Fetcher', 'assertSafe');
+$safe->setAccessible(true);
+$approved = $safe->invoke($f, 'https://example.com/');
+ok(is_array($approved) && $approved !== array(), 'assertSafe returns the addresses it vetted',
+   is_array($approved) ? implode(',', $approved) : gettype($approved));
+
+$overrides = new ReflectionMethod('Fetcher', 'resolveOverrides');
+$overrides->setAccessible(true);
+
+$pin = $overrides->invoke($f, 'https://example.com/some/path', array('93.184.216.34'));
+ok($pin === array('example.com:443:93.184.216.34'), 'https pins to port 443',
+   implode(' ', (array) $pin));
+
+$pin = $overrides->invoke($f, 'http://example.com/', array('93.184.216.34', '93.184.216.35'));
+ok($pin === array('example.com:80:93.184.216.34,93.184.216.35'), 'http pins every vetted address',
+   implode(' ', (array) $pin));
+
+$pin = $overrides->invoke($f, 'https://example.com/', array('2606:2800:220:1:248:1893:25c8:1946'));
+ok($pin === array('example.com:443:[2606:2800:220:1:248:1893:25c8:1946]'),
+   'IPv6 is bracketed the way cURL wants it', implode(' ', (array) $pin));
+
+ok($overrides->invoke($f, 'https://93.184.216.34/', array('93.184.216.34')) === array(),
+   'a literal address needs no override');
+
+$src = (string) file_get_contents(dirname(__DIR__) . '/lib/Fetcher.php');
+ok(strpos($src, 'CURLOPT_RESOLVE') !== false, 'the vetted address is actually pinned on the request');
+
 $rejectedEmpty = false;
 try { $f->normalize('   '); } catch (FetchError $e) { $rejectedEmpty = true; }
 ok($rejectedEmpty, 'refuses an empty URL');
@@ -448,6 +563,44 @@ ok(substr_count($svg, '<path') === 2, 'the mark has both halves of the trace');
 $onDisk = (string) file_get_contents(dirname(__DIR__) . '/assets/img/logo.svg');
 ok(strpos($onDisk, Brand::markSvg(120, 'currentColor', '#b8402e', 'role="img" aria-label="Vibe Code Detector"')) !== false,
    'assets/img/logo.svg matches lib/Brand.php (run tools/build-assets.php)');
+
+// ------------------------------------------------------- bounded scanning
+
+group('Bounded scanning');
+
+// A blind substr can split a UTF-8 character, and every /u pattern run over the
+// result then returns null rather than matching nothing — which reads as "no
+// signals found" instead of an error.
+$multibyte = str_repeat('café — naïve ', 200);
+for ($cut = 20; $cut < 40; $cut++) {
+    $piece = Text::safeCut($multibyte, $cut);
+    if (!preg_match('//u', $piece)) {
+        ok(false, 'safeCut never leaves invalid UTF-8', "broke at {$cut} bytes");
+        break;
+    }
+    if ($cut === 39) {
+        ok(true, 'safeCut never leaves invalid UTF-8 at any offset');
+    }
+}
+ok(strlen(Text::safeCut('abc', 100)) === 3, 'safeCut leaves short input alone');
+ok(Text::safeCut('', 10) === '', 'safeCut handles an empty string');
+
+// A page past the ceiling still analyses, still finds its fingerprint, and says
+// what it did not read.
+$huge = '<!DOCTYPE html><html lang="en"><head><title>Big</title></head><body>'
+      . str_repeat('<p>Filler sentence that exists only to take up room on the page.</p>', 12000)
+      . '<script src="https://cdn.gpteng.co/gptengineer.js"></script></body></html>';
+ok(strlen($huge) > SiteAnalyzer::MAX_SCAN, 'the oversized fixture really is oversized');
+
+$started = microtime(true);
+$rh = (new SiteAnalyzer('https://big.example.com/', $huge))->analyze();
+$elapsed = microtime(true) - $started;
+$ah = $rh->toArray();
+
+ok($rh->hasFingerprint(), 'fingerprints are still found in an oversized page');
+ok(!empty($ah['stats']['scanTruncated']), 'the report records that scanning was bounded');
+ok(strpos(implode(' ', $ah['notes']), 'first') !== false, 'and says so in the notes');
+ok($elapsed < 10.0, 'an oversized page analyses in reasonable time', sprintf('%.1fs', $elapsed));
 
 // ----------------------------------------------------------------- markup
 
@@ -471,10 +624,15 @@ ok(isset($spanRule[1]) && strpos($spanRule[1], 'grid-column: 2') !== false,
 $page = (string) file_get_contents(dirname(__DIR__) . '/index.php');
 ok(substr_count($page, 'class="ladder"') === 1, 'the ladder list is where the test expects it');
 preg_match('~<ol class="ladder">(.*?)</ol>~s', $page, $ladderHtml);
+// The count is not the point — the invariant is. Each rung puts three children
+// into a two-column grid, so a rung whose description is missing, or a stray
+// extra element, is what actually breaks the layout.
 $items = isset($ladderHtml[1]) ? substr_count($ladderHtml[1], '<li>') : 0;
-ok($items === 5, 'the ladder still has five rungs', (string) $items);
+ok($items >= 5, 'the ladder describes the evidence hierarchy', (string) $items . ' rungs');
 ok(substr_count((string) ($ladderHtml[1] ?? ''), '<span>') === $items,
-   'every rung has a description span');
+   'every rung has exactly one description span');
+ok(substr_count((string) ($ladderHtml[1] ?? ''), '<strong>') === $items,
+   'every rung has exactly one term');
 
 ok(strpos($page, 'A Landfall studio product') !== false, 'the studio credit is in the footer');
 ok(strpos($css, '.colophon .studio') !== false, 'the studio credit is styled');

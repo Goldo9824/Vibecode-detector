@@ -329,7 +329,16 @@ final class Report
             $signals[] = $s->toArray();
         }
         // Decisive first, then by weight, so the reasoning reads top-down.
+        //
+        // The id is a tiebreaker rather than decoration: most weights are shared
+        // by several signals, and sorts are only stable from PHP 8.0 onwards. On
+        // 7.4 an unbroken tie orders arbitrarily, which would make the evidence
+        // list — and the signal ids baked into a certificate — differ between
+        // hosts running the same code on the same input.
         usort($signals, function ($a, $b) {
+            if ($a['weight'] === $b['weight']) {
+                return strcmp($a['id'], $b['id']);
+            }
             return $b['weight'] <=> $a['weight'];
         });
 

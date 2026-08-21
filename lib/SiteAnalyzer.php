@@ -326,8 +326,15 @@ final class SiteAnalyzer
         // py-24 everywhere.
         if (preg_match_all('~\bpy-(\d{2})\b~', $this->html, $m) && count($m[1]) >= 3) {
             $counts = array_count_values($m[1]);
-            arsort($counts);
-            $top = key($counts);
+            // Most frequent wins, largest padding breaking a tie. arsort alone
+            // leaves tied counts in an order that is only stable from PHP 8.0,
+            // so the same page could report a different dominant value on 7.4.
+            $top = null;
+            foreach ($counts as $value => $n) {
+                if ($top === null || $n > $counts[$top] || ($n === $counts[$top] && (int) $value > (int) $top)) {
+                    $top = (string) $value;
+                }
+            }
             if ((int) $top >= 16 && $counts[$top] >= 3 && $counts[$top] / count($m[1]) > 0.6) {
                 $this->r->flag('ae.uniform_whitespace', array(
                     sprintf('py-%s on %d of %d spaced sections', $top, $counts[$top], count($m[1])),

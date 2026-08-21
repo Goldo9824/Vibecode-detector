@@ -19,6 +19,8 @@ final class Brand
 {
     const INK    = array(23, 20, 15);
     const PAPER  = array(251, 249, 244);
+    /** The website's warmer ground, for artwork that has to sit next to it. */
+    const PAPER_WEB = array(246, 242, 233);
     const RED    = array(184, 64, 46);
     const GREEN  = array(63, 107, 74);
     const AMBER  = array(176, 125, 26);

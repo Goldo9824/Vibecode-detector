@@ -20,6 +20,11 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 <meta property="og:description" content="A percentage reading of how likely a page or a snippet is to be AI-generated — with the evidence shown and the limits stated.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="<?= h(vcd_site_url()) ?>/">
+<meta property="og:image" content="<?= h(vcd_site_url()) ?>/assets/img/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="<?= h(vcd_site_url()) ?>/assets/img/social-preview.png">
 </head>
 <body>
 

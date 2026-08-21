@@ -146,6 +146,7 @@ Then open <http://localhost:8000>. There is nothing to install first.
 php tests/run.php                       # the whole suite, ~180 assertions
 php tools/gen-signals-doc.php           # regenerate docs/SIGNALS.md
 php tools/build-assets.php              # regenerate the SVG files from lib/Brand.php
+php tools/build-social.php              # regenerate the 1280x640 social preview card
 ```
 
 ## Deploying

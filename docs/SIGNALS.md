@@ -10,17 +10,17 @@ weight of each signal found, positive for AI, negative for human. The total goes
 a logistic curve to become the percentage. As a rough guide, a weight of 0.7 doubles the
 odds; 4.5 ends the argument.
 
-There are **55 signals** across 7 categories.
+There are **67 signals** across 7 categories.
 
 | Category | Signals | Direction |
 |---|---|---|
-| [Platform fingerprint](#platform-fingerprint) | 6 | raises the score |
-| [Structural](#structural) | 8 | raises the score |
-| [Code style](#code-style) | 14 | raises the score |
-| [Content](#content) | 5 | raises the score |
+| [Platform fingerprint](#platform-fingerprint) | 7 | raises the score |
+| [Structural](#structural) | 9 | raises the score |
+| [Code style](#code-style) | 17 | raises the score |
+| [Content](#content) | 7 | raises the score |
 | [Security profile](#security-profile) | 3 | raises the score |
-| [Aesthetic](#aesthetic) | 8 | raises the score |
-| [Human authorship](#human-authorship) | 11 | lowers the score |
+| [Aesthetic](#aesthetic) | 10 | raises the score |
+| [Human authorship](#human-authorship) | 14 | lowers the score |
 
 ---
 
@@ -64,6 +64,12 @@ Replit badge or hosting signature. Replit hosts hand-written projects too, so th
 
 The document's own <meta name="generator"> names an AI site builder.
 
+### Another AI builder's fingerprint
+
+`fp.builder_other` · weight **4** (decisive)
+
+A generator outside the main five identified itself in the page: its SDK, deployment host or badge is present. The specific tool is named in the evidence.
+
 
 ## Structural
 
@@ -105,6 +111,12 @@ Complete components, routes or helpers that nothing imports or calls.
 
 Standard library, third-party, then local, sorted within each group, with no organic accretion.
 
+### Explanatory file-header block
+
+`st.file_header_block` · weight **0.6** (moderate)
+
+A banner comment at the top of the file restating the filename and describing the module's purpose in prose. Humans write these for libraries other people consume; generators write them for every file including the ones nobody reads.
+
 ### Empty client-rendered shell with a hashed bundle
 
 `st.spa_shell` · weight **0.45** (weak)
@@ -127,6 +139,12 @@ Line-level habits. Individually weak and easy to mask by renaming or reformattin
 `cd.emoji_comments` · weight **1.3** (strong)
 
 One of the most reliable single markers reviewers report. Emoji in source comments are rare in hand-written production code and routine in generated code.
+
+### Emoji inside log and status output
+
+`cd.emoji_logging` · weight **1.1** (strong)
+
+Ticks, crosses and party poppers in console output. Nearly as reliable as emoji in comments, and it survives longer because log strings get cleaned up less often than comments do.
 
 ### Comments explain what the code does, not why
 
@@ -176,6 +194,12 @@ Names like currentLoggedInUserAuthTokenValue, where a human would have written t
 
 Curly quotes and em dashes in code, comments or markup, which an editor does not produce on its own.
 
+### Optional chaining and fallbacks on everything
+
+`cd.defensive_chaining` · weight **0.5** (weak)
+
+Every property access guarded and every value given a default, applied uniformly rather than where a value is genuinely optional. The same instinct as the blanket try/catch: nothing can throw, so nothing can be diagnosed.
+
 ### Iteration-scar names
 
 `cd.lazy_names` · weight **0.5** (weak)
@@ -199,6 +223,12 @@ Layers of ceremony classes stacked without a need that justifies them.
 `cd.todo_placeholders` · weight **0.5** (weak)
 
 Stub bodies and "implement this" markers that were never returned to.
+
+### Every branch has its counterpart
+
+`cd.over_symmetric_branches` · weight **0.45** (weak)
+
+An else for every if, a default for every switch, a fallback for every path, whether or not the case can occur. Human control flow is lopsided because real requirements are lopsided.
 
 ### Entry-point guard on a module nothing runs
 
@@ -229,6 +259,12 @@ A rocket for performance, a lightbulb for smart. Emoji do not inherit colour, ad
 
 "Ship faster", "unlock the power of", "everything you need to". Marketing language that tells rather than shows, with no specifics anywhere.
 
+### Round, unsourced statistics
+
+`ct.stat_inflation` · weight **0.5** (weak)
+
+Suspiciously tidy numbers doing persuasive work: 10,000+ users, 99.9% uptime, 10x faster, 2M downloads. Nothing is attributed and the roundness is the tell, because measured figures are rarely this neat.
+
 ### Placeholder copy left in production
 
 `ct.placeholder_copy` · weight **0.5** (weak)
@@ -240,6 +276,12 @@ Lorem ipsum, "Coming soon", "Your text here" on a live page.
 `ct.dead_links` · weight **0.4** (weak)
 
 A full nav and footer where most links are href="#".
+
+### Three tiers with the middle one starred
+
+`ct.pricing_three` · weight **0.35** (weak)
+
+Exactly three pricing columns with a "Most popular" badge on the centre one. A real pricing page is shaped by what a business actually sells; this shape is shaped by every pricing page in the training data.
 
 
 ## Security profile
@@ -287,11 +329,23 @@ rounded-2xl, shadow-lg, p-6, pill buttons, cards nested inside cards, every radi
 
 A 3-4px accent strip down the left edge of a panel, applied to every callout on the page.
 
+### The gradient-filled headline
+
+`ae.gradient_text` · weight **0.4** (weak)
+
+A heading painted with a clipped background gradient instead of a colour. Almost unheard of in hand-built pages before 2023 and near-universal in generated ones since.
+
 ### Default icon set, unchanged
 
 `ae.lucide` · weight **0.35** (weak)
 
 Lucide or Heroicons throughout, because the component kit these tools build on ships them as the default.
+
+### Frosted-glass panels throughout
+
+`ae.glassmorphism` · weight **0.3** (weak)
+
+Backdrop blur over translucent white on every card and bar. One of the handful of effects a model reaches for when asked to make something look modern.
 
 ### Rigid symmetry
 
@@ -340,11 +394,23 @@ Links into a tracker, issue numbers, dated notes, names of colleagues.
 
 HACK, XXX, "do not touch this", "no idea why this works". Models are relentlessly polite.
 
+### Misspellings in the copy
+
+`hu.typos` · weight **0.7** (moderate)
+
+Models do not typo. A page carrying "recieve" or "seperate" was typed by somebody, and typos are one of the few tells that masking makes worse rather than better, since cleaning them up is exactly what nobody bothers to do.
+
 ### Built on a classic CMS or site builder
 
 `hu.cms` · weight **0.7** (moderate)
 
 WordPress, Wix, Squarespace, Webflow, Shopify. These predate the current generation of tools and are a different phenomenon entirely, not evidence of it.
+
+### Signs of a business actually operating
+
+`hu.operational_stack` · weight **0.6** (moderate)
+
+A cookie banner, legal and privacy pages, a tag manager, a real analytics property, a newsletter provider. Accumulated obligations rather than generated features.
 
 ### Inconsistent formatting
 
@@ -369,6 +435,12 @@ Old implementations kept around just in case, which generators do not produce.
 `hu.legacy_stack` · weight **0.5** (weak)
 
 jQuery, table layouts, hand-written includes, vendor-prefixed CSS: an accretion history rather than a single generation.
+
+### A footer that has fallen out of date
+
+`hu.dated_copyright` · weight **0.4** (weak)
+
+A copyright year or "last updated" date already in the past. Generated pages are current by construction; drift means the page has been sitting there.
 
 ### Abbreviated, idiomatic identifiers
 

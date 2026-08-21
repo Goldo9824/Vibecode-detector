@@ -111,6 +111,14 @@ final class CodeAnalyzer
             $this->r->flag('cd.what_comments', $what);
         }
 
+        // An explanatory banner at the top of the file, restating its own name.
+        $head = implode("\n", array_slice($this->lines, 0, 12));
+        if (preg_match('~^\s*(?:/\*\*|"""|\'\'\'|//|#)~', ltrim($head))
+            && preg_match('~\b(?:this (?:file|module|class|script)|handles|responsible for|provides|contains|implements)\b~i', $head)
+            && strlen(trim($head)) > 60) {
+            $this->r->flag('st.file_header_block', array(Report::excerpt(trim($head), 160)));
+        }
+
         // Uniform density: chop the file into blocks and look at the spread.
         // Humans comment in bursts around the hard parts; generators spread it flat.
         $this->checkCommentUniformity($comments);
@@ -272,6 +280,38 @@ final class CodeAnalyzer
         if ($logs >= 5 && $per100 >= 2.0) {
             $this->r->flag('cd.console_noise', array(
                 sprintf('%d debug logging calls, about %.1f per 100 lines', $logs, $per100),
+            ));
+        }
+
+        // Emoji in log and status output. Cleaned up even less often than
+        // comments are, so this outlives most stylistic tells.
+        $logEmoji = array();
+        if (preg_match_all('~(?:console\.\w+|print|println|printf|echo|logger?\.\w+|log)\s*\(\s*[`\'"]([^`\'"]{0,120})~u', $this->src, $m)) {
+            foreach ($m[1] as $str) {
+                if (Text::hasEmoji($str)) {
+                    $logEmoji[] = $str;
+                }
+            }
+        }
+        if ($logEmoji) {
+            $this->r->flag('cd.emoji_logging', $logEmoji);
+        }
+
+        // Every access guarded, everywhere, whether or not it can be absent.
+        $chains = preg_match_all('~\?\.~', $this->src) + preg_match_all('~\?\?~', $this->src);
+        $accesses = max(1, preg_match_all('~[a-zA-Z_$)\]]\s*\.\s*[a-zA-Z_$]~', $this->src));
+        if ($chains >= 8 && ($chains / $accesses) > 0.28) {
+            $this->r->flag('cd.defensive_chaining', array(
+                sprintf('%d optional-chain or nullish-fallback operators across %d property accesses', $chains, $accesses),
+            ));
+        }
+
+        // An else for every if.
+        $ifs = preg_match_all('~(?<![\w$])if\s*\(~', $this->src);
+        $elses = preg_match_all('~(?<![\w$])else\b~', $this->src);
+        if ($ifs >= 5 && $elses >= $ifs * 0.85) {
+            $this->r->flag('cd.over_symmetric_branches', array(
+                sprintf('%d if statements and %d else branches: nearly every path has a counterpart', $ifs, $elses),
             ));
         }
 

@@ -247,23 +247,27 @@ final class Certificate
         // demonstration of how far the number should be trusted.
         $this->pdf->paragraph(
             $tx, $ty + 3, $tw,
-            'The tool that issued this certificate was itself AI-generated, and its own detector '
-          . 'does not identify it as such.',
+            'The tool that issued this certificate was itself half AI-generated, and its own '
+          . 'detector cannot tell which half.',
             'F3', 8.4, 11.2, Brand::INK
         );
     }
 
     private function footer(): void
     {
-        $y = $this->pdf->height() - self::MARGIN - 14;
+        // Three rows now, so the block starts higher to keep the last line
+        // inside the bottom margin.
+        $y = $this->pdf->height() - self::MARGIN - 26;
         $this->pdf->line($this->x0, $y - 14, $this->x1, $y - 14, Brand::RULE, 0.8);
 
         $id = (string) ($this->c['id'] ?? '');
         $this->pdf->text($this->x0, $y, 'Certificate ' . $id, 'F4', 8, Brand::INK);
-        $this->pdf->text($this->x0, $y + 11, 'Verify at ' . VCD_SITE_URL . '/verify', 'F1', 7.5, Brand::GREY);
+        $this->pdf->text($this->x0, $y + 11, 'Verify at ' . vcd_site_url() . '/verify', 'F1', 7.5, Brand::GREY);
 
-        $this->pdf->textRight($this->x1, $y, 'vibecodedetector.fanficnow.com', 'F1', 8, Brand::INK);
+        $this->pdf->textRight($this->x1, $y, preg_replace('~^https?://~', '', vcd_site_url()), 'F1', 8, Brand::INK);
         $this->pdf->textRight($this->x1, $y + 11, 'Open source · github.com/goldo9824/vibecode-detector', 'F1', 7.5, Brand::GREY);
+
+        $this->pdf->textCenter($this->x0 + $this->colW / 2, $y + 24, 'A Landfall studio product', 'F3', 8, Brand::GREY);
     }
 
     // ----------------------------------------------------------------- helpers

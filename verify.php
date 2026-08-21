@@ -98,7 +98,7 @@ $verdicts = array(
       <div class="prose">
         <form method="get" action="verify.php" id="verify-form">
           <label class="field" for="link">Paste a verification link</label>
-          <input type="text" id="link" name="link" spellcheck="false" placeholder="<?= h(VCD_SITE_URL) ?>/verify.php?p=…&amp;s=…">
+          <input type="text" id="link" name="link" spellcheck="false" placeholder="<?= h(vcd_site_url()) ?>/verify.php?p=…&amp;s=…">
           <div class="actions">
             <button class="btn" type="submit">Check it</button>
           </div>

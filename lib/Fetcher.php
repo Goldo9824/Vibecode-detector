@@ -39,6 +39,21 @@ class Fetcher
     const MAX_ASSETS = 4;
 
     /**
+     * Vetted addresses per host, for the lifetime of this Fetcher.
+     *
+     * A whole-site crawl calls assertSafe() on the same host for the entry
+     * page, its assets, robots.txt and up to fifty inner pages — the same DNS
+     * answer, checked the same way, every time. Caching it here does not
+     * weaken the guard: the cache is a plain instance property, so it starts
+     * empty on every request and cannot carry a stale answer from one visitor's
+     * crawl into another's. It only removes redundant lookups within the one
+     * crawl that already committed to trusting this host.
+     *
+     * @var array<string,string[]>
+     */
+    private $safeHostCache = array();
+
+    /**
      * @return array{url:string,body:string,status:int,assets:array<string,string>,contentType:string}
      * @throws FetchError
      */
@@ -339,6 +354,10 @@ class Fetcher
             throw new FetchError('Local addresses cannot be analysed.');
         }
 
+        if (isset($this->safeHostCache[$host])) {
+            return $this->safeHostCache[$host];
+        }
+
         $ips = array();
         if (filter_var($host, FILTER_VALIDATE_IP)) {
             $ips[] = $host;
@@ -366,7 +385,7 @@ class Fetcher
             }
         }
 
-        return array_values(array_unique($ips));
+        return $this->safeHostCache[$host] = array_values(array_unique($ips));
     }
 
     private function isPublicIp(string $ip): bool

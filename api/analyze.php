@@ -30,6 +30,20 @@ if ($mode === 'url') {
         ), 429);
     }
 
+    // A per-IP allowance does nothing against a flood of slow requests spread
+    // across many addresses at once. This caps how many url-mode fetches run
+    // at the same time, across every visitor, so that a busy moment fails one
+    // request with "try again" instead of exhausting the worker pool the rest
+    // of the site depends on. Released on every exit path, vcd_fail()'s
+    // included, because exit() does not run pending finally blocks.
+    $slot = vcd_acquire_fetch_slot();
+    if ($slot === null) {
+        vcd_fail('This tool is busy reading other pages right now. Try again in a few seconds.', 503);
+    }
+    if ($slot !== '') {
+        register_shutdown_function('vcd_release_fetch_slot', $slot);
+    }
+
     $url = isset($_POST['url']) ? (string) $_POST['url'] : '';
     $fetcher = new Fetcher();
 

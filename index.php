@@ -135,6 +135,12 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
           <ol id="r-pages-list"></ol>
         </div>
 
+        <div class="trend" id="r-trend" hidden>
+          <p class="eyebrow">Shape of the history</p>
+          <svg id="r-trend-svg" class="trend-svg" viewBox="0 0 400 90" preserveAspectRatio="none" role="img" aria-label="Lines added and removed per section of the history, oldest to newest"></svg>
+          <div class="trend-scale"><span>oldest</span><span>newest</span></div>
+        </div>
+
         <div class="notes">
           <p class="eyebrow">Read this before repeating the number</p>
           <ul id="r-notes"></ul>

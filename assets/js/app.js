@@ -194,6 +194,7 @@
 
     renderSignals(data.signals);
     renderPages(data);
+    renderTrend(data);
     renderNotes(data);
 
     var cert = $('r-cert');
@@ -266,6 +267,58 @@
       li.appendChild(score);
       list.appendChild(li);
     });
+    host.hidden = false;
+  }
+
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+
+  function svgEl(tag, attrs) {
+    var node = document.createElementNS(SVG_NS, tag);
+    for (var key in attrs) node.setAttribute(key, attrs[key]);
+    return node;
+  }
+
+  // Git mode only: added/removed lines per section of the history, oldest
+  // first, as a pair of bars per bucket rising and falling from a baseline.
+  function renderTrend(data) {
+    var host = $('r-trend');
+    var svg = $('r-trend-svg');
+    var trend = data.stats && data.stats.trend;
+
+    if (!trend || trend.length < 2) {
+      host.hidden = true;
+      return;
+    }
+
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+    var W = 400, H = 90, mid = H / 2, pad = 4;
+    var n = trend.length;
+    var slot = W / n;
+    var barW = Math.max(slot - 1, 0.5);
+
+    var max = 1;
+    trend.forEach(function (p) { max = Math.max(max, p.added, p.removed); });
+
+    svg.appendChild(svgEl('line', { x1: 0, x2: W, y1: mid, y2: mid, class: 'trend-baseline' }));
+
+    trend.forEach(function (p, i) {
+      var x = i * slot;
+      var addedH = (p.added / max) * (mid - pad);
+      var removedH = (p.removed / max) * (mid - pad);
+
+      if (addedH > 0.5) {
+        svg.appendChild(svgEl('rect', {
+          x: x, y: mid - addedH, width: barW, height: addedH, class: 'trend-added'
+        }));
+      }
+      if (removedH > 0.5) {
+        svg.appendChild(svgEl('rect', {
+          x: x, y: mid, width: barW, height: removedH, class: 'trend-removed'
+        }));
+      }
+    });
+
     host.hidden = false;
   }
 

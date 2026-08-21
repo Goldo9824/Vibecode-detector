@@ -200,6 +200,10 @@ final class GitAnalyzer
         $this->checkCadence($withTs, $spanDays);
         $this->checkCollaboration($authors);
 
+        if ($hasStats && $n >= self::THIN_COMMITS) {
+            $this->r->stat('trend', $this->buildTrend());
+        }
+
         if (!$hasStats) {
             $this->r->note('The paste carried no line counts, so nothing about commit size could be checked. Adding --numstat to the command roughly doubles what this can see.');
         }
@@ -424,6 +428,46 @@ final class GitAnalyzer
         if ($branchy) {
             $this->r->flag('gh.merges_and_reverts', array_slice($branchy, 0, 4));
         }
+    }
+
+    /**
+     * A compact shape of the whole history: churn per section, oldest first.
+     *
+     * The signals above each answer one question about the log; this answers
+     * none of them and is shown as-is, so a reader can see a big-bang opening
+     * or a burst mid-history for themselves rather than taking the signals'
+     * word for it. Bucketed rather than one point per commit, because a log of
+     * a thousand commits would otherwise hand the front end a payload larger
+     * than the page it renders into.
+     *
+     * @return array<int,array{added:int,removed:int,commits:int}>
+     */
+    private function buildTrend(): array
+    {
+        $n = count($this->commits);
+        $buckets = min(40, $n);
+        if ($buckets < 1) {
+            return array();
+        }
+
+        $points = array();
+        for ($b = 0; $b < $buckets; $b++) {
+            $lo = (int) floor($b * $n / $buckets);
+            $hi = (int) floor(($b + 1) * $n / $buckets);
+            if ($hi <= $lo) {
+                $hi = $lo + 1;
+            }
+            $added = 0;
+            $removed = 0;
+            $commits = 0;
+            for ($i = $lo; $i < $hi && $i < $n; $i++) {
+                $added   += $this->commits[$i]['added'];
+                $removed += $this->commits[$i]['removed'];
+                $commits++;
+            }
+            $points[] = array('added' => $added, 'removed' => $removed, 'commits' => $commits);
+        }
+        return $points;
     }
 
     // ---------------------------------------------------------------- helpers

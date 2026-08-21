@@ -585,6 +585,21 @@ ok($r->has('gh.micro_fix_trail'), 'catches the trail of one-line fixes');
 ok($r->has('gh.prompt_messages'), 'catches commit messages that read like the prompt');
 ok($r->has('gh.single_session'), 'catches a history that is one sitting');
 
+$trend = $a['stats']['trend'] ?? null;
+ok(is_array($trend) && count($trend) >= 1 && count($trend) <= 40,
+   'reports a bucketed history trend for a log with line counts',
+   is_array($trend) ? (string) count($trend) : gettype($trend));
+$trendAdded = 0;
+foreach ((array) $trend as $point) {
+    $trendAdded += $point['added'];
+}
+$commitAdded = 0;
+foreach ($g->commits() as $c) {
+    $commitAdded += $c['added'];
+}
+ok($trendAdded === $commitAdded, 'the trend accounts for every line added across the log',
+   "{$trendAdded} vs {$commitAdded}");
+
 // ------------------------------------------------------- git: hand-written
 
 group('A hand-written repository history');
@@ -641,6 +656,7 @@ ok($rn->has('gh.generic_messages'), 'reads message quality without line counts')
 ok(!$rn->has('gh.big_bang'), 'does not claim a big bang it cannot measure');
 ok(strpos(implode(' ', $rn->toArray()['notes']), 'no line counts') !== false,
    'says the paste carried no line counts');
+ok(!isset($rn->toArray()['stats']['trend']), 'no trend is reported without line counts to build one from');
 
 // ------------------------------------------------- code: assistant traces
 
@@ -1002,6 +1018,23 @@ $pin = $overrides->invoke($f, 'https://example.com/some/path', array('93.184.216
 ok($pin === array('example.com:443:93.184.216.34'), 'https pins to port 443',
    implode(' ', (array) $pin));
 
+// A crawl calls assertSafe() on the same host for the entry page, its assets,
+// robots.txt and every inner page — the cache exists so that costs one DNS
+// lookup instead of dozens.
+$cacheProp = new ReflectionProperty('Fetcher', 'safeHostCache');
+$cacheProp->setAccessible(true);
+
+$f2 = new Fetcher();
+$firstLookup = $safe->invoke($f2, 'https://example.com/');
+$cached = $cacheProp->getValue($f2);
+ok(isset($cached['example.com']), 'the vetted addresses are cached against the host');
+
+$secondLookup = $safe->invoke($f2, 'https://example.com/a/different/path');
+ok($secondLookup === $firstLookup, 'a second lookup for the same host reuses the cached addresses',
+   implode(',', $secondLookup) . ' vs ' . implode(',', $firstLookup));
+
+ok($cacheProp->getValue(new Fetcher()) === array(), 'a new Fetcher starts with an empty cache');
+
 $pin = $overrides->invoke($f, 'http://example.com/', array('93.184.216.34', '93.184.216.35'));
 ok($pin === array('example.com:80:93.184.216.34,93.184.216.35'), 'http pins every vetted address',
    implode(' ', (array) $pin));
@@ -1071,6 +1104,38 @@ if ($writable) {
     // Documented behaviour: an unwritable data directory fails open rather
     // than taking the site down.
     ok($allowed === 8, 'an unwritable data directory fails open', $allowed . ' of 8 allowed');
+}
+
+// A per-IP throttle does nothing against a flood spread across many
+// addresses at once; the global concurrency cap is the backstop for that.
+$slotsWritable = is_dir(VCD_DATA) && is_writable(VCD_DATA);
+if ($slotsWritable) {
+    @unlink(VCD_DATA . '/inflight.txt'); // start from a clean slot table
+
+    $tokens = array();
+    for ($i = 0; $i < VCD_MAX_CONCURRENT_FETCHES + 3; $i++) {
+        $tokens[] = vcd_acquire_fetch_slot();
+    }
+    $held = array_filter($tokens, function ($t) { return $t !== null; });
+    ok(count($held) === VCD_MAX_CONCURRENT_FETCHES,
+       'the concurrency cap allows exactly its limit of slots then refuses',
+       count($held) . ' of ' . VCD_MAX_CONCURRENT_FETCHES);
+
+    foreach ($tokens as $t) {
+        if ($t !== null && $t !== '') {
+            vcd_release_fetch_slot($t);
+        }
+    }
+    $reopened = vcd_acquire_fetch_slot();
+    ok($reopened !== null, 'releasing a slot frees it back up for the next request');
+    if ($reopened !== null && $reopened !== '') {
+        vcd_release_fetch_slot($reopened);
+    }
+
+    @unlink(VCD_DATA . '/inflight.txt');
+} else {
+    $reopened = vcd_acquire_fetch_slot();
+    ok($reopened !== null, 'an unwritable data directory fails open for the concurrency cap too');
 }
 
 // ---------------------------------------------------------- public base url

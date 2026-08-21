@@ -17,14 +17,16 @@ $mode = isset($_POST['mode']) ? (string) $_POST['mode'] : '';
 if ($mode === 'url') {
     $crawl = !empty($_POST['crawl']);
 
-    // A crawl is ten times the work of a visit, so it gets its own, much
-    // tighter budget. Both buckets are checked for a crawl: it is still a page
-    // fetch, and it should not be a way around the page limit.
+    // A crawl is up to fifty times the work of a visit, so it gets its own,
+    // much tighter budget. Both buckets are checked for a crawl: it is still a
+    // page fetch, and it should not be a way around the page limit. Three per
+    // ten minutes keeps the load one user can put on somebody else's server in
+    // roughly the same place it was when a crawl meant ten pages.
     if (!vcd_rate_limit('url', 20, 600)) {
         vcd_fail('That is a lot of pages in ten minutes. Give it a moment.', 429);
     }
-    if ($crawl && !vcd_rate_limit('crawl', 4, 600)) {
-        vcd_fail('Whole-site reads are limited to four every ten minutes, because they cost the site being read as well as this one.', 429);
+    if ($crawl && !vcd_rate_limit('crawl', 3, 600)) {
+        vcd_fail('Whole-site reads are limited to three every ten minutes, because they cost the site being read as well as this one.', 429);
     }
 
     $url = isset($_POST['url']) ? (string) $_POST['url'] : '';

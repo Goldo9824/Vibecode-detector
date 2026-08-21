@@ -16,17 +16,37 @@ require_once __DIR__ . '/Fetcher.php';
  */
 final class Crawler
 {
-    /** Nobody's site deserves more than this from a novelty detector. */
-    const MAX_PAGES = 10;
+    /**
+     * Page ceiling.
+     *
+     * Rarely the binding constraint: BUDGET_SECONDS almost always stops the
+     * crawl first. Treat this as "never more than", not "will read this many".
+     */
+    const MAX_PAGES = 50;
 
     /**
-     * Wall-clock ceiling for the whole crawl.
+     * Wall-clock ceiling for the whole crawl, and the real limit in practice.
      *
-     * Shared hosting typically allows 30 seconds per request. The crawl has to
-     * finish, aggregate and render inside that, so it stops fetching well
-     * before the limit and reports on what it managed to read.
+     * Shared hosting typically allows 30 seconds per request, and the crawl has
+     * to finish, aggregate and render inside that — so this leaves headroom
+     * rather than spending the lot on fetching. At a typical half-second to a
+     * second per page that is somewhere between 25 and 45 pages; a slow site
+     * will give fewer, and the report says so instead of pretending otherwise.
      */
-    const BUDGET_SECONDS = 18.0;
+    const BUDGET_SECONDS = 24.0;
+
+    /**
+     * Per-page download cap for inner pages.
+     *
+     * The entry page gets the full allowance, but holding fifty documents at
+     * the 3 MB transfer limit would mean 150 MB resident, and shared hosting
+     * commonly caps PHP at 128 MB. Half a megabyte of HTML is far more than any
+     * of these checks needs, and fifty of those is a comfortable 25 MB.
+     */
+    const MAX_PAGE_BYTES = 524288;
+
+    /** Per-page transfer timeout, so one stalled page cannot eat the budget. */
+    const PAGE_TIMEOUT = 6;
 
     /** Extensions that are never an HTML page worth reading. */
     const SKIP_EXT = 'jpg|jpeg|png|gif|webp|avif|svg|ico|bmp|tiff|mp4|webm|mov|avi|mp3|wav|ogg|flac|pdf|zip|gz|tar|rar|7z|dmg|exe|woff2?|ttf|otf|eot|css|js|json|xml|rss|atom|txt|csv|xlsx?|docx?|pptx?';
@@ -143,7 +163,7 @@ final class Crawler
      */
     private function fetchDocument(string $url): ?array
     {
-        $doc = $this->fetcher->fetchDocument($url);
+        $doc = $this->fetcher->fetchDocument($url, self::MAX_PAGE_BYTES, self::PAGE_TIMEOUT);
 
         if ($doc['status'] >= 400 || $doc['body'] === '') {
             return null;

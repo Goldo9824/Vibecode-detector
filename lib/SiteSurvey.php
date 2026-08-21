@@ -23,8 +23,15 @@ require_once __DIR__ . '/Text.php';
  */
 final class SiteSurvey
 {
-    /** A signal seen on at least this share of pages is a site property. */
-    const CORROBORATION = 0.34;
+    /**
+     * Share of pages a signal must appear on to count as a site property.
+     *
+     * Scaled rather than fixed. A flat "two pages is enough" rule is sensible
+     * across six pages and meaningless across fifty, where two pages is four
+     * per cent and indistinguishable from noise. The floor of two still applies
+     * so that small crawls behave as before.
+     */
+    const CORROBORATION = 0.25;
 
     /** @var array<int,array{url:string,body:string,assets:array<string,string>,status:int}> */
     private $pages;
@@ -100,6 +107,17 @@ final class SiteSurvey
     }
 
     /**
+     * How many pages a signal must appear on before it counts site-wide.
+     *
+     * Never fewer than two, so a lone page cannot carry a reading; otherwise a
+     * quarter of what was read, so the bar rises with the size of the crawl.
+     */
+    public static function requiredPages(int $pageCount): int
+    {
+        return max(2, (int) ceil($pageCount * self::CORROBORATION));
+    }
+
+    /**
      * Fold per-page signals into site-wide ones.
      *
      * @param array<string,array<int,int>> $hits
@@ -118,14 +136,13 @@ final class SiteSurvey
                 continue;
             }
             $seen = count($pages);
-            $share = $pageCount > 0 ? $seen / $pageCount : 0;
 
             // A fingerprint only has to be true once: a builder's runtime on any
             // page identifies the builder for the site. Everything else has to
             // show up on enough pages to be a property of the site rather than
             // of one page that happened to be odd.
             $isFingerprint = ($meta['category'] === Catalog::CAT_FINGERPRINT);
-            if (!$isFingerprint && $pageCount > 1 && $seen < 2 && $share < self::CORROBORATION) {
+            if (!$isFingerprint && $pageCount > 1 && $seen < self::requiredPages($pageCount)) {
                 continue;
             }
 

@@ -68,6 +68,27 @@ final class Report
     /** Base rate assumption before any evidence: assume not AI-generated. */
     const PRIOR_LOGIT = -1.0;
 
+    /**
+     * Per-category ceilings on accumulated evidence, in log-odds.
+     *
+     * Signals within a category are not independent — a file that swallows its
+     * exceptions usually also over-wraps them, and counting both at full weight
+     * double-counts one underlying habit. Without ceilings, a subject that
+     * trips eight weak style tells outscores one carrying a hard fingerprint,
+     * which inverts the whole hierarchy of evidence.
+     *
+     * Fingerprints are deliberately absent: they are positive identifications,
+     * not accumulated inference, and nothing should hold them back.
+     */
+    const CATEGORY_CAPS = array(
+        Catalog::CAT_STRUCTURE  => 2.6,
+        Catalog::CAT_CODE       => 2.8,
+        Catalog::CAT_CONTENT    => 1.4,
+        Catalog::CAT_SECURITY   => 1.6,
+        Catalog::CAT_AESTHETIC  => self::AESTHETIC_CAP,
+        Catalog::CAT_PROVENANCE => 3.0,
+    );
+
     /** Aesthetics alone must never carry an accusation. */
     const AESTHETIC_CAP = 1.0;
 
@@ -181,17 +202,27 @@ final class Report
     public function score(): int
     {
         $logit = self::PRIOR_LOGIT;
-        $aesthetic = 0.0;
 
+        // Accumulate per category and direction, then apply that category's
+        // ceiling, so related signals reinforce each other without compounding.
+        // Keying on direction as well means a human-pointing signal added to a
+        // non-provenance category later still nets off correctly.
+        $groups = array();
         foreach ($this->signals as $s) {
-            if ($s->category === Catalog::CAT_AESTHETIC) {
-                $aesthetic += $s->weight;
-                continue;
+            $key = $s->category . '|' . $s->direction;
+            if (!isset($groups[$key])) {
+                $groups[$key] = array('category' => $s->category, 'direction' => $s->direction, 'total' => 0.0);
             }
-            $logit += ($s->direction === 'ai') ? $s->weight : -$s->weight;
+            $groups[$key]['total'] += $s->weight;
         }
 
-        $logit += min($aesthetic, self::AESTHETIC_CAP);
+        foreach ($groups as $group) {
+            $total = $group['total'];
+            if (isset(self::CATEGORY_CAPS[$group['category']])) {
+                $total = min($total, self::CATEGORY_CAPS[$group['category']]);
+            }
+            $logit += ($group['direction'] === 'ai') ? $total : -$total;
+        }
 
         $score = (int) round(100.0 / (1.0 + exp(-$logit)));
 

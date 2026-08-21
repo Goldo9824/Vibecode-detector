@@ -63,6 +63,7 @@ final class SiteAnalyzer
         $this->checkComponentDefaults();
         $this->checkSymmetry();
         $this->checkContent();
+        $this->checkHumanMarks();
         $this->checkMedia();
         $this->checkCms();
         $this->checkAssets();
@@ -119,6 +120,32 @@ final class SiteAnalyzer
             if ($found) {
                 $this->r->flag($id, $found);
             }
+        }
+
+        // The long tail of builders, named in the evidence rather than each
+        // earning its own catalogue entry.
+        $others = array(
+            'Rocket'          => '~rocket\.new|rocket-?builder~i',
+            'Create.xyz'      => '~create\.xyz|createxyz~i',
+            'Tempo Labs'      => '~tempolabs\.ai|tempo-?labs~i',
+            'Databutton'      => '~databutton\.com|databutton-app~i',
+            'Emergent'        => '~emergent\.sh|emergentagent~i',
+            'Firebase Studio' => '~idx\.google\.com|firebase-?studio~i',
+            'Builder.io'      => '~builder\.io/c/|visual-?copilot~i',
+            'Anima'           => '~animaapp\.com|anima-?generated~i',
+            'Locofy'          => '~locofy\.ai|locofy-?generated~i',
+            'Dora'            => '~dora\.run|dorabuilder~i',
+            'Durable'         => '~durable\.co/site|durablesites~i',
+            'Mocha'           => '~getmocha\.com|mocha-?app~i',
+        );
+        $named = array();
+        foreach ($others as $tool => $re) {
+            if (preg_match($re, $hay)) {
+                $named[] = $tool . ' left its signature in the page';
+            }
+        }
+        if ($named) {
+            $this->r->flag('fp.builder_other', $named);
         }
 
         // The document naming its own generator.
@@ -308,8 +335,24 @@ final class SiteAnalyzer
             }
         }
 
-        // The coloured left-border card.
         $css = $this->html . "\n" . implode("\n", $this->assets);
+
+        // A heading painted with a clipped gradient rather than a colour.
+        if (preg_match('~bg-clip-text[^"\']*text-transparent|text-transparent[^"\']*bg-clip-text~i', $this->html)
+            || preg_match('~background-clip:\s*text~i', $css)) {
+            $this->r->flag('ae.gradient_text', array('a headline filled with a background gradient instead of a colour'));
+        }
+
+        // Frosted glass on everything.
+        $blur = preg_match_all('~backdrop-blur(?:-\w+)?\b~i', $this->html)
+              + preg_match_all('~backdrop-filter:\s*blur~i', $css);
+        if ($blur >= 3) {
+            $this->r->flag('ae.glassmorphism', array(
+                sprintf('%d frosted-glass surfaces on one page', $blur),
+            ));
+        }
+
+        // The coloured left-border card.
         if (preg_match('~border-l-(?:2|4|\[\d)~i', $this->html) && preg_match('~\bborder-l-\d?\s*[^"\']*\bborder-(?:indigo|violet|purple|blue|emerald|amber)-\d{3}~i', $this->html)) {
             $this->r->flag('ae.left_border_card', array('accent strip down the left edge of a panel'));
         } elseif (preg_match('~border-left:\s*(?:3|4|5)px\s+solid~i', $css)) {
@@ -443,6 +486,29 @@ final class SiteAnalyzer
             }
         }
 
+        // Round, unsourced numbers doing persuasive work.
+        $stats = array();
+        if (preg_match_all('~\b(\d{1,3}(?:,\d{3})*|\d+)\s*(?:k|K|M|m)?\+\s*(?:happy\s+)?(?:users?|customers?|developers?|teams?|downloads?|companies|businesses|creators?|members?)~i', $text, $m)) {
+            foreach ($m[0] as $hit) $stats[] = trim($hit);
+        }
+        if (preg_match_all('~\b(?:99\.9+|9[5-9])\s*%\s*(?:uptime|accuracy|satisfaction|faster|reliable)~i', $text, $m)) {
+            foreach ($m[0] as $hit) $stats[] = trim($hit);
+        }
+        if (preg_match_all('~\b\d{1,3}x\s+(?:faster|better|more|cheaper|productive)~i', $text, $m)) {
+            foreach ($m[0] as $hit) $stats[] = trim($hit);
+        }
+        // Attribution defuses it: a sourced number is a claim someone stands behind.
+        $sourced = preg_match('~\b(?:source|according to|survey|report|study|measured|benchmark)\b~i', $text);
+        if (count($stats) >= 2 && !$sourced) {
+            $this->r->flag('ct.stat_inflation', $stats);
+        }
+
+        // Three tiers with the middle one starred.
+        if (preg_match('~\b(?:most popular|recommended|best value)\b~i', $text)
+            && preg_match_all('~(?:\$|€|£)\s?\d{1,4}\s*(?:/|per\s)\s*(?:mo|month|user|seat|year)~iu', $text) >= 3) {
+            $this->r->flag('ct.pricing_three', array('three priced tiers with a "most popular" badge on the middle one'));
+        }
+
         // Specifics pull the other way: real prices, dates, addresses, hours.
         $specific = 0;
         if (preg_match('~(?:[$£€]\s?\d{1,3}(?:[.,]\d{2})?|\d+\s?(?:€|EUR|USD|GBP))~', $text)) $specific++;
@@ -454,6 +520,73 @@ final class SiteAnalyzer
             $this->r->flag('hu.long_tail_copy', array(
                 'the copy carries prices, hours, an address or a phone number: details that had to come from somewhere outside the page',
             ));
+        }
+    }
+
+    /**
+     * Marks of a page a person has been living with.
+     *
+     * Typos are the most interesting of these because masking makes them
+     * worse: running generated text through a model to disguise it removes
+     * misspellings, while a human page keeps accumulating them.
+     */
+    private function checkHumanMarks(): void
+    {
+        $text = $this->text;
+
+        // Only meaningful on English copy; other languages would need their own
+        // lists and a wrong guess here would be a false human signal.
+        if (preg_match('~<html[^>]+lang=["\']([a-z]{2})~i', $this->html, $m) && strtolower($m[1]) !== 'en') {
+            $this->r->stat('lang', strtolower($m[1]));
+        } else {
+            $misspellings = array(
+                'recieve', 'seperate', 'occured', 'definately', 'accomodate', 'adress',
+                'buisness', 'thier', 'untill', 'sucessful', 'publically', 'calender',
+                'enviroment', 'neccessary', 'existance', 'maintainance', 'refered',
+                'begining', 'beleive', 'wierd', 'arguement', 'foriegn', 'goverment',
+                'independant', 'occurence', 'persistant', 'priviledge', 'recomend',
+                'tommorow', 'wellcome', 'succesful', 'commited', 'appologise',
+                'garantee', 'guarentee', 'proffesional', 'reccomend', 'availabe',
+            );
+            $found = array();
+            foreach ($misspellings as $word) {
+                if (preg_match('~\b' . $word . '\b~i', $text, $hit)) {
+                    $found[] = $hit[0];
+                }
+            }
+            if ($found) {
+                $this->r->flag('hu.typos', $found);
+            }
+        }
+
+        // Obligations accumulate; features get generated.
+        $ops = array();
+        if (preg_match('~(?:cookie[- ]?(?:consent|banner|policy)|gdpr|tarteaucitron|cookieconsent|axeptio|didomi)~i', $this->html)) {
+            $ops[] = 'a cookie consent mechanism';
+        }
+        if (preg_match('~href=["\'][^"\']*(?:privacy|terms|legal|mentions-legales|impressum|cgv|cgu)~i', $this->html)) {
+            $ops[] = 'legal or privacy pages linked from the page';
+        }
+        if (preg_match('~(?:googletagmanager\.com|google-analytics\.com|gtag\(|plausible\.io|matomo|umami|fathom|hotjar|clarity\.ms)~i', $this->html)) {
+            $ops[] = 'a real analytics or tag-manager property';
+        }
+        if (preg_match('~(?:mailchimp|list-manage\.com|sendinblue|brevo|convertkit|substack|klaviyo)~i', $this->html)) {
+            $ops[] = 'a mailing-list provider wired in';
+        }
+        if (count($ops) >= 2) {
+            $this->r->flag('hu.operational_stack', $ops);
+        }
+
+        // A footer that has drifted out of date.
+        $thisYear = (int) gmdate('Y');
+        if (preg_match_all('~(?:©|&copy;|copyright)\s*(?:\d{4}\s*[-–]\s*)?(\d{4})~i', $this->html, $m)) {
+            $years = array_map('intval', $m[1]);
+            $latest = max($years);
+            if ($latest > 1990 && $latest < $thisYear) {
+                $this->r->flag('hu.dated_copyright', array(
+                    sprintf('the footer still reads %d', $latest),
+                ));
+            }
         }
     }
 

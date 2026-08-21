@@ -29,6 +29,45 @@ require_once __DIR__ . '/SiteAnalyzer.php';
  * this installation so certificates still verify against themselves — weaker,
  * but a broken download is worse than a weaker signature on a novelty PDF.
  */
+/**
+ * The public base URL of this installation.
+ *
+ * Derived from the request rather than hardcoded, because the certificate
+ * bakes a "verify at" address into the PDF and that address has to be the host
+ * the certificate was actually issued by. A constant gets this wrong the moment
+ * the site is reachable at more than one name.
+ *
+ * Host is client-controlled, so it is format-checked before use. Nothing
+ * security-relevant hangs off it: the worst a forged Host achieves is a PDF
+ * with a wrong link, issued to the person who forged it.
+ */
+function vcd_site_url(): string
+{
+    static $cached = null;
+    if ($cached !== null) {
+        return $cached;
+    }
+
+    $host = isset($_SERVER['HTTP_HOST']) ? (string) $_SERVER['HTTP_HOST'] : '';
+    if ($host === '' || !preg_match('~^[a-z0-9]([a-z0-9.\-]{0,253}[a-z0-9])?(:\d{1,5})?$~i', $host)) {
+        return $cached = VCD_SITE_URL;
+    }
+
+    $https = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
+        || (isset($_SERVER['SERVER_PORT']) && (int) $_SERVER['SERVER_PORT'] === 443);
+
+    // Works when the app lives in a subdirectory as well as at the domain root.
+    $path = '';
+    $docRoot = isset($_SERVER['DOCUMENT_ROOT']) ? realpath((string) $_SERVER['DOCUMENT_ROOT']) : false;
+    $appRoot = realpath(VCD_ROOT);
+    if ($docRoot !== false && $appRoot !== false && strpos($appRoot, $docRoot) === 0) {
+        $path = str_replace('\\', '/', substr($appRoot, strlen($docRoot)));
+        $path = rtrim('/' . trim($path, '/'), '/');
+    }
+
+    return $cached = ($https ? 'https://' : 'http://') . $host . $path;
+}
+
 function vcd_secret(): string
 {
     static $cached = null;

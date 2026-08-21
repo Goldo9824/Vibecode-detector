@@ -432,8 +432,12 @@ section.band { padding: clamp(2.5rem, 6vw, 4rem) 0; border-top: 1px solid var(--
 .ladder { list-style: none; padding: 0; margin: 1.5rem 0 0; counter-reset: rung; }
 .ladder li {
   display: grid;
+  /* Three children (the counter, the term, the description) across two
+     columns, so the term and description must both be pinned to column 2.
+     Without that the description auto-places into the 2.5rem counter column
+     and wraps one word per line. */
   grid-template-columns: 2.5rem minmax(0, 1fr);
-  gap: 1rem;
+  gap: 0 1rem;
   padding: .85rem 0;
   border-top: 1px solid var(--rule);
   align-items: baseline;
@@ -445,8 +449,14 @@ section.band { padding: clamp(2.5rem, 6vw, 4rem) 0; border-top: 1px solid var(--
   font-size: .75rem;
   color: var(--red);
 }
-.ladder strong { font-weight: 600; }
-.ladder span { display: block; color: var(--ink-2); font-size: .9375rem; }
+.ladder strong { grid-column: 2; font-weight: 600; }
+.ladder span {
+  grid-column: 2;
+  display: block;
+  margin-top: .3rem;
+  color: var(--ink-2);
+  font-size: .9375rem;
+}
 
 /* ------------------------------------------------------------------- footer */
 
@@ -465,6 +475,16 @@ section.band { padding: clamp(2.5rem, 6vw, 4rem) 0; border-top: 1px solid var(--
 .colophon a { color: var(--ink-2); }
 .colophon p { margin: 0 0 .5rem; max-width: 34ch; }
 .colophon .links { display: flex; flex-direction: column; gap: .4rem; font-family: var(--mono); font-size: .75rem; }
+
+.colophon .studio {
+  margin-top: .9rem;
+  padding-top: .9rem;
+  border-top: 1px solid var(--rule);
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: .875rem;
+  color: var(--ink-2);
+}
 
 /* -------------------------------------------------------------------- misc */
 

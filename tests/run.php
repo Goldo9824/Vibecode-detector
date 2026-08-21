@@ -101,6 +101,65 @@ ok($a['verdict']['code'] === 'builder_identified', 'verdict names it as builder-
 ok($a['confidence']['level'] === 'high', 'confidence is high for a positive ID');
 ok($a['score'] <= 97, 'still never claims certainty', (string) $a['score']);
 
+// --------------------------------------------------- site: newer AI tells
+
+group('Newer generated-page tells');
+
+$modern = '<!DOCTYPE html><html lang="en"><head><title>Nimbus</title></head><body>'
+    . '<h1 class="bg-gradient-to-r from-indigo-500 to-violet-500 bg-clip-text text-transparent">Nimbus</h1>'
+    . '<div class="backdrop-blur-lg bg-white/10">a</div>'
+    . '<div class="backdrop-blur-md bg-white/10">b</div>'
+    . '<div class="backdrop-blur-sm bg-white/10">c</div>'
+    . '<p>Join 10,000+ developers shipping with Nimbus. 99.9% uptime. 10x faster builds.</p>'
+    . '<section><div>Starter $9 per month</div><div>Pro $29 per month <span>Most popular</span></div>'
+    . '<div>Scale $99 per month</div></section>'
+    . str_repeat('<p>A sentence of ordinary body copy for length.</p>', 20)
+    . '</body></html>';
+$r = (new SiteAnalyzer('https://nimbus.example.com/', $modern))->analyze();
+
+ok($r->has('ae.gradient_text'), 'catches the gradient-filled headline');
+ok($r->has('ae.glassmorphism'), 'catches frosted-glass panels');
+ok($r->has('ct.stat_inflation'), 'catches round unsourced statistics');
+ok($r->has('ct.pricing_three'), 'catches three tiers with the middle one starred');
+
+// A sourced number is a claim someone stands behind, so it should not fire.
+$sourced = str_replace('99.9% uptime.', '99.9% uptime, according to our 2026 status report.', $modern);
+$r2 = (new SiteAnalyzer('https://nimbus.example.com/', $sourced))->analyze();
+ok(!$r2->has('ct.stat_inflation'), 'an attributed statistic does not fire the signal');
+
+$builder = '<!DOCTYPE html><html><head><title>x</title></head><body>'
+    . '<script src="https://cdn.databutton.com/app.js"></script></body></html>';
+$r3 = (new SiteAnalyzer('https://x.example.com/', $builder))->analyze();
+ok($r3->has('fp.builder_other'), 'identifies a long-tail builder by name');
+ok(strpos(implode(' ', $r3->signals()[0]->evidence), 'Databutton') !== false,
+   'names the specific builder in the evidence');
+
+// ------------------------------------------------- site: newer human tells
+
+group('Newer hand-written tells');
+
+$operated = '<!DOCTYPE html><html lang="en"><head><title>Shop</title>'
+    . '<script src="https://www.googletagmanager.com/gtm.js"></script></head><body>'
+    . '<div id="cookie-consent">We use cookies</div>'
+    . '<a href="/privacy-policy">Privacy</a><a href="/terms">Terms</a>'
+    . '<p>Please recieve your order within 3 days. Delivery is seperate.</p>'
+    . '<footer>&copy; 2019 Shop Ltd</footer>'
+    . str_repeat('<p>Ordinary body copy that goes on for a while here.</p>', 20)
+    . '</body></html>';
+$r = (new SiteAnalyzer('https://shop.example.com/', $operated))->analyze();
+
+ok($r->has('hu.typos'), 'catches misspellings in the copy');
+ok($r->has('hu.operational_stack'), 'catches cookie banner, legal pages and analytics');
+ok($r->has('hu.dated_copyright'), 'catches a footer stuck in a past year');
+
+$french = str_replace('lang="en"', 'lang="fr"', $operated);
+$rf = (new SiteAnalyzer('https://shop.example.fr/', $french))->analyze();
+ok(!$rf->has('hu.typos'), 'the English misspelling list is not applied to other languages');
+
+$current = str_replace('&copy; 2019', '&copy; ' . gmdate('Y'), $operated);
+$rc = (new SiteAnalyzer('https://shop.example.com/', $current))->analyze();
+ok(!$rc->has('hu.dated_copyright'), 'a current copyright year does not fire');
+
 // ---------------------------------------------------------------- code: AI
 
 group('Generated JavaScript');
@@ -146,6 +205,44 @@ ok($r->has('hu.commented_code'), 'recognises commented-out code');
 ok($r->has('hu.inconsistent_format'), 'recognises mixed tabs and spaces');
 ok(!$r->has('cd.what_comments'), 'does not mistake why-comments for what-comments');
 
+// --------------------------------------------------- code: newer AI tells
+
+group('Newer generated-code tells');
+
+$modernCode = <<<'JS'
+/**
+ * userService.js
+ *
+ * This module handles all user-related operations and provides a clean
+ * interface for the rest of the application to consume.
+ */
+export function loadUser(input) {
+  const name = input?.profile?.name ?? 'Unknown';
+  const email = input?.profile?.email ?? '';
+  const role = input?.meta?.role ?? 'user';
+  const org = input?.meta?.org?.name ?? null;
+  const tier = input?.billing?.tier ?? 'free';
+  const seats = input?.billing?.seats ?? 1;
+  const flags = input?.flags?.list ?? [];
+  const region = input?.region?.code ?? 'eu';
+
+  if (!name) { console.log('❌ No name'); } else { console.log('✅ Name resolved'); }
+  if (!email) { console.log('❌ No email'); } else { console.log('✅ Email resolved'); }
+  if (!role) { console.log('⚠️ No role'); } else { console.log('🎉 Role resolved'); }
+  if (!org) { console.log('No org'); } else { console.log('Org resolved'); }
+  if (!tier) { console.log('No tier'); } else { console.log('Tier resolved'); }
+
+  return { name, email, role, org, tier, seats, flags, region };
+}
+JS;
+
+$r = (new CodeAnalyzer($modernCode))->analyze();
+
+ok($r->has('cd.emoji_logging'), 'catches emoji in log output');
+ok($r->has('cd.defensive_chaining'), 'catches optional chaining on everything');
+ok($r->has('cd.over_symmetric_branches'), 'catches an else for every if');
+ok($r->has('st.file_header_block'), 'catches the explanatory file-header block');
+
 // --------------------------------------------------------------- guardrails
 
 group('Scoring guardrails');
@@ -167,6 +264,36 @@ $r = (new CodeAnalyzer("const a = 1;\nconst b = 2;\n"))->analyze();
 $a = $r->toArray();
 ok($a['confidence']['level'] === 'insufficient', 'two lines of code gives insufficient confidence');
 between($a['score'], 30, 60, 'a thin sample is pulled toward the middle');
+
+// Category ceilings: piling on weak style tells must not outrank a fingerprint.
+$stacked = new Report('code', 'stacked');
+foreach (array('cd.what_comments', 'cd.blanket_try', 'cd.swallowed_errors', 'cd.console_noise',
+               'cd.verbose_names', 'cd.lazy_names', 'cd.helper_pileup', 'cd.formal_errors',
+               'cd.todo_placeholders', 'cd.typography') as $id) {
+    $stacked->flag($id, array('x'));
+}
+$fingerprinted = new Report('url', 'fingerprinted');
+$fingerprinted->flag('fp.lovable', array('x'));
+
+ok($stacked->score() < $fingerprinted->score(),
+   'ten stacked style tells still score below one hard fingerprint',
+   $stacked->score() . ' vs ' . $fingerprinted->score());
+
+$five = new Report('code', 'five');
+foreach (array('cd.what_comments', 'cd.blanket_try', 'cd.swallowed_errors', 'cd.console_noise', 'cd.verbose_names') as $id) {
+    $five->flag($id, array('x'));
+}
+ok($stacked->score() - $five->score() < 8,
+   'the ceiling makes the last five style tells add almost nothing',
+   $five->score() . ' -> ' . $stacked->score());
+
+// Human evidence still nets off correctly under the ceilings.
+$mixed = new Report('code', 'mixed');
+$mixed->flag('cd.what_comments', array('x'));
+$mixed->flag('cd.blanket_try', array('x'));
+$mixed->flag('hu.why_comments', array('x'));
+$mixed->flag('hu.ticket_refs', array('x'));
+between($mixed->score(), 15, 45, 'opposing evidence pulls the score down');
 
 // -------------------------------------------------------------- certificate
 
@@ -319,6 +446,36 @@ ok(substr_count($svg, '<path') === 2, 'the mark has both halves of the trace');
 $onDisk = (string) file_get_contents(dirname(__DIR__) . '/assets/img/logo.svg');
 ok(strpos($onDisk, Brand::markSvg(120, 'currentColor', '#b8402e', 'role="img" aria-label="Vibe Code Detector"')) !== false,
    'assets/img/logo.svg matches lib/Brand.php (run tools/build-assets.php)');
+
+// ----------------------------------------------------------------- markup
+
+group('Page markup');
+
+$css = (string) file_get_contents(dirname(__DIR__) . '/assets/css/site.css');
+
+// The .ladder list has three children across two columns. Both the term and
+// the description must be pinned to column 2, or the description auto-places
+// into the 2.5rem counter column and wraps one word per line. This shipped
+// once; it does not get to ship twice.
+preg_match('~\.ladder strong \{([^}]*)\}~', $css, $strongRule);
+preg_match('~\.ladder span \{([^}]*)\}~s', $css, $spanRule);
+ok(isset($strongRule[1]) && strpos($strongRule[1], 'grid-column: 2') !== false,
+   '.ladder strong is pinned to the content column');
+ok(isset($spanRule[1]) && strpos($spanRule[1], 'grid-column: 2') !== false,
+   '.ladder span is pinned to the content column');
+
+// Every grid in the stylesheet: count declared columns against the children
+// the markup puts in it, so this class of bug is caught generally.
+$page = (string) file_get_contents(dirname(__DIR__) . '/index.php');
+ok(substr_count($page, 'class="ladder"') === 1, 'the ladder list is where the test expects it');
+preg_match('~<ol class="ladder">(.*?)</ol>~s', $page, $ladderHtml);
+$items = isset($ladderHtml[1]) ? substr_count($ladderHtml[1], '<li>') : 0;
+ok($items === 5, 'the ladder still has five rungs', (string) $items);
+ok(substr_count((string) ($ladderHtml[1] ?? ''), '<span>') === $items,
+   'every rung has a description span');
+
+ok(strpos($page, 'A Landfall studio product') !== false, 'the studio credit is in the footer');
+ok(strpos($css, '.colophon .studio') !== false, 'the studio credit is styled');
 
 // ------------------------------------------------------------------ catalog
 

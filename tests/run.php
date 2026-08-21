@@ -336,6 +336,27 @@ foreach ($r->signals() as $s) {
 }
 ok(strpos($ev, 'of 6 pages') !== false, 'and says how many pages carried it', $ev);
 
+// The bar has to rise with the crawl. Two pages out of six is a pattern; two
+// out of fifty is four per cent and indistinguishable from noise.
+ok(SiteSurvey::requiredPages(2) === 2, 'two pages: both must carry it');
+ok(SiteSurvey::requiredPages(6) === 2, 'six pages: two is still the floor');
+ok(SiteSurvey::requiredPages(20) === 5, 'twenty pages: a quarter of them');
+ok(SiteSurvey::requiredPages(50) === 13, 'fifty pages: thirteen, not two',
+   (string) SiteSurvey::requiredPages(50));
+
+$wide = array();
+for ($i = 1; $i <= 20; $i++) {
+    $body = '<!DOCTYPE html><html lang="en"><head><title>P</title></head><body>'
+          . '<div class="a"><p>' . str_repeat('ordinary body copy here ', 30 + $i * 3) . '</p></div>';
+    if ($i <= 3) {
+        $body .= '<p>Lorem ipsum dolor sit amet</p>'; // three pages out of twenty
+    }
+    $wide['/w' . $i] = $body . '</body></html>';
+}
+$r = (new SiteSurvey('https://example.com/', pageSet($wide)))->analyze();
+ok(!$r->has('ct.placeholder_copy'),
+   'three pages in twenty is below the scaled bar and does not count');
+
 // A fingerprint only has to be true once.
 $onePrint = array(
     '/'  => '<!DOCTYPE html><html><head><title>a</title></head><body><p>' . str_repeat('x ', 60) . '</p></body></html>',
@@ -400,9 +421,14 @@ ok($robots->invoke($c, 'https://example.com/public', 'https://example.com') === 
 ok($robots->invoke($c, 'https://example.com/private/x', 'https://example.com') === false, 'disallowed prefixes are obeyed');
 ok($robots->invoke($c, 'https://example.com/admin', 'https://example.com') === false, 'an exact disallow is obeyed');
 
-ok(Crawler::MAX_PAGES <= 10, 'the page ceiling stays polite', (string) Crawler::MAX_PAGES);
-ok(Crawler::BUDGET_SECONDS < 30, 'the crawl finishes inside a shared-hosting request',
+ok(Crawler::MAX_PAGES <= 50, 'the page ceiling stays bounded', (string) Crawler::MAX_PAGES);
+ok(Crawler::BUDGET_SECONDS <= 25, 'the crawl leaves room to aggregate and render inside a 30s request',
    (string) Crawler::BUDGET_SECONDS);
+// Fifty pages at the full transfer allowance would be 150 MB resident, against
+// a PHP limit that is commonly 128 MB.
+ok(Crawler::MAX_PAGES * Crawler::MAX_PAGE_BYTES <= 32 * 1024 * 1024,
+   'a full crawl cannot exhaust a modest memory limit',
+   sprintf('%d MB worst case', (Crawler::MAX_PAGES * Crawler::MAX_PAGE_BYTES) >> 20));
 
 // ------------------------------------------------------- crawl, end to end
 
@@ -491,13 +517,14 @@ ok($took < 5.0, 'a small site crawls quickly', sprintf('%.2fs', $took));
 ok($stub->calls <= 6, 'each page is fetched once, plus robots.txt', $stub->calls . ' fetches');
 
 // The page ceiling holds on a site with more pages than the limit.
+$overshoot = Crawler::MAX_PAGES + 10;
 $big = array('/robots.txt' => "User-agent: *\n");
 $links = '';
-for ($i = 1; $i <= 30; $i++) {
+for ($i = 1; $i <= $overshoot; $i++) {
     $links .= '<a href="/p' . $i . '">p' . $i . '</a>';
 }
 $big['/'] = '<!DOCTYPE html><html lang="en"><head><title>i</title></head><body>' . $links . '</body></html>';
-for ($i = 1; $i <= 30; $i++) {
+for ($i = 1; $i <= $overshoot; $i++) {
     $big['/p' . $i] = stubPage('p' . $i);
 }
 $capped = new Crawler(new StubFetcher($big));

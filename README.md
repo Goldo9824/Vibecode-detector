@@ -28,12 +28,13 @@ Three modes, no account, nothing stored.
 - **Live page** — fetches a URL and up to four of its own stylesheets and scripts,
   then reads it the way you would with View Source open: builder fingerprints
   first, then structure, then the look of the thing.
-- **Whole site** — tick the box and it follows links from that page, reads up to
-  ten of them, and compares them against each other. This is not the page check
-  run ten times: a signal only counts site-wide when enough pages carry it, and
-  whether the pages *resemble* each other is itself evidence no single page can
-  give you. Honours `robots.txt`, stops after ten pages, and finishes inside a
-  shared-hosting request.
+- **Whole site** — tick the box and it follows links from that page, reads as
+  many as it can manage in about twenty seconds (up to fifty), and compares them
+  against each other. This is not the page check run fifty times: a signal only
+  counts site-wide when a quarter of the pages carry it, and whether the pages
+  *resemble* each other is itself evidence no single page can give you. Honours
+  `robots.txt` and finishes inside a shared-hosting request — on a slow site
+  that means fewer pages, and the report says how many it managed.
 - **Pasted code** — reads a source file in any language for the tells that survive
   in text: comment habits, error handling, naming, dependency incoherence, the
   security profile.

@@ -66,13 +66,13 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
           <input type="url" id="url" name="url" placeholder="example.com" autocomplete="url" spellcheck="false">
           <label class="check" for="crawl">
             <input type="checkbox" id="crawl" name="crawl" value="1">
-            <span><strong>Read the whole site</strong> &mdash; follows links from this page and reads up to ten of them, then compares them against each other. Takes longer, and finds things one page cannot.</span>
+            <span><strong>Read the whole site</strong> &mdash; follows links from this page and reads as many as it can manage in about twenty seconds, up to fifty, then compares them against each other. Takes a while, and finds things one page cannot.</span>
           </label>
           <div class="actions">
             <button class="btn" type="submit">Analyse page</button>
             <span class="spinner" id="spin-url" hidden>reading&hellip;</span>
           </div>
-          <p class="hint">Fetches the page and up to four of its own stylesheets and scripts. Nothing else is requested, nothing is stored. Whole-site reads honour robots.txt and stop after ten pages.</p>
+          <p class="hint">Fetches the page and up to four of its own stylesheets and scripts. Nothing else is requested, nothing is stored. Whole-site reads honour robots.txt, stop at fifty pages, and stop sooner if the site is slow &mdash; the report says how many it managed.</p>
         </form>
       </div>
 

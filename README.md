@@ -23,17 +23,25 @@
 
 ## What it does
 
-Three modes, no account, and nothing stored unless the operator has deliberately
-turned on the optional admin panel (see [Privacy](#privacy)).
+Four modes, no account, and nothing stored unless the operator has deliberately
+configured a database for the optional admin panel (see [Privacy](#privacy)).
 
 - **Live page** — fetches a URL and up to four of its own stylesheets and scripts,
   then reads it the way you would with View Source open: builder fingerprints
-  first, then structure, then the look of the thing.
-- **Whole site** — tick the box and it follows links from that page, reads as
-  many as it can manage in about twenty seconds (up to fifty), and compares them
-  against each other. This is not the page check run fifty times: a signal only
-  counts site-wide when a quarter of the pages carry it, and whether the pages
-  *resemble* each other is itself evidence no single page can give you. Honours
+  first, then structure, then the look of the thing. When the page builds itself
+  in the browser it reads the bundle rather than the empty shell it serves — a
+  `className` is a string literal, and a minifier has no reason to touch the
+  inside of a string — and when the bundle points at a source map it reads the
+  original source, comments and all. The response headers are read too, for what
+  somebody configured rather than for where it happens to be hosted.
+- **Whole site** — tick the box and it follows links from that page *and* from
+  its sitemap, reads as many as it can manage in about twenty seconds (up to
+  fifty), and compares them against each other. This is not the page check run
+  fifty times: a signal only counts site-wide when a quarter of the pages carry
+  it, and whether the pages *resemble* each other is itself evidence no single
+  page can give you. The sitemap earns its place twice: it lists pages the
+  navigation never links to, and its `lastmod` column is a dated record of a
+  site being worked on that nobody thinks to fake. Honours
   `robots.txt` and finishes inside a shared-hosting request — on a slow site
   that means fewer pages, and the report says how many it managed.
 - **Pasted code** — reads a source file in any language for the tells that survive
@@ -80,13 +88,13 @@ Evidence is ranked, because evidence is not equal:
 | Platform fingerprint | `cdn.gpteng.co`, a `lovable-tagger` marker, a builder's generator meta tag | 4.5 — decisive |
 | Repository history | a big-bang first commit, 600 lines in four minutes, a run of "fix typo" | 0.6–1.4 |
 | Site-wide | every page one template with the words swapped; or pages from visibly different eras | 0.7–1.2 |
-| Structural | uniform comment density, the same problem solved several ways, code wired to nothing | 0.6–1.1 |
-| Code style | what-not-why comments, swallowed exceptions, tests that assert nothing | 0.4–1.3 |
-| Content & security | generic testimonials, placeholder secrets, textbook-insecure defaults | 0.4–0.9 |
-| Aesthetic | indigo gradients, Inter, three identical cards | 0.25–0.45, **capped as a group** |
+| Structural | a scaffold nobody renamed, uniform comment density, the same problem solved several ways | 0.35–1.1 |
+| Code style | what-not-why comments, swallowed exceptions, tests that assert nothing | 0.4–1.4 |
+| Content & security | generic testimonials, a key shipped to the browser, auth decided in localStorage | 0.35–0.9 |
+| Aesthetic | indigo gradients, Inter, three identical cards | 0.25–0.5, **capped as a group** |
 | Human authorship | ticket references, exasperated comments, commented-out code, mixed indentation | subtracts |
 
-Six rules the scoring will not break:
+Seven rules the scoring will not break:
 
 1. Aesthetic evidence is capped. A subject with nothing but aesthetic tells cannot
    exceed **55%**, however purple it is.
@@ -94,14 +102,19 @@ Six rules the scoring will not break:
    code that swallows its exceptions usually over-wraps them too — so tripping eight
    weak style tells must never outweigh one hard fingerprint. Fingerprints are the
    only category with no ceiling.
-3. No reading reaches 0% or 100%. The scale is clamped to 3–97.
-4. Thin input is pulled toward the middle and reports insufficient confidence,
-   rather than being quietly guessed at.
-5. Confidence never exceeds *moderate* without a platform fingerprint — pattern
+3. **Inference stops short of identification.** Without a fingerprint no reading
+   passes **92%**, however many families of evidence agree. The category ceilings
+   stop one family running away; this stops several near their ceilings from adding
+   up to the number a builder naming itself would produce.
+4. No reading reaches 0% or 100%. The scale is clamped to 3–97.
+5. Thin input is pulled toward the middle and reports insufficient confidence,
+   rather than being quietly guessed at. Thin means *nothing to read* — a page that
+   serves 300 bytes of markup and half a megabyte of readable bundle is not thin.
+6. Confidence never exceeds *moderate* without a platform fingerprint — pattern
    reading without repository history has not earned more than that.
-6. Human signals are first-class and weighted on the same scale as the rest.
+7. Human signals are first-class and weighted on the same scale as the rest.
 
-All 96 signals, with their weights and reasoning, are in
+All 104 signals, with their weights and reasoning, are in
 **[docs/SIGNALS.md](docs/SIGNALS.md)** — generated from `lib/Catalog.php`, so the
 documentation cannot drift from the code.
 
@@ -229,16 +242,31 @@ tools/             doc and asset generators
 
 ## Privacy
 
-No account, no tracking of who visits. Pasted code and git history are read once in
-memory and discarded, never written to disk — that's true with or without anything
-below. Certificates are signed rather than stored, which is why verification is a
-signature check and not a lookup — there is nothing to look up.
+No account, no cookies, no third-party analytics, nothing loaded from anyone else's
+server. Pasted code and git history are read once in memory and discarded, never
+written to disk — that's true with or without anything below. Certificates are
+signed rather than stored, which is why verification is a signature check and not a
+lookup — there is nothing to look up.
 
 The one opt-in exception: an operator can configure a database for `admin/`
-(see [docs/ADMIN.md](docs/ADMIN.md)) to manage named API keys and see usage. With
-no database configured, that code path is inert and the site keeps nothing at all.
-With one configured, it records the mode and, for URL checks, the address analysed
-— never the pasted content, never anything about who is asking.
+(see [docs/ADMIN.md](docs/ADMIN.md)) to manage named API keys and to see how the
+site is used. **With no database configured, that code path is inert and the site
+keeps nothing at all** — which is the default for anyone who forks this and does not
+set one up. With one configured, two things are recorded:
+
+- **Analyses** — the mode, and for URL checks the address analysed. Never the pasted
+  content, never the fetched page, never anything about who is asking.
+- **Visits** — one row per page view: the path, a timestamp, the referring site's
+  host, and a coarse client class. No address, no cookie, no session, and never the
+  query string, which is where the URL somebody asked about would be.
+
+Counting people rather than page views needs *something* per visitor, and the
+something is a token: an HMAC of address and user agent under this installation's
+secret **and today's date**. It cannot be reversed into an address, and because the
+date is in the salt it cannot recognise the same person tomorrow. Counting who came
+today is the whole of what it can do. Rows are deleted after 90 days, and
+`'log_visits' => false` in the database config turns the whole thing off while
+leaving the API-key management working.
 
 ## Contributing
 

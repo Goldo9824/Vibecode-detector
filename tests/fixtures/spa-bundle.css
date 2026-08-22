@@ -1,0 +1,8 @@
+*,::before,::after{box-sizing:border-box;border-width:0}
+.rounded-2xl{border-radius:1rem}.rounded-full{border-radius:9999px}
+.shadow-lg{box-shadow:0 10px 15px -3px rgb(0 0 0/0.1)}.shadow-xl{box-shadow:0 20px 25px -5px rgb(0 0 0/0.1)}
+.bg-indigo-500{background-color:#6366f1}.text-violet-600{color:#7c3aed}.from-indigo-500{--tw-gradient-from:#6366f1}
+.to-violet-600{--tw-gradient-to:#7c3aed}.bg-clip-text{background-clip:text}.backdrop-blur-md{backdrop-filter:blur(12px)}
+.blur-3xl{filter:blur(64px)}.py-24{padding-top:6rem;padding-bottom:6rem}
+@font-face{font-family:"Inter";src:url(/assets/inter.woff2) format("woff2")}
+body{font-family:Inter,ui-sans-serif,system-ui,sans-serif}

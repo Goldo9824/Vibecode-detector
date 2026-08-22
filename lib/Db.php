@@ -21,6 +21,8 @@ final class Db
 {
     /** @var PDO|null|false false means "not attempted yet" */
     private static $pdo = false;
+    /** @var array<string,mixed>|null the parsed config, once it has been read */
+    private static $config = null;
 
     public static function connect(): ?PDO
     {
@@ -37,6 +39,7 @@ final class Db
         if (!is_array($config) || empty($config['host']) || empty($config['database']) || empty($config['user'])) {
             return self::$pdo = null;
         }
+        self::$config = $config;
 
         try {
             $dsn = sprintf(
@@ -64,7 +67,28 @@ final class Db
     }
 
     /**
-     * Creates the two tables this feature needs if they are not already
+     * An optional setting from data/db-config.php.
+     *
+     * The file is a connection config that has grown two switches, rather than
+     * a settings system: everything here has a default that is right for an
+     * operator who pasted in the four connection lines and stopped reading.
+     *
+     * @param  mixed $default
+     * @return mixed
+     */
+    public static function option(string $key, $default = null)
+    {
+        if (self::$config === null) {
+            self::connect();
+        }
+        if (!is_array(self::$config) || !array_key_exists($key, self::$config)) {
+            return $default;
+        }
+        return self::$config[$key];
+    }
+
+    /**
+     * Creates the three tables this feature needs if they are not already
      * there. Idempotent, so it is safe to call on every admin page load —
      * called there rather than from the high-traffic logging path, so a
      * database that has not been initialised yet fails a login attempt with
@@ -97,6 +121,25 @@ final class Db
                 KEY api_key_id (api_key_id),
                 KEY target_host (target_host),
                 KEY created_at (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+
+        // One row per page view. `visitor` is an HMAC of address and user
+        // agent salted with the day, so it counts people within a day and is
+        // useless for recognising anyone across two — see lib/VisitLog.php.
+        $pdo->exec(
+            "CREATE TABLE IF NOT EXISTS visit_log (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                path VARCHAR(255) NOT NULL,
+                visitor CHAR(16) NOT NULL,
+                referer_host VARCHAR(255) NULL,
+                device ENUM('desktop','mobile','tablet','bot','other') NOT NULL DEFAULT 'other',
+                created_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                KEY created_at (created_at),
+                KEY path (path),
+                KEY device (device),
+                KEY referer_host (referer_host)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
         );
     }

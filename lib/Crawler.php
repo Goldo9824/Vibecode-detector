@@ -48,6 +48,17 @@ final class Crawler
     /** Per-page transfer timeout, so one stalled page cannot eat the budget. */
     const PAGE_TIMEOUT = 6;
 
+    /**
+     * Sitemap limits.
+     *
+     * Three documents is enough for an index plus a couple of children, and
+     * the whole thing is skipped once half the crawl budget is gone: a list of
+     * pages is worth having, but never at the cost of the pages themselves.
+     */
+    const MAX_SITEMAPS = 3;
+    const MAX_SITEMAP_BYTES = 524288;
+    const SITEMAP_TIMEOUT = 5;
+
     /** Extensions that are never an HTML page worth reading. */
     const SKIP_EXT = 'jpg|jpeg|png|gif|webp|avif|svg|ico|bmp|tiff|mp4|webm|mov|avi|mp3|wav|ogg|flac|pdf|zip|gz|tar|rar|7z|dmg|exe|woff2?|ttf|otf|eot|css|js|json|xml|rss|atom|txt|csv|xlsx?|docx?|pptx?';
 
@@ -57,6 +68,12 @@ final class Crawler
     private $notes = array();
     /** @var string[]|null robots.txt disallow prefixes, null until loaded */
     private $disallow = null;
+    /** @var string[] sitemap addresses robots.txt pointed at */
+    private $sitemapUrls = array();
+    /** @var array<int,string> lastmod values seen in the sitemap */
+    private $lastmods = array();
+    /** @var int URLs listed in the sitemap, whether or not they were read */
+    private $sitemapCount = 0;
 
     public function __construct(?Fetcher $fetcher = null)
     {
@@ -70,6 +87,17 @@ final class Crawler
     }
 
     /**
+     * What the sitemap said, for the site-wide checks to read.
+     *
+     * @return array{urls:int,lastmods:string[]}
+     */
+    public function sitemap(): array
+    {
+        return array('urls' => $this->sitemapCount, 'lastmods' => array_values($this->lastmods));
+    }
+
+
+    /**
      * Breadth-first from the entry page, same origin only.
      *
      * @return array<int,array{url:string,body:string,assets:array<string,string>,status:int}>
@@ -81,7 +109,11 @@ final class Crawler
         $maxPages = max(1, min($maxPages, self::MAX_PAGES));
 
         // The entry page is fetched with its assets: it is the one page that
-        // gets the full single-page treatment.
+        // gets the full single-page treatment. Source maps are the exception —
+        // reading one costs seconds that a crawl would rather spend on pages,
+        // so whole-site mode trades depth on the entry page for breadth across
+        // the rest, and the single-page mode is where the deep read lives.
+        $this->fetcher->skipSourceMaps();
         $entry = $this->fetcher->fetchSite($entryUrl);
         $origin = $this->originOf($entry['url']);
         if ($origin === null) {
@@ -91,10 +123,30 @@ final class Crawler
         $pages = array(array(
             'url' => $entry['url'], 'body' => $entry['body'],
             'assets' => $entry['assets'], 'status' => $entry['status'],
+            // Only the entry page carries transport detail and source maps:
+            // it is the one page fetched with the full single-page treatment.
+            'meta' => array(
+                'status'     => $entry['status'],
+                'headers'    => isset($entry['headers']) ? $entry['headers'] : array(),
+                'sourceMaps' => isset($entry['sourceMaps']) ? $entry['sourceMaps'] : array(),
+            ),
         ));
         $seen = array($this->canonical($entry['url']) => true);
 
+        // robots.txt is loaded now rather than on the first inner page: it has
+        // to be read either way, and reading it here also gets the Sitemap:
+        // lines, which are the best list of a site's own pages that exists.
+        $this->disallow = $this->loadRobots($origin);
+
         $queue = $this->linksFrom($entry['body'], $entry['url'], $origin);
+
+        // Links first, sitemap second. Following links reads the site the way
+        // a visitor would; the sitemap then fills in what the navigation does
+        // not reach, which on a generated site is often most of it.
+        foreach ($this->readSitemaps($origin, $started) as $url) {
+            $queue[] = $url;
+        }
+
         $skippedForRobots = 0;
 
         while ($queue && count($pages) < $maxPages) {
@@ -176,6 +228,96 @@ final class Crawler
             'url' => $doc['url'], 'body' => $doc['body'],
             'assets' => array(), 'status' => $doc['status'],
         );
+    }
+
+    // --------------------------------------------------------------- sitemap
+
+    /**
+     * The site's own list of its pages, and when each of them last changed.
+     *
+     * Two things come out of this. The obvious one is coverage: link-following
+     * only reaches what the navigation links to, and a generated site often
+     * has routes that exist without being linked from anywhere. The less
+     * obvious one is the lastmod column, which is a dated record of the site
+     * being worked on — written by tooling rather than by an author, and one
+     * of the few things on a website that is tedious to fabricate.
+     *
+     * @return string[] page URLs to add to the crawl queue
+     */
+    private function readSitemaps(string $origin, float $started): array
+    {
+        $queue = $this->sitemapUrls;
+        if (!$queue) {
+            $queue[] = $origin . '/sitemap.xml';
+        }
+
+        $out = array();
+        $read = 0;
+        $seen = array();
+
+        while ($queue && $read < self::MAX_SITEMAPS) {
+            if (microtime(true) - $started > self::BUDGET_SECONDS / 2) {
+                break; // never spend the page budget on index files
+            }
+            $url = array_shift($queue);
+            if (isset($seen[$url]) || $this->originOf($url) !== $origin) {
+                continue;
+            }
+            $seen[$url] = true;
+
+            try {
+                $doc = $this->fetcher->fetchDocument($url, self::MAX_SITEMAP_BYTES, self::SITEMAP_TIMEOUT);
+            } catch (FetchError $e) {
+                continue;
+            }
+            if ($doc['status'] !== 200 || $doc['body'] === '') {
+                continue;
+            }
+            $read++;
+            $body = $doc['body'];
+
+            // A sitemap index points at more sitemaps; those are queued and the
+            // rest of this document ignored, which is what the format means.
+            if (preg_match('~<sitemapindex~i', $body)) {
+                if (preg_match_all('~<sitemap\b[^>]*>.*?<loc>\s*([^<\s]+)\s*</loc>~is', $body, $m)) {
+                    foreach ($m[1] as $child) {
+                        $queue[] = html_entity_decode($child, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                    }
+                }
+                continue;
+            }
+
+            if (!preg_match_all('~<url\b[^>]*>(.*?)</url>~is', $body, $entries)) {
+                continue;
+            }
+            foreach ($entries[1] as $entry) {
+                if (!preg_match('~<loc>\s*([^<\s]+)\s*</loc>~i', $entry, $loc)) {
+                    continue;
+                }
+                $this->sitemapCount++;
+                if (preg_match('~<lastmod>\s*([0-9]{4}-[0-9]{2}-[0-9]{2})~i', $entry, $lm)) {
+                    $this->lastmods[] = $lm[1];
+                }
+
+                $abs = html_entity_decode($loc[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                if ($this->originOf($abs) !== $origin) {
+                    continue;
+                }
+                $path = (string) parse_url($abs, PHP_URL_PATH);
+                if ($path !== '' && preg_match('~\.(?:' . self::SKIP_EXT . ')$~i', $path)) {
+                    continue;
+                }
+                $out[] = (string) preg_replace('~#.*$~', '', $abs);
+            }
+        }
+
+        if ($this->sitemapCount > 0) {
+            $this->notes[] = sprintf(
+                'The site publishes a sitemap listing %d page%s, which was used to find pages the navigation does not link to.',
+                $this->sitemapCount, $this->sitemapCount === 1 ? '' : 's'
+            );
+        }
+        return array_values(array_unique($out));
     }
 
     // ------------------------------------------------------------------ links
@@ -345,6 +487,12 @@ final class Crawler
             if (preg_match('~^user-agent\s*:\s*(.+)$~i', $line, $m)) {
                 $agent = strtolower(trim($m[1]));
                 $applies = ($agent === '*' || strpos($agent, 'vibecodedetector') !== false);
+                continue;
+            }
+            // Sitemap directives are group-independent by specification, so
+            // they are taken wherever they appear.
+            if (preg_match('~^sitemap\s*:\s*(\S+)~i', $line, $m)) {
+                $this->sitemapUrls[] = trim($m[1]);
                 continue;
             }
             if ($applies && preg_match('~^disallow\s*:\s*(.*)$~i', $line, $m)) {

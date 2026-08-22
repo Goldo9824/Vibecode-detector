@@ -98,6 +98,19 @@ final class Report
     /** Aesthetics alone must never carry an accusation. */
     const AESTHETIC_CAP = 1.0;
 
+    /**
+     * Where inference stops.
+     *
+     * A fingerprint is a positive identification and can reach the top of the
+     * scale. Everything else is a reading of converging habits, and a reading
+     * — however many families of evidence agree — has not identified anybody.
+     * The per-category ceilings already stop one category running away; this
+     * stops several near their ceilings from adding up to the same number a
+     * builder naming itself would produce, which would collapse the tier the
+     * rest of the tool is built around.
+     */
+    const INFERENCE_CEIL = 92;
+
     /** Score ceiling/floor. Certainty is not on the menu. */
     const FLOOR = 3;
     const CEIL  = 97;
@@ -241,6 +254,11 @@ final class Report
         // Thin subjects cannot support a strong reading in either direction.
         if (!empty($this->stats['thin']) && !$this->hasFingerprint()) {
             $score = (int) round(50 + ($score - 50) * 0.55);
+        }
+
+        // Converging inference is not identification.
+        if (!$this->hasFingerprint() && $score > self::INFERENCE_CEIL) {
+            $score = self::INFERENCE_CEIL;
         }
 
         return max(self::FLOOR, min(self::CEIL, $score));

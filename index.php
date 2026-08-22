@@ -3,9 +3,16 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/lib/bootstrap.php';
 require_once __DIR__ . '/lib/Brand.php';
+require_once __DIR__ . '/lib/VisitLog.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
+
+// Counted only when this installation has a database configured, and switched
+// off with 'log_visits' => false in data/db-config.php. Called here rather
+// than from bootstrap so that every page which counts a visit says so in its
+// own first lines — see lib/VisitLog.php for what a row does and does not hold.
+VisitLog::record('/');
 ?>
 <!doctype html>
 <html lang="en">
@@ -165,7 +172,7 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
           <li><strong>Repository history</strong><span>One enormous opening commit, hundreds of lines in minutes, a trail of one-line fixes behind it. The hardest thing to fake after the fact, and the reason the third tab exists.</span></li>
           <li><strong>Structural signals</strong><span>Uniform comment density, the same problem solved four ways, fully-built code wired to nothing. Hard to produce by accident, hard to fake.</span></li>
           <li><strong>Code-style tells</strong><span>What-not-why comments, blanket try/catch, swallowed exceptions, tests that assert nothing, emoji in comments.</span></li>
-          <li><strong>Content and security</strong><span>Statistically generic testimonials, placeholder secrets, textbook-insecure defaults. The security profile decays slowest of all the tells.</span></li>
+          <li><strong>Content and security</strong><span>Statistically generic testimonials, a database key shipped to the browser, a login the browser grants itself. The security profile decays slowest of all the tells.</span></li>
           <li><strong>Aesthetics</strong><span>Indigo gradients, the default icon set, three identical cards. Counted, capped, and never enough on their own to reach a verdict.</span></li>
         </ol>
 
@@ -173,8 +180,9 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
         <ul>
           <li>Aesthetic evidence is capped as a group. A purple page with no other tells cannot score above 55%.</li>
           <li>Every category has a ceiling. Signals within one are not independent, so eight weak style tells must never outweigh a single hard fingerprint. Fingerprints are the only category with no ceiling.</li>
+          <li>Inference stops short of identification. Without a fingerprint no reading passes 92%, however many families of evidence agree.</li>
           <li>A reading never reaches 0% or 100%. Certainty is not available here.</li>
-          <li>Short input is explicitly discounted rather than quietly guessed at.</li>
+          <li>Short input is explicitly discounted rather than quietly guessed at &mdash; where &ldquo;short&rdquo; means nothing to read, not a short document. A page that builds itself in the browser is read from its bundle.</li>
           <li>Signals pointing at human authorship subtract, and they are weighted as heavily as the ones pointing the other way.</li>
         </ul>
 
@@ -233,7 +241,7 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 <footer class="colophon">
   <div class="shell colophon-grid">
     <div>
-      <p><strong>Vibe Code Detector</strong> is free and open source. No account, no tracking of who you are. Pasted code and git history are read once and discarded, never stored; live-page and whole-site checks record only the address and mode analysed, for operator visibility, never the page content.</p>
+      <p><strong>Vibe Code Detector</strong> is free and open source. No account, no cookies, no third-party analytics, nothing loaded from anyone else&rsquo;s server. Pasted code and git history are read once and discarded, never stored; live-page and whole-site checks record only the address and mode analysed, for operator visibility, never the page content. Page views are counted &mdash; the path, the referring site, and a token that is salted with today&rsquo;s date so that it counts visitors today and cannot recognise anyone tomorrow. No address, no cookie, no session.</p>
       <p>Built to run on ordinary shared hosting: plain PHP, no dependencies, no build step.</p>
       <p><a href="#provenance">Half of this site was vibecoded</a>, and it scores 73% on its own detector.</p>
     </div>

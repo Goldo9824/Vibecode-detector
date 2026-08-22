@@ -65,7 +65,7 @@ if ($crawl) {
     }
 
     $entry = $pages[0]['url'];
-    $result = (new SiteSurvey($entry, $pages, $crawler->notes()))->analyze()->toArray();
+    $result = (new SiteSurvey($entry, $pages, $crawler->notes(), $crawler->sitemap()))->analyze()->toArray();
 } else {
     try {
         $doc = $fetcher->fetchSite($url);
@@ -73,7 +73,11 @@ if ($crawl) {
         vcd_fail($e->getMessage(), 400);
     }
 
-    $analyzer = new SiteAnalyzer($doc['url'], $doc['body'], $doc['assets'], array('status' => $doc['status']));
+    $analyzer = new SiteAnalyzer($doc['url'], $doc['body'], $doc['assets'], array(
+        'status'     => $doc['status'],
+        'headers'    => isset($doc['headers']) ? $doc['headers'] : array(),
+        'sourceMaps' => isset($doc['sourceMaps']) ? $doc['sourceMaps'] : array(),
+    ));
     $result = $analyzer->analyze()->toArray();
 
     if ($doc['url'] !== $fetcher->normalize($url)) {

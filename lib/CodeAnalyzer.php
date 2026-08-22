@@ -51,7 +51,11 @@ final class CodeAnalyzer
             $this->r->stat('bytes', strlen($this->src));
         }
 
-        if ($n < self::THIN_LINES) {
+        // Only when this is the whole subject. Merging into an existing report
+        // means one asset or one source file out of a page's worth of them, and
+        // a short helper is not a reason to call the page thin and damp every
+        // reading of it — the caller has already measured what it had to read.
+        if ($n < self::THIN_LINES && $report === null) {
             $this->r->stat('thin', true);
             $this->r->note('Short samples are exactly where automated detection performs worst. Anything under about 50 lines should be read as a hint, and several hundred lines gives a far more stable reading.');
         }

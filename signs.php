@@ -3,9 +3,16 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/lib/bootstrap.php';
 require_once __DIR__ . '/lib/Brand.php';
+require_once __DIR__ . '/lib/VisitLog.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
+
+// Counted only when this installation has a database configured, and switched
+// off with 'log_visits' => false in data/db-config.php. Called here rather
+// than from bootstrap so that every page which counts a visit says so in its
+// own first lines — see lib/VisitLog.php for what a row does and does not hold.
+VisitLog::record('/signs');
 
 /**
  * The visual field guide.

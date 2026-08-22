@@ -5,6 +5,8 @@ require_once dirname(__DIR__) . '/lib/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/AdminAuth.php';
 require_once dirname(__DIR__) . '/lib/ApiKeys.php';
 require_once dirname(__DIR__) . '/lib/UsageLog.php';
+require_once dirname(__DIR__) . '/lib/VisitLog.php';
+require_once dirname(__DIR__) . '/lib/Chart.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
@@ -60,6 +62,8 @@ $keys = array();
 $totalsByMode = array('url' => 0, 'site' => 0, 'code' => 0, 'git' => 0);
 $totalCount = 0;
 $topHosts = array();
+$visits = array('views' => 0, 'visitors' => 0, 'bots' => 0, 'busiest' => null);
+$visitDaily = array();
 
 if ($pdo !== null) {
     try {
@@ -67,6 +71,10 @@ if ($pdo !== null) {
         $totalsByMode = UsageLog::totalsByMode($pdo, 30);
         $totalCount = UsageLog::totalCount($pdo, 30);
         $topHosts = UsageLog::topHosts($pdo, 30, null, 20);
+        // The headline only. Everything else about traffic lives on visits.php,
+        // which is where the window switcher and the breakdowns are.
+        $visits = VisitLog::summary($pdo, 30);
+        $visitDaily = VisitLog::daily($pdo, 30, false);
     } catch (Throwable $e) {
         $dbError = 'Connected to the database, but a query failed: ' . $e->getMessage();
     }
@@ -180,7 +188,35 @@ if ($pdo !== null) {
     </section>
 
     <section class="admin-section">
-      <h2>Usage, last 30 days</h2>
+      <h2>Traffic, last 30 days</h2>
+      <div class="stat-row">
+        <div class="stat"><span class="n"><?= number_format($visits['views']) ?></span><span class="l">Page views</span></div>
+        <div class="stat"><span class="n"><?= number_format($visits['visitors']) ?></span><span class="l">Daily visitors</span></div>
+        <div class="stat"><span class="n"><?= number_format($visits['bots']) ?></span><span class="l">Bot hits</span></div>
+      </div>
+
+      <?php $visitChart = Chart::daily($visitDaily); ?>
+      <?php if ($visitChart !== '' && $visits['views'] > 0): ?>
+        <figure class="chart-figure">
+          <?= $visitChart ?>
+          <figcaption>
+            <span class="key key-bar"></span> page views
+            <span class="key key-line"></span> distinct visitors that day
+          </figcaption>
+        </figure>
+        <p class="hint"><a href="visits.php">Pages, referrers, hours and devices &rarr;</a></p>
+      <?php elseif (!Db::option('log_visits', true)): ?>
+        <p class="hint">Visit logging is switched off for this installation
+           (<code>'log_visits' =&gt; false</code> in <code>data/db-config.php</code>).</p>
+      <?php else: ?>
+        <p class="hint">No page views recorded yet. They start counting the moment this
+           page has created its tables &mdash; which it just did.
+           <a href="visits.php">Traffic detail &rarr;</a></p>
+      <?php endif; ?>
+    </section>
+
+    <section class="admin-section">
+      <h2>Analyses, last 30 days</h2>
       <div class="stat-row">
         <div class="stat"><span class="n"><?= (int) $totalCount ?></span><span class="l">Total analyses</span></div>
         <div class="stat"><span class="n"><?= (int) $totalsByMode['url'] ?></span><span class="l">Live page</span></div>

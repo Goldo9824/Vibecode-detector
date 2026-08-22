@@ -34,6 +34,15 @@ denial). Removing a line and re-saving the file revokes that key immediately
 If `data/api-keys.txt` does not exist or is empty, the endpoint refuses every
 request with 401. There is no default key.
 
+## Handing a key to someone
+
+Give them the key and point them at **[`llms.txt`](../llms.txt)**, at the
+root of the site (`https://your-install.example/llms.txt`). It's written
+directly for an AI agent to read and follow — the request format, the exact
+response shape, every error code, and the ground rules for calling the
+endpoint responsibly — so if the recipient is having an AI make the calls on
+their behalf, that file alone is enough context to hand it.
+
 ## Calling it
 
 ```

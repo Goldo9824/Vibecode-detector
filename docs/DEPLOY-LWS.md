@@ -34,6 +34,7 @@ Nothing else. There is deliberately no dependency to install and nothing to keep
 ```
    index.php            the page
    verify.php           certificate verification
+   llms.txt             instructions for an AI agent calling api/website.php
    .htaccess            security headers, denies lib/ and data/
    api/                 analyze.php, website.php, certificate.php
    lib/                 the engine — never served directly

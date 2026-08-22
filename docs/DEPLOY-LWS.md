@@ -116,7 +116,9 @@ Shared hosting is not generous, and the analyser is built around that:
 - Nothing is logged, stored or cached between requests, and there is no database
   requirement for any of the above. The one opt-in exception is the admin panel
   (see [docs/ADMIN.md](ADMIN.md)) — inert, and nothing is recorded, unless you
-  configure one yourself.
+  configure one yourself. Configuring one turns on both analysis logging and
+  page-view counting; `'log_visits' => false` in the database config keeps the
+  panel and drops the second.
 
 If `max_execution_time` is low on your plan, a slow remote site can still time
 out. That surfaces as a readable error in the browser, not a white page.

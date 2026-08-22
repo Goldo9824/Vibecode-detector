@@ -23,8 +23,8 @@
 
 ## What it does
 
-Three modes, no account, and nothing stored unless the operator has deliberately
-turned on the optional admin panel (see [Privacy](#privacy)).
+Four modes, no account, and nothing stored unless the operator has deliberately
+configured a database for the optional admin panel (see [Privacy](#privacy)).
 
 - **Live page** — fetches a URL and up to four of its own stylesheets and scripts,
   then reads it the way you would with View Source open: builder fingerprints
@@ -242,16 +242,31 @@ tools/             doc and asset generators
 
 ## Privacy
 
-No account, no tracking of who visits. Pasted code and git history are read once in
-memory and discarded, never written to disk — that's true with or without anything
-below. Certificates are signed rather than stored, which is why verification is a
-signature check and not a lookup — there is nothing to look up.
+No account, no cookies, no third-party analytics, nothing loaded from anyone else's
+server. Pasted code and git history are read once in memory and discarded, never
+written to disk — that's true with or without anything below. Certificates are
+signed rather than stored, which is why verification is a signature check and not a
+lookup — there is nothing to look up.
 
 The one opt-in exception: an operator can configure a database for `admin/`
-(see [docs/ADMIN.md](docs/ADMIN.md)) to manage named API keys and see usage. With
-no database configured, that code path is inert and the site keeps nothing at all.
-With one configured, it records the mode and, for URL checks, the address analysed
-— never the pasted content, never anything about who is asking.
+(see [docs/ADMIN.md](docs/ADMIN.md)) to manage named API keys and to see how the
+site is used. **With no database configured, that code path is inert and the site
+keeps nothing at all** — which is the default for anyone who forks this and does not
+set one up. With one configured, two things are recorded:
+
+- **Analyses** — the mode, and for URL checks the address analysed. Never the pasted
+  content, never the fetched page, never anything about who is asking.
+- **Visits** — one row per page view: the path, a timestamp, the referring site's
+  host, and a coarse client class. No address, no cookie, no session, and never the
+  query string, which is where the URL somebody asked about would be.
+
+Counting people rather than page views needs *something* per visitor, and the
+something is a token: an HMAC of address and user agent under this installation's
+secret **and today's date**. It cannot be reversed into an address, and because the
+date is in the salt it cannot recognise the same person tomorrow. Counting who came
+today is the whole of what it can do. Rows are deleted after 90 days, and
+`'log_visits' => false` in the database config turns the whole thing off while
+leaving the API-key management working.
 
 ## Contributing
 

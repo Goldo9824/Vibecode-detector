@@ -113,3 +113,88 @@ table.admin-table td.num { text-align: right; font-variant-numeric: tabular-nums
   color: var(--ink-2);
 }
 .no-db code { font-family: var(--mono); font-size: .85rem; }
+
+/* Charts. Drawn as SVG on the server (lib/Chart.php), so the only job here is
+   colour, which comes from the same tokens as everything else and therefore
+   follows the theme without the chart knowing there is one. */
+
+.chart-figure { margin: 0 0 .5rem; }
+.chart {
+  display: block;
+  width: 100%;
+  height: 180px;
+  overflow: visible;
+}
+.chart-hours { height: 110px; }
+
+.c-bar { fill: var(--rule-2); }
+.c-bar:hover { fill: var(--ink-3); }
+.c-line { fill: none; stroke: var(--red); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.c-grid { stroke: var(--rule); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.c-axis {
+  fill: var(--ink-3);
+  font-family: var(--mono);
+  font-size: 9px;
+}
+
+.chart-figure figcaption {
+  font-family: var(--mono);
+  font-size: .7rem;
+  letter-spacing: .04em;
+  color: var(--ink-3);
+  margin-top: .4rem;
+}
+.key {
+  display: inline-block;
+  width: .7rem;
+  height: .7rem;
+  vertical-align: -1px;
+  margin-right: .15rem;
+  margin-left: .6rem;
+}
+.key:first-child { margin-left: 0; }
+.key-bar { background: var(--rule-2); }
+.key-line { height: 2px; background: var(--red); vertical-align: 3px; }
+
+/* A bar behind a table label: the same comparison a bar chart would draw,
+   in a shape that stays readable at twenty rows and copyable as text. */
+td.with-bar { position: relative; }
+td.with-bar .bar {
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 2px;
+  background: var(--paper-3);
+  border-radius: 2px;
+  z-index: 0;
+}
+td.with-bar .bar-label {
+  position: relative;
+  z-index: 1;
+  word-break: break-all;
+}
+
+/* Window switcher. Links, not a form: every state is a URL you can bookmark. */
+.range-bar {
+  display: flex;
+  align-items: baseline;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+  font-family: var(--mono);
+  font-size: .75rem;
+}
+.range-label {
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-right: .25rem;
+}
+.range-sep { color: var(--rule-2); }
+a.range {
+  color: var(--ink-3);
+  border-bottom: 1px solid transparent;
+  text-decoration: none;
+}
+a.range:hover { color: var(--ink); }
+a.range.is-on { color: var(--red); border-bottom-color: var(--red); }

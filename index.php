@@ -3,9 +3,16 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/lib/bootstrap.php';
 require_once __DIR__ . '/lib/Brand.php';
+require_once __DIR__ . '/lib/VisitLog.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
+
+// Counted only when this installation has a database configured, and switched
+// off with 'log_visits' => false in data/db-config.php. Called here rather
+// than from bootstrap so that every page which counts a visit says so in its
+// own first lines — see lib/VisitLog.php for what a row does and does not hold.
+VisitLog::record('/');
 ?>
 <!doctype html>
 <html lang="en">
@@ -234,7 +241,7 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 <footer class="colophon">
   <div class="shell colophon-grid">
     <div>
-      <p><strong>Vibe Code Detector</strong> is free and open source. No account, no tracking of who you are. Pasted code and git history are read once and discarded, never stored; live-page and whole-site checks record only the address and mode analysed, for operator visibility, never the page content.</p>
+      <p><strong>Vibe Code Detector</strong> is free and open source. No account, no cookies, no third-party analytics, nothing loaded from anyone else&rsquo;s server. Pasted code and git history are read once and discarded, never stored; live-page and whole-site checks record only the address and mode analysed, for operator visibility, never the page content. Page views are counted &mdash; the path, the referring site, and a token that is salted with today&rsquo;s date so that it counts visitors today and cannot recognise anyone tomorrow. No address, no cookie, no session.</p>
       <p>Built to run on ordinary shared hosting: plain PHP, no dependencies, no build step.</p>
       <p><a href="#provenance">Half of this site was vibecoded</a>, and it scores 73% on its own detector.</p>
     </div>

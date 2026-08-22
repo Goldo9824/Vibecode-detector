@@ -49,9 +49,17 @@ very good argument and a conversation first.
 
 The one deliberate, opt-in exception is `admin/` (see `docs/ADMIN.md`): an operator
 who configures a database gets a password-gated panel for managing named API keys
-and seeing usage — the mode and, for URL checks, the target address of each
-analysis, never the pasted content, never who is asking. With no database
-configured, that code path is inert and the claim above is exactly true.
+and seeing usage. That records two things — the mode and, for URL checks, the
+target address of each analysis; and one row per page view, holding a path, a
+timestamp, a referring host and a visitor token salted with the day so it can count
+people today and recognise nobody tomorrow. Never the pasted content, never an
+address, never a cookie. With no database configured, that code path is inert and
+the claim above is exactly true.
+
+If you add a page that should be counted, call `VisitLog::record('/its-path')` in
+its opening lines the way `index.php` does, rather than moving the call into
+`lib/bootstrap.php`. Every page that counts a visit saying so in its own first
+lines is the property that makes the claim above checkable by reading.
 
 **The site does not wear the tells it detects.** No indigo-to-violet, no Inter, no
 three-card grid, no default icon set. This is only half a joke: it is also the

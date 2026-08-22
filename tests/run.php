@@ -18,6 +18,8 @@ require_once dirname(__DIR__) . '/lib/Certificate.php';
 require_once dirname(__DIR__) . '/lib/Crawler.php';
 require_once dirname(__DIR__) . '/lib/AdminAuth.php';
 require_once dirname(__DIR__) . '/lib/UsageLog.php';
+require_once dirname(__DIR__) . '/lib/VisitLog.php';
+require_once dirname(__DIR__) . '/lib/Chart.php';
 
 $passed = 0;
 $failed = 0;
@@ -1619,6 +1621,132 @@ if (!$hadAdminPassword) {
     ok(!AdminAuth::attempt('anything'), 'with no admin-password.php, every password is rejected');
     ok(!AdminAuth::attempt(''), 'including an empty one');
 }
+
+// ------------------------------------------------------------ visit logging
+
+group('Counting visits without identifying anyone');
+
+// The visitor token is the whole privacy question in one function: it has to
+// count two people as two, and it must not recognise anybody tomorrow.
+$ua = 'Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/120 Safari/537.36';
+$monday = VisitLog::visitorToken($ua, '198.51.100.7', '2026-08-17');
+
+ok($monday === VisitLog::visitorToken($ua, '198.51.100.7', '2026-08-17'),
+   'the same visitor on the same day counts once');
+ok($monday !== VisitLog::visitorToken($ua, '198.51.100.8', '2026-08-17'),
+   'a different address is a different visitor');
+ok($monday !== VisitLog::visitorToken('curl/8.4.0', '198.51.100.7', '2026-08-17'),
+   'so is a different client from the same address');
+ok($monday !== VisitLog::visitorToken($ua, '198.51.100.7', '2026-08-18'),
+   'and the same visitor tomorrow is nobody the table has seen before');
+ok(strlen($monday) === 16 && ctype_xdigit($monday), 'the token is a short hex digest', $monday);
+ok(strpos($monday, '198.51.100.7') === false && stripos($monday, 'chrome') === false,
+   'and carries none of its input');
+
+// The query string is where a URL somebody asked about ends up, and where a
+// certificate payload ends up. Neither belongs in a table about page views.
+ok(VisitLog::normalisePath('/verify?p=eyJhbGciOi&s=abc') === '/verify',
+   'the query string is dropped, not trimmed', VisitLog::normalisePath('/verify?p=x&s=y'));
+ok(VisitLog::normalisePath('/index.php') === '/', 'the index resolves to the root');
+ok(VisitLog::normalisePath('signs') === '/signs', 'a bare path is anchored');
+ok(strlen(VisitLog::normalisePath('/' . str_repeat('a', 400))) === 255, 'and a silly one is cut');
+
+// A full referrer carries the search somebody typed. The host does not.
+ok(VisitLog::refererHost('https://news.ycombinator.com/item?id=123') === 'news.ycombinator.com',
+   'a referrer is reduced to its host');
+ok(VisitLog::refererHost('') === null, 'no referrer is no referrer');
+ok(VisitLog::refererHost('not a url') === null, 'and neither is nonsense');
+$selfHost = (string) parse_url(vcd_site_url(), PHP_URL_HOST);
+ok(VisitLog::refererHost('https://' . $selfHost . '/signs') === null,
+   'arriving from another page of this site is navigation, not a referral');
+
+ok(VisitLog::deviceOf('Mozilla/5.0 (compatible; Googlebot/2.1)') === 'bot', 'Googlebot is a bot');
+ok(VisitLog::deviceOf('ClaudeBot/1.0') === 'bot', 'so is ClaudeBot');
+ok(VisitLog::deviceOf('curl/8.4.0') === 'bot', 'and so is curl');
+ok(VisitLog::deviceOf('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Safari/604.1') === 'mobile', 'an iPhone is mobile');
+ok(VisitLog::deviceOf('Mozilla/5.0 (iPad; CPU OS 17_0) Safari/604.1') === 'tablet', 'an iPad is a tablet');
+ok(VisitLog::deviceOf($ua) === 'desktop', 'a desktop browser is a desktop');
+ok(VisitLog::deviceOf('') === 'other', 'and nothing at all is nothing at all');
+
+// The chart is drawn day by day, so the days have to be there — including the
+// ones nothing happened on. A window that silently drops its quiet days draws
+// a fortnight of silence as a short fortnight rather than a quiet one.
+$now = (int) strtotime('2026-08-22 09:15:00 UTC');
+$filled = VisitLog::fillDays(array('2026-08-20' => array('views' => 12, 'visitors' => 9)), 7, $now);
+ok(count($filled) === 7, 'a seven-day window has seven days in it', (string) count($filled));
+ok($filled[0]['day'] === '2026-08-16', 'starting seven days ago, today included', $filled[0]['day']);
+ok($filled[6]['day'] === '2026-08-22', 'and ending today', $filled[6]['day']);
+ok($filled[4]['views'] === 12 && $filled[4]['visitors'] === 9, 'the day with traffic keeps its numbers');
+ok($filled[5]['views'] === 0 && $filled[3]['views'] === 0, 'and the quiet days are zeroes, not gaps');
+
+$days = array();
+foreach ($filled as $row) {
+    $days[] = $row['day'];
+}
+ok($days === array_unique($days), 'no day appears twice');
+$sorted = $days;
+sort($sorted);
+ok($days === $sorted, 'and they come out oldest first');
+
+// Same contract as UsageLog: with no database, recording is a silent no-op.
+if (!is_file(VCD_DATA . '/db-config.php')) {
+    $threw = false;
+    try {
+        VisitLog::record('/');
+    } catch (Throwable $e) {
+        $threw = true;
+    }
+    ok(!$threw, 'VisitLog::record() is silent with no database configured');
+    ok(Db::option('log_visits', true) === true, 'and an unset option falls back to its default');
+}
+
+// --------------------------------------------------------------- charts
+
+group('Charts drawn without a chart library');
+
+$series = array();
+foreach (range(1, 30) as $i) {
+    $series[] = array(
+        'day'      => gmdate('Y-m-d', strtotime('2026-08-01 UTC') + ($i - 1) * 86400),
+        'views'    => $i * 3,
+        'visitors' => $i,
+    );
+}
+$svg = Chart::daily($series);
+ok(strpos($svg, '<svg') === 0, 'produces an SVG element');
+ok(substr_count($svg, '<rect') === 30, 'one column per day', (string) substr_count($svg, '<rect'));
+ok(strpos($svg, 'role="img"') !== false && strpos($svg, '<title>') !== false,
+   'carries a text alternative rather than being a picture of a number');
+ok(strpos($svg, 'viewBox') !== false && strpos($svg, 'width="720px"') === false,
+   'scales with its container rather than being pinned to a pixel size');
+ok(strpos($svg, 'class="c-bar"') !== false && strpos($svg, 'fill="#') === false,
+   'takes its colour from the stylesheet, so it follows the theme');
+
+// A day with nothing in it has to draw as nothing, not as a full-height bar.
+$quiet = array(
+    array('day' => '2026-08-01', 'views' => 0, 'visitors' => 0),
+    array('day' => '2026-08-02', 'views' => 0, 'visitors' => 0),
+);
+$svgQuiet = Chart::daily($quiet);
+ok(strpos($svgQuiet, '<rect') === false, 'an empty window draws no columns at all');
+ok(Chart::daily(array()) === '', 'and no data draws nothing');
+
+$hours = array_fill(0, 24, 0);
+$hours[9] = 40;
+$hours[14] = 10;
+$hourSvg = Chart::hours($hours);
+ok(substr_count($hourSvg, '<rect') === 2, 'the hour chart draws only the hours with traffic');
+ok(Chart::hours(array_fill(0, 24, 0)) === '', 'and nothing when nothing happened');
+
+ok(Chart::barWidth(5, 10) === '50.0%', 'in-table bars are a percentage of the biggest row');
+ok(Chart::barWidth(0, 10) === '0%', 'zero is zero');
+ok(Chart::barWidth(5, 0) === '0%', 'and nothing is divided by nothing');
+ok(Chart::barWidth(20, 10) === '100.0%', 'a row bigger than the maximum is still one bar wide');
+
+// Text from the outside — a path, a referrer host — is escaped on the way in.
+$evil = array(array('day' => '2026-08-01', 'views' => 3, 'visitors' => 1));
+$svgEvil = Chart::daily($evil, '<script>alert(1)</script>');
+ok(strpos($svgEvil, '<script>') === false, 'a label cannot inject markup into the chart');
 
 // ---------------------------------------------------------- public base url
 

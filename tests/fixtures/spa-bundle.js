@@ -1,0 +1,11 @@
+import{j as e,r as R}from"./vendor-DkZ8fQ2p.js";import{cva as V}from"class-variance-authority";import{twMerge as M}from"tailwind-merge";import W from"clsx";import{Rocket as O,Sparkles as P}from"lucide-react";import{Toaster as T}from"sonner";import*as D from"@radix-ui/react-dialog";
+const Nav=()=>e("header",{className:"fixed top-4 inset-x-0 mx-auto max-w-5xl backdrop-blur-md rounded-full border border-white/20 px-6 py-3"});
+const Badge=()=>e("span",{className:"rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-sm"},"Introducing Nimbus v2");
+const Hero=()=>e("section",{className:"py-24 px-4 max-w-7xl mx-auto text-center"},[e("h1",{className:"text-5xl font-bold bg-gradient-to-r from-indigo-500 to-violet-600 bg-clip-text text-transparent"},"Ship faster with everything you need to supercharge your workflow"),e("p",{className:"mt-6 text-lg text-slate-600"},"Trusted by thousands of teams building lightning-fast products every day.")]);
+const Glow=()=>[e("div",{className:"absolute -top-24 left-1/4 h-72 w-72 rounded-full bg-indigo-400/30 blur-3xl"}),e("div",{className:"absolute top-40 right-1/4 h-72 w-72 rounded-full bg-violet-400/30 blur-3xl"})];
+const Card=({t:t,d:d})=>e("div",{className:"rounded-2xl shadow-lg p-6 bg-white border border-slate-200"},[e("h3",{className:"text-xl font-semibold"},t),e("p",{className:"mt-2 text-slate-600"},d)]);
+const Feature=()=>e("div",{className:"rounded-2xl shadow-lg p-6 hover:shadow-xl transition duration-200"});
+const Grid=()=>e("div",{className:"grid grid-cols-3 gap-6"},[e("div",{className:"col-span-2"}),e("div",{className:"col-span-1"}),e("div",{className:"row-span-2"}),e("div",{className:"col-span-2"})]);
+const Section=()=>e("section",{className:"py-24 px-4 border-t border-slate-100"});
+const Footer=()=>e("footer",{className:"py-24 px-4 text-center text-slate-500"});
+export{Nav,Badge,Hero,Glow,Card,Feature,Grid,Section,Footer,V,M,W,O,P,T,D,R};

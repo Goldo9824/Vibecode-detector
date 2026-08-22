@@ -170,31 +170,14 @@ group('A page that builds itself in the browser');
 /**
  * The shape almost every generated application ships in: an empty mount point
  * and a hashed bundle. None of the class names or copy is in the document, so
- * everything below is being read out of the JavaScript.
+ * everything below is being read out of the JavaScript and the stylesheet.
  */
-$spaShell = '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
-    . '<title>Nimbus</title>'
-    . '<script type="module" crossorigin src="/assets/index-Ba7Xk9Lm.js"></script>'
-    . '<link rel="stylesheet" crossorigin href="/assets/index-C3xY1pQz.css">'
-    . '</head><body><div id="root"></div></body></html>';
-
-$spaBundle =
-      'const a=()=>e("div",{className:"rounded-2xl shadow-lg p-6 bg-white border border-slate-200"});'
-    . 'const b=()=>e("div",{className:"rounded-2xl shadow-lg p-6 hover:shadow-xl transition"});'
-    . 'const c=()=>e("section",{className:"py-24 px-4 max-w-7xl mx-auto"});'
-    . 'const d=()=>e("h1",{className:"text-5xl font-bold bg-gradient-to-r from-indigo-500 to-violet-600 bg-clip-text text-transparent"});'
-    . 'const f=()=>e("nav",{className:"fixed top-4 inset-x-0 mx-auto backdrop-blur-md rounded-full border"});'
-    . 'const g=()=>e("span",{className:"rounded-full border px-3 py-1"},"Introducing Nimbus v2");'
-    . 'const h="Ship faster with everything you need to supercharge your workflow.";'
-    . 'const i="Trusted by thousands of teams building lightning-fast products.";';
-
-$spaCss = str_repeat('.pad{padding:1px}', 120) . '.bg-indigo-500{background-color:#6366f1}'
-    . '.from-violet-600{--tw:#7c3aed}@font-face{font-family:"Inter"}';
-
+$spaShell = fixture('spa-shell.html');
 $spaAssets = array(
-    'https://nimbus.example.com/assets/index-C3xY1pQz.css' => $spaCss,
-    'https://nimbus.example.com/assets/index-Ba7Xk9Lm.js'  => $spaBundle,
+    'https://nimbus.example.com/assets/index-C3xY1pQz.css' => fixture('spa-bundle.css'),
+    'https://nimbus.example.com/assets/index-Ba7Xk9Lm.js'  => fixture('spa-bundle.js'),
 );
+
 $r = (new SiteAnalyzer('https://nimbus.example.com/', $spaShell, $spaAssets))->analyze();
 $a = $r->toArray();
 
@@ -208,6 +191,7 @@ ok(empty($a['stats']['thin']),
    'a short document with a readable bundle is not treated as thin input');
 ok(isset($a['stats']['framework']) && $a['stats']['framework'] === 'Vite',
    'names the framework it recognised', (string) ($a['stats']['framework'] ?? 'none'));
+between($a['score'], 72, 92, 'and reaches a reading, where the document alone gave none');
 
 // The same shell with nothing readable behind it really is thin.
 $r = (new SiteAnalyzer('https://nimbus.example.com/', $spaShell))->analyze();

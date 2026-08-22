@@ -60,6 +60,17 @@ content is in scope.
 **5. Resource exhaustion.** Per-IP rate limiting is file-based and deliberately
 fails open. Reports of a way to pin the server's CPU or fill its disk are in scope.
 
+**6. Admin panel (`admin/`, `lib/AdminAuth.php`).** Password-gated, session-based,
+with a per-form CSRF token and a rate-limited login. `data/admin-password.php` and
+`data/db-config.php` are denied the same two ways as `data/secret.key`, and no
+admin route is reachable without a valid session. In scope: anything that reaches
+a dashboard action without a valid session or a valid CSRF token, a session fixation
+or timing issue in the password check, or SQL injection in `lib/ApiKeys.php` /
+`lib/UsageLog.php` (both use prepared statements throughout — a report showing that
+assumption broken anywhere is high priority). Out of scope: brute-forcing the
+password itself, which is rate-limited but not otherwise this project's problem to
+solve — pick a strong one.
+
 ## Out of scope
 
 - **That the detector is inaccurate.** It is, it says so, and that is a
@@ -85,3 +96,13 @@ curl -I https://your-domain/lib/Catalog.php
 If either returns 200, `AllowOverride` is not enabled and the installation is not
 safe to leave up. Back up `data/secret.key` privately: losing it invalidates every
 certificate you have issued, and leaking it lets anyone forge one.
+
+If you have set up the [admin panel](docs/ADMIN.md), also confirm:
+
+```
+curl -I https://your-domain/data/db-config.php
+curl -I https://your-domain/data/admin-password.php
+```
+
+Both must return 403 or 404 — they carry your database password and your admin
+login hash respectively.

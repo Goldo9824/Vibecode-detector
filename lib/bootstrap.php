@@ -59,6 +59,8 @@ define('VCD_MAX_CONCURRENT_FETCHES', 8);
 /** How long a slot is honoured for before it is treated as abandoned. */
 define('VCD_SLOT_TTL', 40);
 
+require_once __DIR__ . '/Db.php';
+require_once __DIR__ . '/ApiKeys.php';
 require_once __DIR__ . '/Catalog.php';
 require_once __DIR__ . '/Report.php';
 require_once __DIR__ . '/Text.php';
@@ -448,18 +450,47 @@ function vcd_api_keys(): array
     return $keys;
 }
 
-/** Timing-safe check against every configured key. */
-function vcd_api_key_valid(string $key): bool
+/**
+ * Look up an API key: the database first, when one is configured and a
+ * matching non-revoked row exists (managed by name through admin/), then
+ * the manual file as a fallback that keeps working even if the database is
+ * unreachable or was never set up.
+ *
+ * The id is null for a file-based match, which has no identity beyond
+ * "valid" — there is nothing to attribute usage to in that case.
+ *
+ * @return array{id:?int,name:?string}|null
+ */
+function vcd_api_key_lookup(string $key): ?array
 {
     if ($key === '') {
-        return false;
+        return null;
     }
-    foreach (vcd_api_keys() as $configured) {
-        if (hash_equals($configured, $key)) {
-            return true;
+
+    $pdo = Db::connect();
+    if ($pdo !== null) {
+        try {
+            $found = ApiKeys::lookup($pdo, $key);
+            if ($found !== null) {
+                return $found;
+            }
+        } catch (Throwable $e) {
+            // Fall through to the file-based keys below.
         }
     }
-    return false;
+
+    foreach (vcd_api_keys() as $configured) {
+        if (hash_equals($configured, $key)) {
+            return array('id' => null, 'name' => null);
+        }
+    }
+    return null;
+}
+
+/** Timing-safe check against every configured key, database and file alike. */
+function vcd_api_key_valid(string $key): bool
+{
+    return vcd_api_key_lookup($key) !== null;
 }
 
 /**

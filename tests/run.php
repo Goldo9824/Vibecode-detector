@@ -16,6 +16,8 @@ require_once dirname(__DIR__) . '/lib/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/Fetcher.php';
 require_once dirname(__DIR__) . '/lib/Certificate.php';
 require_once dirname(__DIR__) . '/lib/Crawler.php';
+require_once dirname(__DIR__) . '/lib/AdminAuth.php';
+require_once dirname(__DIR__) . '/lib/UsageLog.php';
 
 $passed = 0;
 $failed = 0;
@@ -1193,6 +1195,40 @@ if ($keysWritable) {
 ok(count(VCD_LIMIT_API_URL) === 2 && VCD_LIMIT_API_URL[0] > VCD_LIMIT_URL[0],
    'the API budget is a sane [count, seconds] pair and roomier than the anonymous UI limit',
    implode('/', VCD_LIMIT_API_URL) . ' vs ' . implode('/', VCD_LIMIT_URL));
+
+// -------------------------------------------------- optional database layer
+
+group('Database and admin panel (optional)');
+
+// The database is additive: a fresh checkout with no data/db-config.php must
+// behave exactly as if this whole feature did not exist.
+$hadDbConfig = is_file(VCD_DATA . '/db-config.php');
+if (!$hadDbConfig) {
+    ok(Db::connect() === null, 'with no db-config.php, Db::connect() returns null rather than throwing');
+    ok(!Db::available(), 'and Db::available() agrees');
+
+    // Usage logging must be a no-op, not a crash, when there is nowhere to log to.
+    $threw = false;
+    try {
+        UsageLog::record('ui', null, 'url', 'https://example.com/');
+    } catch (Throwable $e) {
+        $threw = true;
+    }
+    ok(!$threw, 'UsageLog::record() is silent with no database configured');
+}
+
+$k1 = ApiKeys::generate();
+$k2 = ApiKeys::generate();
+ok(strpos($k1, 'vcd_') === 0, 'a generated API key has a recognisable prefix', $k1);
+ok($k1 !== $k2, 'two generated keys are not the same');
+ok(strlen($k1) === strlen('vcd_') + 48, 'a generated key has the expected length (24 random bytes, hex-encoded)');
+
+// Admin auth must fail closed: with no data/admin-password.php, nothing logs in.
+$hadAdminPassword = is_file(VCD_DATA . '/admin-password.php');
+if (!$hadAdminPassword) {
+    ok(!AdminAuth::attempt('anything'), 'with no admin-password.php, every password is rejected');
+    ok(!AdminAuth::attempt(''), 'including an empty one');
+}
 
 // ---------------------------------------------------------- public base url
 

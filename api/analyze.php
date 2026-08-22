@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__) . '/lib/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/Fetcher.php';
 require_once dirname(__DIR__) . '/lib/Crawler.php';
+require_once dirname(__DIR__) . '/lib/UsageLog.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
@@ -117,9 +118,15 @@ if ($mode === 'url') {
     vcd_fail('Unknown mode. Use "url", "code" or "git".');
 }
 
-// Nothing about the request is stored. The certificate token is a signature
-// over the result, computed here and thrown away — there is no database and
-// no log, so a certificate can be checked but never looked up.
+// If the operator has configured a database (see docs/ADMIN.md), this
+// records the mode, and for url/site modes the target address — never
+// pasted code, a git log, or the fetched page content, none of which are
+// ever written down. See lib/UsageLog.php.
+$target = in_array($result['mode'], array('url', 'site'), true) ? $result['target'] : null;
+UsageLog::record('ui', null, $result['mode'], $target);
+
+// The certificate token is a signature over the result, computed here and
+// thrown away — a certificate can be checked but never looked up.
 $result['cert'] = vcd_cert_token($result);
 
 vcd_json($result);

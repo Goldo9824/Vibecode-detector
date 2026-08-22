@@ -73,7 +73,7 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
             <button class="btn" type="submit">Analyse page</button>
             <span class="spinner" id="spin-url" hidden>reading&hellip;</span>
           </div>
-          <p class="hint">Fetches the page and up to four of its own stylesheets and scripts. Nothing else is requested, nothing is stored. Whole-site reads honour robots.txt, stop at fifty pages, and stop sooner if the site is slow &mdash; the report says how many it managed.</p>
+          <p class="hint">Fetches the page and up to four of its own stylesheets and scripts. Nothing else is requested, and the page itself is never stored. Whole-site reads honour robots.txt, stop at fifty pages, and stop sooner if the site is slow &mdash; the report says how many it managed.</p>
         </form>
       </div>
 
@@ -233,7 +233,7 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 <footer class="colophon">
   <div class="shell colophon-grid">
     <div>
-      <p><strong>Vibe Code Detector</strong> is free, open source, and keeps nothing. No account, no tracking, no database, no record of what you analysed.</p>
+      <p><strong>Vibe Code Detector</strong> is free and open source. No account, no tracking of who you are. Pasted code and git history are read once and discarded, never stored; live-page and whole-site checks record only the address and mode analysed, for operator visibility, never the page content.</p>
       <p>Built to run on ordinary shared hosting: plain PHP, no dependencies, no build step.</p>
       <p><a href="#provenance">Half of this site was vibecoded</a>, and it scores 73% on its own detector.</p>
     </div>

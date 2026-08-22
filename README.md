@@ -23,7 +23,8 @@
 
 ## What it does
 
-Three modes, no account, nothing stored.
+Three modes, no account, and nothing stored unless the operator has deliberately
+turned on the optional admin panel (see [Privacy](#privacy)).
 
 - **Live page** — fetches a URL and up to four of its own stylesheets and scripts,
   then reads it the way you would with View Source open: builder fingerprints
@@ -183,10 +184,18 @@ Full instructions, including the two 403 checks to run afterwards, are in
 `api/website.php` gives a caller with an API key programmatic access to the
 Live page / Whole site check, with a much higher rate limit than the
 anonymous UI. There is no key by default; the operator sets one by hand in
-`data/api-keys.txt`, which never goes in the repo. See
-**[docs/API.md](docs/API.md)** for setup, and hand **[`llms.txt`](llms.txt)**
-to anyone you give a key to — it's written for an AI agent to read and call
-the endpoint correctly on its own.
+`data/api-keys.txt`, which never goes in the repo — or, with a database
+configured, creates named, individually revocable keys through `admin/`
+instead. See **[docs/API.md](docs/API.md)** for setup, and hand
+**[`llms.txt`](llms.txt)** to anyone you give a key to — it's written for an
+AI agent to read and call the endpoint correctly on its own.
+
+## Admin panel
+
+An optional, password-gated dashboard at `/admin/` for creating and revoking
+named API keys and seeing usage — total analyses by mode, the most-analysed
+websites, and the same broken down per key. Inert with no database
+configured; see **[docs/ADMIN.md](docs/ADMIN.md)**.
 
 ## Layout
 
@@ -194,7 +203,9 @@ the endpoint correctly on its own.
 index.php          the page
 verify.php         certificate verification
 llms.txt           instructions for an AI agent calling api/website.php
+robots.txt         disallows /admin/
 api/               analyze.php, website.php, certificate.php
+admin/             optional password-gated key management and usage dashboard
 lib/
   Catalog.php      every signal, its weight and its reasoning — the source of truth
   Report.php       scoring, verdict bands, guard rails
@@ -204,6 +215,10 @@ lib/
   Crawler.php      polite same-origin crawl, robots.txt and a time budget
   SiteSurvey.php   multi-page aggregation and cross-page comparison
   Fetcher.php      HTTP with SSRF protection
+  Db.php           optional MySQL connection, used only by admin/
+  ApiKeys.php      API key CRUD, backed by Db.php
+  UsageLog.php     usage recording and stats, backed by Db.php
+  AdminAuth.php    admin session, login and CSRF
   Pdf.php          a small PDF 1.4 writer
   Brand.php        the mark, as geometry
   Certificate.php  certificate layout
@@ -214,10 +229,16 @@ tools/             doc and asset generators
 
 ## Privacy
 
-No account, no tracking, no analytics, no database, no logs. Pasted code is read
-once in memory and discarded; it is never written to disk. Certificates are signed
-rather than stored, which is why verification is a signature check and not a
-lookup — there is nothing to look up.
+No account, no tracking of who visits. Pasted code and git history are read once in
+memory and discarded, never written to disk — that's true with or without anything
+below. Certificates are signed rather than stored, which is why verification is a
+signature check and not a lookup — there is nothing to look up.
+
+The one opt-in exception: an operator can configure a database for `admin/`
+(see [docs/ADMIN.md](docs/ADMIN.md)) to manage named API keys and see usage. With
+no database configured, that code path is inert and the site keeps nothing at all.
+With one configured, it records the mode and, for URL checks, the address analysed
+— never the pasted content, never anything about who is asking.
 
 ## Contributing
 

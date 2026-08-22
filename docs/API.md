@@ -9,7 +9,15 @@ higher-volume access.
 
 ## Setting up a key
 
-Create `data/api-keys.txt` on the server, one key per line:
+Two ways to do this — pick one, or use both at once, since `api/website.php`
+checks both:
+
+**Managed, with names and usage stats:** configure a database and use the
+[admin panel](ADMIN.md) at `/admin/` — create a key with a name, revoke it
+later without touching a file, and see which websites it's been used against.
+
+**Manual, no database needed:** create `data/api-keys.txt` on the server, one
+key per line:
 
 ```
 vcd-key-9f3a7c2e4b1d6a80c5e2f1b3a9d7c6e4
@@ -31,8 +39,8 @@ under `data/` is (see `data/.htaccess` and the root `.htaccess` rewrite
 denial). Removing a line and re-saving the file revokes that key immediately
 — there is no caching, so the very next request sees the change.
 
-If `data/api-keys.txt` does not exist or is empty, the endpoint refuses every
-request with 401. There is no default key.
+If neither a database key nor `data/api-keys.txt` matches, the endpoint refuses
+the request with 401. There is no default key.
 
 ## Handing a key to someone
 

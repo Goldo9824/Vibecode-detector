@@ -1,8 +1,12 @@
 # Runtime state. The signing key in particular must never be committed:
 # it is what makes a certificate from this installation verifiable. The API
-# key file is the credential for api/website.php and must never be either.
+# key file is the credential for api/website.php, the DB config carries a
+# database password, and the admin password hash gates admin/ — none of
+# these may ever be committed either.
 /data/secret.key
 /data/api-keys.txt
+/data/db-config.php
+/data/admin-password.php
 /data/rate/
 
 # Local scratch

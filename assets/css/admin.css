@@ -1,0 +1,115 @@
+/* Admin panel additions on top of site.css. Same tokens, a few more shapes:
+   tables, a password field, status badges, a one-time flash banner. */
+
+input[type="password"] {
+  width: 100%;
+  background: var(--paper);
+  border: 1px solid var(--rule-2);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: .875rem;
+  line-height: 1.5;
+  padding: .7rem .8rem;
+  border-radius: 2px;
+}
+input[type="password"]:focus { border-color: var(--red); outline: none; }
+
+.admin-shell { max-width: 52rem; padding-top: clamp(2rem, 5vw, 3.5rem); padding-bottom: 4rem; }
+.admin-shell.narrow { max-width: 26rem; padding-top: clamp(4rem, 12vw, 8rem); }
+
+.admin-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+.admin-head h1 { font-size: clamp(1.25rem, 3vw, 1.6rem); margin: 0; }
+.admin-head a { font-size: .8rem; color: var(--ink-3); }
+.admin-head a:hover { color: var(--red); }
+
+.admin-section { margin-bottom: 2.5rem; }
+.admin-section h2 {
+  font-family: var(--mono);
+  font-size: .75rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 .9rem;
+}
+
+.flash {
+  background: var(--red-soft);
+  border: 1px solid var(--red);
+  border-radius: 3px;
+  padding: 1rem 1.2rem;
+  margin-bottom: 2rem;
+}
+.flash p { margin: 0 0 .5rem; }
+.flash code {
+  display: block;
+  background: var(--paper-2);
+  border: 1px solid var(--rule-2);
+  border-radius: 2px;
+  padding: .6rem .7rem;
+  font-family: var(--mono);
+  font-size: .85rem;
+  word-break: break-all;
+  user-select: all;
+}
+
+.error-box { color: var(--red); margin: 0 0 1rem; }
+
+table.admin-table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+table.admin-table th, table.admin-table td {
+  text-align: left;
+  padding: .6rem .7rem;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+table.admin-table th {
+  font-family: var(--mono);
+  font-size: .7rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 400;
+}
+table.admin-table tr:last-child td { border-bottom: none; }
+table.admin-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: .7rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: .15rem .5rem;
+  border-radius: 2px;
+  border: 1px solid var(--rule-2);
+  color: var(--ink-3);
+}
+.badge.is-active { border-color: var(--green); color: var(--green); }
+.badge.is-revoked { border-color: var(--rule-2); color: var(--ink-3); }
+
+.inline-form { display: inline; }
+
+.add-key-form { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; }
+.add-key-form > div { flex: 1 1 16rem; }
+.add-key-form label.field { margin-bottom: .3rem; }
+
+.stat-row { display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+.stat {
+  font-family: var(--mono);
+}
+.stat .n { display: block; font-size: 1.6rem; color: var(--ink); }
+.stat .l { font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+
+.no-db {
+  border: 1px dashed var(--rule-2);
+  border-radius: 3px;
+  padding: 1.5rem;
+  color: var(--ink-2);
+}
+.no-db code { font-family: var(--mono); font-size: .85rem; }

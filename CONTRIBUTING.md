@@ -41,11 +41,17 @@ is and why it exists.
 **PHP 7.4 is the floor.** No `match`, no enums, no `readonly`, no nullsafe operator,
 no `str_contains`. CI runs the suite on 7.4, 8.1 and 8.4.
 
-**Nothing is stored.** No database, no logs, no analytics, no record of any
-analysis. Pasted code is read once in memory and discarded. Certificates are signed,
-not saved, which is why verification is a signature check rather than a lookup. A
-change that starts retaining anything about what people analyse needs a very good
-argument and a conversation first.
+**Nothing is stored, by default.** No database, no logs, no analytics, no record of
+any analysis. Pasted code is read once in memory and discarded. Certificates are
+signed, not saved, which is why verification is a signature check rather than a
+lookup. A change that starts retaining anything about what people analyse needs a
+very good argument and a conversation first.
+
+The one deliberate, opt-in exception is `admin/` (see `docs/ADMIN.md`): an operator
+who configures a database gets a password-gated panel for managing named API keys
+and seeing usage — the mode and, for URL checks, the target address of each
+analysis, never the pasted content, never who is asking. With no database
+configured, that code path is inert and the claim above is exactly true.
 
 **The site does not wear the tells it detects.** No indigo-to-violet, no Inter, no
 three-card grid, no default icon set. This is only half a joke: it is also the

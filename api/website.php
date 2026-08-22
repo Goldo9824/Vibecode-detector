@@ -16,6 +16,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__) . '/lib/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/Fetcher.php';
 require_once dirname(__DIR__) . '/lib/Crawler.php';
+require_once dirname(__DIR__) . '/lib/UsageLog.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
@@ -26,7 +27,8 @@ if ($method !== 'GET' && $method !== 'POST') {
 }
 
 $apiKey = vcd_request_api_key();
-if (!vcd_api_key_valid($apiKey)) {
+$matchedKey = vcd_api_key_lookup($apiKey);
+if ($matchedKey === null) {
     vcd_fail('Missing or invalid API key. Send it in the X-Api-Key header.', 401);
 }
 
@@ -79,9 +81,13 @@ if ($crawl) {
     }
 }
 
-// Same as api/analyze.php: nothing about the request is stored, the
-// certificate token is a signature over the result computed here and thrown
-// away.
+// If a database is configured (see docs/ADMIN.md), this records the mode,
+// the target address and which key was used — never the fetched page
+// content, which is discarded the same as it always was. See lib/UsageLog.php.
+UsageLog::record('api', $matchedKey['id'], $result['mode'], $result['target']);
+
+// The certificate token is a signature over the result, computed here and
+// thrown away — it is not stored, and is not how usage above gets recorded.
 $result['cert'] = vcd_cert_token($result);
 
 vcd_json($result);

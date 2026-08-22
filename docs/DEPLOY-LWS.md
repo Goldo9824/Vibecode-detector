@@ -4,8 +4,9 @@ There is no build step. Upload the files, and it runs.
 
 That is not a boast, it is the design constraint: the target is an LWS mutualisé
 account with FTP access and a PHP version picker, and nothing in this project may
-assume anything more than that. No Composer, no npm, no shell access, no database,
-no cron, no writable system temp.
+assume anything more than that. No Composer, no npm, no shell access, no cron, no
+writable system temp — and no database either, for everything except the optional
+admin panel (see [docs/ADMIN.md](ADMIN.md)), which stays entirely inert without one.
 
 ---
 
@@ -17,8 +18,9 @@ no cron, no writable system temp.
 | `curl` **or** `allow_url_fopen` | To fetch the page being analysed. The code prefers cURL and falls back on its own. |
 | `mbstring` or `iconv` | Character-set handling on fetched pages and CP1252 conversion for the PDF. Either one is enough. |
 | `zlib` | Optional. Compresses PDF content streams; without it certificates are simply larger. |
+| `pdo_mysql` | Optional. Only needed for the admin panel (`admin/`) — see docs/ADMIN.md. Everything else runs with no database at all. |
 
-Nothing else. There is deliberately no dependency to install and nothing to keep updated.
+Nothing else required. There is deliberately no dependency to install and nothing to keep updated.
 
 ---
 
@@ -35,12 +37,15 @@ Nothing else. There is deliberately no dependency to install and nothing to keep
    index.php            the page
    verify.php           certificate verification
    llms.txt             instructions for an AI agent calling api/website.php
+   robots.txt           disallows /admin/
    .htaccess            security headers, denies lib/ and data/
    api/                 analyze.php, website.php, certificate.php
+   admin/               optional password-gated key management and usage — docs/ADMIN.md
    lib/                 the engine — never served directly
    assets/              css, js, svg
    data/                created on first run, holds the signing key
-                        (and, if you add it, api-keys.txt — see below)
+                        (and, if you add them, api-keys.txt, db-config.php,
+                        admin-password.php — see below and docs/ADMIN.md)
 ```
 
 4. Do **not** upload `tests/`, `tools/`, `docs/` or `.github/`. They are harmless
@@ -93,7 +98,8 @@ distinguishable.
 
 `api/website.php` lets a caller with a key analyse a page or site over plain
 HTTP, outside the browser UI. There is no key by default — create
-`data/api-keys.txt` by hand (never over git) to turn it on. See
+`data/api-keys.txt` by hand (never over git) to turn it on, or manage named,
+revocable keys through the [admin panel](ADMIN.md) instead. See
 [`docs/API.md`](API.md) for the request format and [`Keeping the key`](#keeping-the-key)
 below for why this file lives outside the repo the same way `secret.key` does.
 
@@ -107,8 +113,10 @@ Shared hosting is not generous, and the analyser is built around that:
 - Rate limiting is file-based in `data/rate/` — 20 URL analyses and 60 code
   analyses per IP per 10 minutes — and cleans up after itself. It **fails open**:
   if the directory misbehaves the site keeps working rather than locking everyone out.
-- Nothing is logged, stored or cached between requests. There is no database
-  because there is nothing to put in one.
+- Nothing is logged, stored or cached between requests, and there is no database
+  requirement for any of the above. The one opt-in exception is the admin panel
+  (see [docs/ADMIN.md](ADMIN.md)) — inert, and nothing is recorded, unless you
+  configure one yourself.
 
 If `max_execution_time` is low on your plan, a slow remote site can still time
 out. That surfaces as a readable error in the browser, not a white page.

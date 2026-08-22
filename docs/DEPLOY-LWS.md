@@ -35,10 +35,11 @@ Nothing else. There is deliberately no dependency to install and nothing to keep
    index.php            the page
    verify.php           certificate verification
    .htaccess            security headers, denies lib/ and data/
-   api/                 analyze.php, certificate.php
+   api/                 analyze.php, website.php, certificate.php
    lib/                 the engine — never served directly
    assets/              css, js, svg
    data/                created on first run, holds the signing key
+                        (and, if you add it, api-keys.txt — see below)
 ```
 
 4. Do **not** upload `tests/`, `tools/`, `docs/` or `.github/`. They are harmless
@@ -86,6 +87,14 @@ and do not copy it between staging and production if you want those to be
 distinguishable.
 
 ---
+
+## API access
+
+`api/website.php` lets a caller with a key analyse a page or site over plain
+HTTP, outside the browser UI. There is no key by default — create
+`data/api-keys.txt` by hand (never over git) to turn it on. See
+[`docs/API.md`](API.md) for the request format and [`Keeping the key`](#keeping-the-key)
+below for why this file lives outside the repo the same way `secret.key` does.
 
 ## Resource notes
 

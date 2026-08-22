@@ -30,6 +30,18 @@ define('VCD_LIMIT_CODE',  array(60, 600));
 define('VCD_LIMIT_GIT',   array(60, 600));
 
 /**
+ * Budget for authenticated API callers (api/website.php), keyed by the API
+ * key itself rather than by IP — one key is meant to be shared across
+ * whatever machines its holder runs, so the budget should not be split (or
+ * multiplied) by how many addresses happen to use it. Deliberately far
+ * roomier than VCD_LIMIT_URL: a caller trusted enough to hold a key is
+ * trusted more than an anonymous visitor, and the global fetch-concurrency
+ * cap (VCD_MAX_CONCURRENT_FETCHES) is the backstop that actually protects
+ * shared hosting, not this number.
+ */
+define('VCD_LIMIT_API_URL', array(500, 600));
+
+/**
  * Global cap on url-mode fetches in flight at once, across every visitor.
  *
  * vcd_rate_limit() bounds one IP's own use of the tool; it does nothing
@@ -284,8 +296,12 @@ function vcd_client_ip(): string
 /**
  * Crude per-IP throttle, file-backed because there is no Redis and no database.
  * Fails open: if the data directory will not cooperate, the tool still works.
+ *
+ * $identity defaults to the caller's IP, but api/website.php passes the API
+ * key instead: that budget belongs to the key, not to whatever address it is
+ * used from.
  */
-function vcd_rate_limit(string $bucket, int $limit, int $windowSeconds): bool
+function vcd_rate_limit(string $bucket, int $limit, int $windowSeconds, ?string $identity = null): bool
 {
     if (!is_dir(VCD_DATA) && !@mkdir(VCD_DATA, 0755, true)) {
         return true;
@@ -295,7 +311,7 @@ function vcd_rate_limit(string $bucket, int $limit, int $windowSeconds): bool
         return true;
     }
 
-    $file = $dir . '/' . $bucket . '-' . hash('sha256', vcd_client_ip() . vcd_secret()) . '.txt';
+    $file = $dir . '/' . $bucket . '-' . hash('sha256', ($identity ?? vcd_client_ip()) . vcd_secret()) . '.txt';
     $now  = time();
 
     $fh = @fopen($file, 'c+');
@@ -400,6 +416,60 @@ function vcd_acquire_fetch_slot(): ?string
     fclose($fh);
 
     return $token;
+}
+
+/**
+ * API keys for api/website.php, one per line in data/api-keys.txt — created
+ * by hand on the live server, never by this code and never committed. Blank
+ * lines and lines starting with # are ignored, so the file can carry comments
+ * about who each key was given to.
+ *
+ * Not cached: this is read at most once per request, before anything else
+ * runs, and a live server should not have to be restarted to pick up a key
+ * added or removed by editing the file.
+ *
+ * @return string[]
+ */
+function vcd_api_keys(): array
+{
+    $file = VCD_DATA . '/api-keys.txt';
+    if (!is_readable($file)) {
+        return array();
+    }
+
+    $keys = array();
+    foreach (explode("\n", (string) file_get_contents($file)) as $line) {
+        $line = trim($line);
+        if ($line === '' || $line[0] === '#') {
+            continue;
+        }
+        $keys[] = $line;
+    }
+    return $keys;
+}
+
+/** Timing-safe check against every configured key. */
+function vcd_api_key_valid(string $key): bool
+{
+    if ($key === '') {
+        return false;
+    }
+    foreach (vcd_api_keys() as $configured) {
+        if (hash_equals($configured, $key)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * The key the caller sent, from the X-Api-Key header. Headers, not a query
+ * string or POST field, so the key never ends up in access logs or browser
+ * history — this is a credential, not a parameter.
+ */
+function vcd_request_api_key(): string
+{
+    return isset($_SERVER['HTTP_X_API_KEY']) ? trim((string) $_SERVER['HTTP_X_API_KEY']) : '';
 }
 
 /** Release a slot claimed by vcd_acquire_fetch_slot(). Safe to call with '' or twice. */

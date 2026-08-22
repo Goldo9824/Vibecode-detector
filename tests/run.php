@@ -1138,6 +1138,62 @@ if ($slotsWritable) {
     ok($reopened !== null, 'an unwritable data directory fails open for the concurrency cap too');
 }
 
+// ------------------------------------------------------------ api key auth
+
+group('API key auth');
+
+$keyFile = VCD_DATA . '/api-keys.txt';
+$hadKeyFile = is_file($keyFile);
+$priorKeyFile = $hadKeyFile ? (string) file_get_contents($keyFile) : null;
+$keysWritable = is_dir(VCD_DATA) && is_writable(VCD_DATA);
+
+if ($keysWritable) {
+    file_put_contents($keyFile, "# note for a human\n\nsk_test_first\nsk_test_second\n");
+
+    ok(vcd_api_keys() === array('sk_test_first', 'sk_test_second'),
+       'blank lines and #-comments are skipped when reading the key file');
+    ok(vcd_api_key_valid('sk_test_first'), 'a key present in the file validates');
+    ok(vcd_api_key_valid('sk_test_second'), 'so does a second key on its own line');
+    ok(!vcd_api_key_valid('sk_test_wrong'), 'a key not in the file is rejected');
+    ok(!vcd_api_key_valid(''), 'an empty key is rejected outright');
+    ok(!vcd_api_key_valid('# note for a human'), 'a comment line is never itself a valid key');
+
+    unlink($keyFile);
+    ok(vcd_api_keys() === array(), 'no configured keys once the file is gone');
+    ok(!vcd_api_key_valid('sk_test_first'), 'and nothing validates once the file is gone');
+
+    if ($priorKeyFile !== null) {
+        file_put_contents($keyFile, $priorKeyFile);
+    }
+} else {
+    ok(vcd_api_keys() === array(), 'an unreadable data directory yields no keys, not an error');
+}
+
+$_SERVER['HTTP_X_API_KEY'] = ' sk_from_header ';
+ok(vcd_request_api_key() === 'sk_from_header', 'the API key is read from the X-Api-Key header, trimmed');
+unset($_SERVER['HTTP_X_API_KEY']);
+ok(vcd_request_api_key() === '', 'no header means no key');
+
+// The rate limiter has to be keyable by something other than the caller's
+// IP, so that one API key shares one budget across every machine using it.
+if ($keysWritable) {
+    $bucket = 'apitest' . bin2hex(random_bytes(4));
+    $allowed = 0;
+    for ($i = 0; $i < 8; $i++) {
+        if (vcd_rate_limit($bucket, 5, 600, 'key:sk_shared')) {
+            $allowed++;
+        }
+    }
+    ok($allowed === 5, 'a rate limit keyed by API key is enforced independently of IP', $allowed . ' of 8 allowed');
+    foreach ((array) glob(VCD_DATA . '/rate/' . $bucket . '-*.txt') as $tmp) {
+        @unlink($tmp);
+    }
+}
+
+ok(count(VCD_LIMIT_API_URL) === 2 && VCD_LIMIT_API_URL[0] > VCD_LIMIT_URL[0],
+   'the API budget is a sane [count, seconds] pair and roomier than the anonymous UI limit',
+   implode('/', VCD_LIMIT_API_URL) . ' vs ' . implode('/', VCD_LIMIT_URL));
+
 // ---------------------------------------------------------- public base url
 
 group('Where the app thinks it lives');

@@ -178,12 +178,23 @@ install on the host.
 Full instructions, including the two 403 checks to run afterwards, are in
 **[docs/DEPLOY-LWS.md](docs/DEPLOY-LWS.md)**.
 
+## API access
+
+`api/website.php` gives a caller with an API key programmatic access to the
+Live page / Whole site check, with a much higher rate limit than the
+anonymous UI. There is no key by default; the operator sets one by hand in
+`data/api-keys.txt`, which never goes in the repo. See
+**[docs/API.md](docs/API.md)** for setup, and hand **[`llms.txt`](llms.txt)**
+to anyone you give a key to — it's written for an AI agent to read and call
+the endpoint correctly on its own.
+
 ## Layout
 
 ```
 index.php          the page
 verify.php         certificate verification
-api/               analyze.php, certificate.php
+llms.txt           instructions for an AI agent calling api/website.php
+api/               analyze.php, website.php, certificate.php
 lib/
   Catalog.php      every signal, its weight and its reasoning — the source of truth
   Report.php       scoring, verdict bands, guard rails

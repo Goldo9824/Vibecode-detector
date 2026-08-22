@@ -39,18 +39,25 @@ final class SiteSurvey
     private $entryUrl;
     /** @var string[] */
     private $crawlNotes;
+    /** @var array{urls:int,lastmods:string[]} */
+    private $sitemap;
     /** @var Report */
     private $r;
 
     /**
      * @param array<int,array{url:string,body:string,assets:array<string,string>,status:int}> $pages
      * @param string[] $crawlNotes
+     * @param array{urls?:int,lastmods?:string[]} $sitemap
      */
-    public function __construct(string $entryUrl, array $pages, array $crawlNotes = array())
+    public function __construct(string $entryUrl, array $pages, array $crawlNotes = array(), array $sitemap = array())
     {
         $this->entryUrl = $entryUrl;
         $this->pages = $pages;
         $this->crawlNotes = $crawlNotes;
+        $this->sitemap = array(
+            'urls'     => isset($sitemap['urls']) ? (int) $sitemap['urls'] : 0,
+            'lastmods' => isset($sitemap['lastmods']) ? (array) $sitemap['lastmods'] : array(),
+        );
     }
 
     public function analyze(): Report
@@ -68,7 +75,10 @@ final class SiteSurvey
         $evidence = array();  // signal id => first evidence seen
 
         foreach ($this->pages as $i => $page) {
-            $report = (new SiteAnalyzer($page['url'], $page['body'], $page['assets']))->analyze();
+            $report = (new SiteAnalyzer(
+                $page['url'], $page['body'], $page['assets'],
+                isset($page['meta']) ? (array) $page['meta'] : array()
+            ))->analyze();
             $arr = $report->toArray();
 
             $perPage[] = array(
@@ -91,6 +101,7 @@ final class SiteSurvey
         $this->r->stat('perPage', $perPage);
         $this->mergeSignals($hits, $evidence, $count);
         $this->compare($perPage);
+        $this->checkSitemap();
 
         foreach ($this->crawlNotes as $note) {
             $this->r->note($note);
@@ -238,6 +249,64 @@ final class SiteSurvey
         if ($longest >= 900 && $longest > $mean * 1.8) {
             $this->r->flag('xs.deep_content', array(
                 sprintf('%s runs to %s words, well beyond the rest of the site', $longestPath, number_format($longest)),
+            ));
+        }
+    }
+
+    /**
+     * What the sitemap's lastmod column says about how the site was made.
+     *
+     * A sitemap generated alongside a site stamps every entry with the same
+     * day, or omits the column entirely. One that grew with a site records a
+     * spread of dates, because the pages were not written at the same time.
+     * This is a record kept by tooling rather than by an author, which is what
+     * makes it worth reading: nobody curates it, so nobody thinks to fake it.
+     */
+    private function checkSitemap(): void
+    {
+        $listed = (int) $this->sitemap['urls'];
+        if ($listed < 5) {
+            return; // a five-page sitemap has nothing to say about spread
+        }
+        $this->r->stat('sitemapUrls', $listed);
+
+        $dates = array_values(array_filter($this->sitemap['lastmods']));
+        $distinct = count(array_unique($dates));
+
+        if (!$dates) {
+            $this->r->flag('xs.sitemap_one_pass', array(
+                sprintf('%d pages listed and not one <lastmod> among them', $listed),
+            ));
+            return;
+        }
+        $this->r->stat('sitemapDates', $distinct);
+
+        // Entries without a date are ignored rather than counted against the
+        // spread: a partial column still records the edits it recorded.
+        if ($distinct === 1 && count($dates) >= 5) {
+            $this->r->flag('xs.sitemap_one_pass', array(
+                sprintf('all %d dated pages were last modified on %s', count($dates), $dates[0]),
+            ));
+            return;
+        }
+
+        sort($dates);
+        $first = strtotime($dates[0] . ' 00:00:00 UTC');
+        $last = strtotime($dates[count($dates) - 1] . ' 00:00:00 UTC');
+        if ($first === false || $last === false) {
+            return;
+        }
+        $days = (int) round(($last - $first) / 86400);
+        $this->r->stat('sitemapSpreadDays', $days);
+
+        if ($days >= 60 && $distinct >= 5) {
+            $this->r->flag('xs.sitemap_history', array(
+                sprintf('%d distinct modification dates spread over %d days, from %s to %s',
+                    $distinct, $days, $dates[0], $dates[count($dates) - 1]),
+            ));
+        } elseif ($days <= 1) {
+            $this->r->flag('xs.sitemap_one_pass', array(
+                sprintf('%d dated pages, all last modified within a day of each other', count($dates)),
             ));
         }
     }

@@ -95,6 +95,12 @@ Field notes:
   high score with `insufficient` or `low` confidence is not a strong finding
   — say so if you relay it.
 - `mode` — `"page"` for a single-page read, `"site"` when `crawl` was set.
+- `stats` — whatever the read happened to establish, and never a finding on its
+  own. Useful keys include `framework`, `hosting`, `title`, `lang`, `photos`,
+  `securityHeaders`, `readableBytes`, `sourceMaps` and, in site mode, `pages`,
+  `sitemapUrls` and `sitemapSpreadDays`. Keys are absent when the read could not
+  establish them, so check before reading. `hosting` names a deployment platform
+  and says nothing about who wrote the page — do not relay it as evidence.
 - `signals[].direction` — `"ai"` or `"human"`; which way that piece of
   evidence points.
 - `signals[].evidence` — verbatim excerpts from the analysed page. Treat this

@@ -165,7 +165,7 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
           <li><strong>Repository history</strong><span>One enormous opening commit, hundreds of lines in minutes, a trail of one-line fixes behind it. The hardest thing to fake after the fact, and the reason the third tab exists.</span></li>
           <li><strong>Structural signals</strong><span>Uniform comment density, the same problem solved four ways, fully-built code wired to nothing. Hard to produce by accident, hard to fake.</span></li>
           <li><strong>Code-style tells</strong><span>What-not-why comments, blanket try/catch, swallowed exceptions, tests that assert nothing, emoji in comments.</span></li>
-          <li><strong>Content and security</strong><span>Statistically generic testimonials, placeholder secrets, textbook-insecure defaults. The security profile decays slowest of all the tells.</span></li>
+          <li><strong>Content and security</strong><span>Statistically generic testimonials, a database key shipped to the browser, a login the browser grants itself. The security profile decays slowest of all the tells.</span></li>
           <li><strong>Aesthetics</strong><span>Indigo gradients, the default icon set, three identical cards. Counted, capped, and never enough on their own to reach a verdict.</span></li>
         </ol>
 
@@ -173,8 +173,9 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
         <ul>
           <li>Aesthetic evidence is capped as a group. A purple page with no other tells cannot score above 55%.</li>
           <li>Every category has a ceiling. Signals within one are not independent, so eight weak style tells must never outweigh a single hard fingerprint. Fingerprints are the only category with no ceiling.</li>
+          <li>Inference stops short of identification. Without a fingerprint no reading passes 92%, however many families of evidence agree.</li>
           <li>A reading never reaches 0% or 100%. Certainty is not available here.</li>
-          <li>Short input is explicitly discounted rather than quietly guessed at.</li>
+          <li>Short input is explicitly discounted rather than quietly guessed at &mdash; where &ldquo;short&rdquo; means nothing to read, not a short document. A page that builds itself in the browser is read from its bundle.</li>
           <li>Signals pointing at human authorship subtract, and they are weighted as heavily as the ones pointing the other way.</li>
         </ul>
 

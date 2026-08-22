@@ -163,6 +163,265 @@ $current = str_replace('&copy; 2019', '&copy; ' . gmdate('Y'), $operated);
 $rc = (new SiteAnalyzer('https://shop.example.com/', $current))->analyze();
 ok(!$rc->has('hu.dated_copyright'), 'a current copyright year does not fire');
 
+// --------------------------------------------------------- site: client-side
+
+group('A page that builds itself in the browser');
+
+/**
+ * The shape almost every generated application ships in: an empty mount point
+ * and a hashed bundle. None of the class names or copy is in the document, so
+ * everything below is being read out of the JavaScript.
+ */
+$spaShell = '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+    . '<title>Nimbus</title>'
+    . '<script type="module" crossorigin src="/assets/index-Ba7Xk9Lm.js"></script>'
+    . '<link rel="stylesheet" crossorigin href="/assets/index-C3xY1pQz.css">'
+    . '</head><body><div id="root"></div></body></html>';
+
+$spaBundle =
+      'const a=()=>e("div",{className:"rounded-2xl shadow-lg p-6 bg-white border border-slate-200"});'
+    . 'const b=()=>e("div",{className:"rounded-2xl shadow-lg p-6 hover:shadow-xl transition"});'
+    . 'const c=()=>e("section",{className:"py-24 px-4 max-w-7xl mx-auto"});'
+    . 'const d=()=>e("h1",{className:"text-5xl font-bold bg-gradient-to-r from-indigo-500 to-violet-600 bg-clip-text text-transparent"});'
+    . 'const f=()=>e("nav",{className:"fixed top-4 inset-x-0 mx-auto backdrop-blur-md rounded-full border"});'
+    . 'const g=()=>e("span",{className:"rounded-full border px-3 py-1"},"Introducing Nimbus v2");'
+    . 'const h="Ship faster with everything you need to supercharge your workflow.";'
+    . 'const i="Trusted by thousands of teams building lightning-fast products.";';
+
+$spaCss = str_repeat('.pad{padding:1px}', 120) . '.bg-indigo-500{background-color:#6366f1}'
+    . '.from-violet-600{--tw:#7c3aed}@font-face{font-family:"Inter"}';
+
+$spaAssets = array(
+    'https://nimbus.example.com/assets/index-C3xY1pQz.css' => $spaCss,
+    'https://nimbus.example.com/assets/index-Ba7Xk9Lm.js'  => $spaBundle,
+);
+$r = (new SiteAnalyzer('https://nimbus.example.com/', $spaShell, $spaAssets))->analyze();
+$a = $r->toArray();
+
+ok($r->has('ae.shadcn_defaults'), 'reads component defaults out of the bundle');
+ok($r->has('ae.gradient_text'), 'reads the gradient headline out of the bundle');
+ok($r->has('ae.floating_nav'), 'reads the floating navbar out of the bundle');
+ok($r->has('ae.hero_pill'), 'reads the hero pill out of the bundle');
+ok($r->has('ct.marketing_cliche'), 'reads the marketing copy out of the bundle');
+ok($r->has('ae.indigo'), 'reads the palette out of the stylesheet');
+ok(empty($a['stats']['thin']),
+   'a short document with a readable bundle is not treated as thin input');
+ok(isset($a['stats']['framework']) && $a['stats']['framework'] === 'Vite',
+   'names the framework it recognised', (string) ($a['stats']['framework'] ?? 'none'));
+
+// The same shell with nothing readable behind it really is thin.
+$r = (new SiteAnalyzer('https://nimbus.example.com/', $spaShell))->analyze();
+ok(!empty($r->toArray()['stats']['thin']), 'a shell with no readable bundle is still thin');
+
+// Arbitrary strings in a bundle must not be mistaken for class lists.
+$noise = 'const u="SELECT id FROM users WHERE id = ?";const p="/api/v1/orders/create";'
+       . 'const q="Content-Type: application/json";const z="error while loading resource";';
+$r = (new SiteAnalyzer('https://nimbus.example.com/', $spaShell,
+     array('https://nimbus.example.com/assets/index-Ba7Xk9Lm.js' => $noise)))->analyze();
+ok(!$r->has('ae.shadcn_defaults') && !$r->has('ae.gradient_text'),
+   'ordinary strings in a bundle are not read as styling');
+
+// --------------------------------------------------------- site: scaffold
+
+group('A scaffold nobody renamed');
+
+$scaffold = '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+    . '<title>Vite + React + TS</title><link rel="icon" type="image/svg+xml" href="/vite.svg">'
+    . '</head><body><div id="root"></div>' . str_repeat('<p>Body copy that goes on a while.</p>', 40)
+    . '</body></html>';
+$r = (new SiteAnalyzer('https://thing.example.com/', $scaffold))->analyze();
+ok($r->has('st.untouched_scaffold'), 'catches the starter template title and favicon');
+
+$named = str_replace(array('Vite + React + TS', '/vite.svg'),
+                     array('Marchand & Fils, boulangerie', '/favicon-boulangerie.png'), $scaffold);
+$r = (new SiteAnalyzer('https://thing.example.com/', $named))->analyze();
+ok(!$r->has('st.untouched_scaffold'), 'a page with its own title and favicon does not fire');
+
+$cra = '<!DOCTYPE html><html lang="en"><head><title>My Shop</title>'
+     . '<meta name="description" content="Web site created using create-react-app"></head>'
+     . '<body><noscript>You need to enable JavaScript to run this app.</noscript>'
+     . str_repeat('<p>Copy.</p>', 60) . '</body></html>';
+$r = (new SiteAnalyzer('https://thing.example.com/', $cra))->analyze();
+ok($r->has('st.untouched_scaffold'), 'catches the create-react-app description and noscript block');
+
+// A build pipeline is not evidence of craft on a page still wearing its scaffold.
+$hashed = str_replace('</head>', '<script src="/assets/index-Ba7Xk9Lm.js"></script></head>', $scaffold);
+$r = (new SiteAnalyzer('https://thing.example.com/', $hashed))->analyze();
+ok(!$r->has('hu.build_stripped'),
+   'the build-pipeline signal is withheld when the scaffold gives the page away');
+
+$hashedNamed = str_replace('</head>', '<script src="/assets/index-Ba7Xk9Lm.js"></script></head>', $named);
+$r = (new SiteAnalyzer('https://thing.example.com/', $hashedNamed))->analyze();
+ok($r->has('hu.build_stripped'), 'and still fires on a page with nothing else against it');
+
+// ------------------------------------------------------- site: transport
+
+group('What the response headers say');
+
+$plain = '<!DOCTYPE html><html lang="en"><head><title>Shop</title></head><body>'
+       . str_repeat('<p>Ordinary copy on an ordinary page.</p>', 40) . '</body></html>';
+
+$r = (new SiteAnalyzer('https://shop.example.com/', $plain, array(), array(
+    'status' => 200,
+    'headers' => array('server' => 'Vercel', 'x-vercel-id' => 'cdg1::abc', 'content-type' => 'text/html'),
+)))->analyze();
+$a = $r->toArray();
+ok(($a['stats']['hosting'] ?? '') === 'Vercel', 'records the hosting platform');
+ok(!$r->hasFingerprint(), 'but the hosting platform is never treated as evidence of a builder');
+ok(($a['stats']['securityHeaders'] ?? null) === 0, 'counts the hardening headers it found');
+ok($r->countAi() === 0,
+   'a bare response is recorded and not scored: almost nothing sets these, so their absence separates nothing');
+
+$r = (new SiteAnalyzer('https://shop.example.com/', $plain, array(), array(
+    'status' => 200,
+    'headers' => array(
+        'content-security-policy' => "default-src 'self'; script-src 'self' 'unsafe-inline'",
+        'strict-transport-security' => 'max-age=31536000; includeSubDomains',
+        'x-frame-options' => 'DENY',
+    ),
+)))->analyze();
+ok($r->has('hu.hardened_headers'), 'catches headers somebody configured');
+
+$r = (new SiteAnalyzer('https://shop.example.com/', $plain, array(), array(
+    'status' => 200,
+    'headers' => array('set-cookie' => 'PHPSESSID=abc; path=/', 'server' => 'Apache'),
+)))->analyze();
+ok($r->has('hu.legacy_stack'), 'a server-side session cookie counts toward a classic stack');
+
+// Analysing without headers at all must change nothing.
+$r = (new SiteAnalyzer('https://shop.example.com/', $plain))->analyze();
+$a = $r->toArray();
+ok(!$r->has('hu.hardened_headers') && !isset($a['stats']['securityHeaders']),
+   'a page fetched without header detail says nothing about headers either way');
+
+// -------------------------------------------------- site: stack and backend
+
+group('The stack and what it talks to');
+
+$kit = 'import{cva}from"class-variance-authority";import{twMerge}from"tailwind-merge";'
+     . 'import clsx from"clsx";import{Rocket}from"lucide-react";import{Toaster}from"sonner";'
+     . 'import*as Dialog from"@radix-ui/react-dialog";';
+$r = (new SiteAnalyzer('https://app.example.com/', $spaShell,
+     array('https://app.example.com/assets/index-Ba7Xk9Lm.js' => $kit)))->analyze();
+ok($r->has('st.generated_stack'), 'catches the whole component kit arriving together');
+
+$partial = 'import clsx from"clsx";import{Rocket}from"lucide-react";';
+$r = (new SiteAnalyzer('https://app.example.com/', $spaShell,
+     array('https://app.example.com/assets/index-Ba7Xk9Lm.js' => $partial)))->analyze();
+ok(!$r->has('st.generated_stack'), 'two ordinary libraries are not a finding');
+
+$backend = 'const c=createClient("https://abcdefghij.supabase.co",'
+    . '"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIn0.aaaaaaaaaaaa");'
+    . 'localStorage.setItem("isLoggedIn","true");'
+    . 'localStorage.setItem("todos",JSON.stringify(t));localStorage.setItem("cart",JSON.stringify(c));'
+    . 'localStorage.setItem("profile",JSON.stringify(p));';
+$r = (new SiteAnalyzer('https://app.example.com/', $spaShell,
+     array('https://app.example.com/assets/index-Ba7Xk9Lm.js' => $backend)))->analyze();
+$a = $r->toArray();
+ok($r->has('st.client_only_backend'), 'catches a database addressed straight from the browser');
+ok($r->has('se.exposed_client_key'), 'catches the key that travels with it');
+ok($r->has('se.client_side_auth'), 'catches a login the browser grants itself');
+
+$printed = json_encode($a['signals']);
+ok(strpos($printed, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9') === false,
+   'the credential itself is never echoed back in the evidence');
+
+$openai = 'const client=new OpenAI({apiKey:k,dangerouslyAllowBrowser:true});';
+$r = (new SiteAnalyzer('https://app.example.com/', $spaShell,
+     array('https://app.example.com/assets/index-Ba7Xk9Lm.js' => $openai)))->analyze();
+ok($r->has('se.exposed_client_key'), 'catches an AI SDK told to run in the browser');
+
+// ------------------------------------------------------- site: source maps
+
+group('Reading the source a bundle came from');
+
+$mapped = array(array(
+    'url' => 'https://app.example.com/assets/index-Ba7Xk9Lm.js.map',
+    'sources' => array(
+        'src/App.tsx', 'src/components/ui/button.tsx', 'src/components/ui/card.tsx',
+        'src/components/ui/dialog.tsx', 'src/components/ui/input.tsx', 'src/components/ui/toast.tsx',
+    ),
+    'content' => "// 🚀 Fetch the users from the API\n"
+        . "// ✅ Then render them\nasync function loadUsers() {\n"
+        . "  try {\n    const r = await fetch(url);\n    return await r.json();\n"
+        . "  } catch (e) {\n    console.log('❌ failed');\n  }\n}\n",
+));
+$r = (new SiteAnalyzer('https://app.example.com/', $spaShell,
+     array('https://app.example.com/assets/index-Ba7Xk9Lm.js' => 'var a=1;'),
+     array('status' => 200, 'sourceMaps' => $mapped)))->analyze();
+$a = $r->toArray();
+
+ok($r->has('cd.emoji_comments'), 'reads the original comments through the source map');
+ok(($a['stats']['sourceFiles'] ?? 0) === 6, 'counts the source files the map named');
+$notes = implode(' ', $a['notes']);
+ok(strpos($notes, 'source map') !== false, 'says where the code-level reading came from');
+
+// A builder marker in a source path identifies the builder just as well.
+$lovableMap = array(array(
+    'url' => 'inline', 'sources' => array('src/lovable-tagger/index.ts'), 'content' => 'var x=1;',
+));
+$r = (new SiteAnalyzer('https://app.example.com/', $spaShell, array(),
+     array('status' => 200, 'sourceMaps' => $lovableMap)))->analyze();
+ok($r->has('fp.lovable'), 'a builder marker in a source-map path is a fingerprint');
+
+// -------------------------------------------------- site: corrected misfires
+
+group('Findings that used to point the wrong way');
+
+// A page full of photographs served through an image optimiser has photographs
+// on it. The old check looked for a file extension at the end of the src and
+// found none, then read the silence as "no real photography".
+$optimised = '<!DOCTYPE html><html lang="fr"><head><title>Boulangerie Marchand</title></head><body>';
+foreach (range(1, 6) as $i) {
+    $optimised .= '<img src="/_next/image?url=%2Fphotos%2Fboutique' . $i . '.jpg&w=1080&q=75" alt="boutique">';
+}
+$optimised .= '<picture><source srcset="/img/pain.webp 1x, /img/pain@2x.webp 2x"><img src="/img/pain.webp" alt="pain"></picture>'
+    . '<div style="background-image:url(/img/fournil.jpg)"></div>'
+    . str_repeat('<section class="p-4"><h2>Nos produits</h2><p>Texte de présentation.</p></section>', 30)
+    . '<svg></svg><svg></svg><svg></svg><svg></svg><svg></svg></body></html>';
+
+$r = (new SiteAnalyzer('https://boulangerie.example.fr/', $optimised))->analyze();
+$a = $r->toArray();
+ok(!$r->has('ae.no_real_images'), 'optimiser and srcset images count as photographs');
+ok(($a['stats']['photos'] ?? 0) >= 6, 'counts them', (string) ($a['stats']['photos'] ?? 0));
+
+// And a page that genuinely has none still says so.
+$vectorOnly = '<!DOCTYPE html><html lang="en"><head><title>Nimbus</title></head><body>'
+    . '<div class="bg-gradient-to-r"></div><div class="bg-gradient-to-b"></div><div class="bg-gradient-to-t"></div>'
+    . str_repeat('<svg></svg>', 6)
+    . str_repeat('<section><h2>Feature</h2><p>Description of the feature, at some length.</p></section>', 90)
+    . '</body></html>';
+ok((new SiteAnalyzer('https://x.example.com/', $vectorOnly))->analyze()->has('ae.no_real_images'),
+   'a page carried entirely by gradients and vectors still fires');
+
+// French words that are not misspellings, on a French page.
+$frenchOk = '<!DOCTYPE html><html lang="fr"><head><title>Boulangerie</title></head><body>'
+    . '<p>Rendez vous au 12 rue des Capucins. Notre connection internet et le language du site.</p>'
+    . str_repeat('<p>Une phrase ordinaire sur la boutique et ses produits du jour.</p>', 40)
+    . '</body></html>';
+ok(!(new SiteAnalyzer('https://b.example.fr/', $frenchOk))->analyze()->has('hu.typos'),
+   'ordinary French and English loanwords are not counted as typos');
+
+$frenchTypo = str_replace('Rendez vous au', 'Bienvenue sur notre acceuil, au', $frenchOk);
+ok((new SiteAnalyzer('https://b.example.fr/', $frenchTypo))->analyze()->has('hu.typos'),
+   'a real French misspelling still fires');
+
+// A scaffold's lang="en" over French copy must not send the English list at it.
+$frenchScaffold = str_replace('lang="fr"', 'lang="en"', $frenchTypo);
+ok((new SiteAnalyzer('https://b.example.fr/', $frenchScaffold))->analyze()->has('hu.typos'),
+   'the language of the copy wins over a scaffold\'s lang attribute');
+
+// One common name is a person; two is a cast list.
+$oneName = '<!DOCTYPE html><html lang="en"><head><title>Studio</title></head><body>'
+    . '<blockquote>Sarah Johnson said the work was excellent.</blockquote>'
+    . str_repeat('<p>Ordinary copy about the studio and its work.</p>', 40) . '</body></html>';
+ok(!(new SiteAnalyzer('https://s.example.com/', $oneName))->analyze()->has('ct.generic_names'),
+   'a single common name is not a placeholder cast');
+
+$twoNames = str_replace('</body>', '<blockquote>John Smith, Verified User</blockquote></body>', $oneName);
+ok((new SiteAnalyzer('https://s.example.com/', $twoNames))->analyze()->has('ct.generic_names'),
+   'two of them together still fires');
+
 // ---------------------------------------------------------------- code: AI
 
 group('Generated JavaScript');
@@ -560,6 +819,71 @@ ok($full['stats']['pages'] === 4, 'and how many pages it read');
 ok(count($full['stats']['perPage']) === 4, 'with a per-page breakdown for the UI');
 ok(isset($full['score']) && $full['score'] >= 3 && $full['score'] <= 97, 'and a bounded score');
 
+// --------------------------------------------------------------- sitemap
+
+group('What the sitemap adds');
+
+// Pages the navigation never links to, found because the site lists them.
+$sitemapSite = array(
+    '/' => '<!DOCTYPE html><html lang="en"><head><title>Home</title></head><body>'
+         . '<nav><a href="/about">About</a></nav><p>' . str_repeat('copy ', 60) . '</p></body></html>',
+    '/about'    => stubPage('About'),
+    '/unlinked' => stubPage('Unlinked'),
+    '/robots.txt' => "User-agent: *\nSitemap: https://example.com/sitemap.xml\n",
+    '/sitemap.xml' =>
+        '<?xml version="1.0" encoding="UTF-8"?><urlset>'
+        . '<url><loc>https://example.com/</loc><lastmod>2026-01-04</lastmod></url>'
+        . '<url><loc>https://example.com/about</loc><lastmod>2026-01-04</lastmod></url>'
+        . '<url><loc>https://example.com/unlinked</loc><lastmod>2026-01-04</lastmod></url>'
+        . '<url><loc>https://example.com/x1</loc><lastmod>2026-01-04</lastmod></url>'
+        . '<url><loc>https://example.com/x2</loc><lastmod>2026-01-04</lastmod></url>'
+        . '<url><loc>https://example.com/x3</loc><lastmod>2026-01-04</lastmod></url>'
+        . '</urlset>',
+);
+$crawler = new Crawler(new StubFetcher($sitemapSite));
+$pages = $crawler->crawl('https://example.com/', 10);
+$paths = array();
+foreach ($pages as $page) {
+    $paths[] = (string) parse_url($page['url'], PHP_URL_PATH);
+}
+ok(in_array('/unlinked', $paths, true), 'reads a page only the sitemap knows about',
+   implode(' ', $paths));
+
+$sm = $crawler->sitemap();
+ok($sm['urls'] === 6, 'counts what the sitemap listed', (string) $sm['urls']);
+
+// A crawl spends its seconds on pages, not on one page's original source.
+$stub = new StubFetcher($sitemapSite);
+(new Crawler($stub))->crawl('https://example.com/', 3);
+$mapsFlag = new ReflectionProperty('Fetcher', 'readSourceMaps');
+$mapsFlag->setAccessible(true);
+ok($mapsFlag->getValue($stub) === false, 'a crawl turns source-map reading off');
+ok($mapsFlag->getValue(new Fetcher()) === true, 'and single-page mode leaves it on');
+
+// Every page stamped with the same day: the sitemap was written in one pass.
+$r = (new SiteSurvey('https://example.com/', pageSet(array('/' => stubPage('Home'))), array(), $sm))->analyze();
+ok($r->has('xs.sitemap_one_pass'), 'one lastmod across the whole site is a finding');
+
+// A spread of dates is the opposite finding.
+$grownMap = array('urls' => 9, 'lastmods' => array(
+    '2024-02-11', '2024-05-30', '2024-09-02', '2025-01-19', '2025-04-07',
+    '2025-08-23', '2026-01-15', '2026-03-30',
+));
+$r = (new SiteSurvey('https://example.com/', pageSet(array('/' => stubPage('Home'))), array(), $grownMap))->analyze();
+ok($r->has('xs.sitemap_history'), 'dates spread over months read as a worked-on site');
+ok(!$r->has('xs.sitemap_one_pass'), 'and not as a generated one');
+
+// A sitemap with no dates at all says the same thing as one date.
+$undated = array('urls' => 12, 'lastmods' => array());
+$r = (new SiteSurvey('https://example.com/', pageSet(array('/' => stubPage('Home'))), array(), $undated))->analyze();
+ok($r->has('xs.sitemap_one_pass'), 'a sitemap with no lastmod column at all also fires');
+
+// Too small to say anything.
+$tiny = array('urls' => 3, 'lastmods' => array('2026-01-04'));
+$r = (new SiteSurvey('https://example.com/', pageSet(array('/' => stubPage('Home'))), array(), $tiny))->analyze();
+ok(!$r->has('xs.sitemap_one_pass') && !$r->has('xs.sitemap_history'),
+   'a three-page sitemap is not evidence either way');
+
 // ------------------------------------------------------------ git history
 
 group('A generated repository history');
@@ -857,6 +1181,30 @@ ok($stacked->score() - $five->score() < 8,
    'the ceiling makes the last five style tells add almost nothing',
    $five->score() . ' -> ' . $stacked->score());
 
+// Inference, however much of it converges, stops short of identification.
+$everything = new Report('url', 'everything');
+foreach (array('st.untouched_scaffold', 'st.generated_stack', 'st.client_only_backend', 'st.spa_shell',
+               'se.exposed_client_key', 'se.client_side_auth', 'se.insecure_defaults',
+               'ct.marketing_cliche', 'ct.generic_names', 'ct.stat_inflation',
+               'ae.indigo', 'ae.gradient_text', 'ae.hero_pill', 'ae.glow_orbs', 'ae.lucide') as $id) {
+    $everything->flag($id, array('x'));
+}
+ok($everything->score() <= Report::INFERENCE_CEIL,
+   'fifteen converging inferential signals still stop below the fingerprint band',
+   (string) $everything->score());
+ok($everything->score() < $fingerprinted->score(),
+   'and still score below one builder naming itself',
+   $everything->score() . ' vs ' . $fingerprinted->score());
+ok($everything->score() >= 85, 'but they do produce a strong reading', (string) $everything->score());
+
+$alsoPrinted = new Report('url', 'also-printed');
+foreach (array('st.untouched_scaffold', 'se.exposed_client_key', 'fp.lovable') as $id) {
+    $alsoPrinted->flag($id, array('x'));
+}
+ok($alsoPrinted->score() > Report::INFERENCE_CEIL,
+   'a fingerprint lifts the same reading past the ceiling',
+   (string) $alsoPrinted->score());
+
 // Human evidence still nets off correctly under the ceilings.
 $mixed = new Report('code', 'mixed');
 $mixed->flag('cd.what_comments', array('x'));
@@ -1034,6 +1382,64 @@ ok(isset($cached['example.com']), 'the vetted addresses are cached against the h
 $secondLookup = $safe->invoke($f2, 'https://example.com/a/different/path');
 ok($secondLookup === $firstLookup, 'a second lookup for the same host reuses the cached addresses',
    implode(',', $secondLookup) . ' vs ' . implode(',', $firstLookup));
+
+// ----------------------------------------------------- fetcher: what it reads
+
+group('Choosing what to read and how to read it');
+
+$rank = new ReflectionMethod('Fetcher', 'assetRank');
+$rank->setAccessible(true);
+$order = array(
+    'https://x.example.com/js/gtm.js',
+    'https://x.example.com/assets/index-Ba7Xk9Lm.js',
+    'https://x.example.com/assets/index-C3xY1pQz.css',
+    'https://x.example.com/js/cookie-consent.js',
+);
+$ranked = array();
+foreach ($order as $u) {
+    $ranked[$u] = $rank->invoke($f, $u);
+}
+arsort($ranked);
+$best = array_keys($ranked);
+ok(substr($best[0], -4) === '.css', 'the stylesheet is read first', $best[0]);
+ok(strpos($best[1], 'index-Ba7Xk9Lm.js') !== false, 'then the application bundle', $best[1]);
+ok($ranked['https://x.example.com/js/gtm.js'] < 0
+   && $ranked['https://x.example.com/js/cookie-consent.js'] < 0,
+   'analytics and consent scripts go to the back of the queue');
+
+$parse = new ReflectionMethod('Fetcher', 'parseHeaders');
+$parse->setAccessible(true);
+$h = $parse->invoke($f, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nX-Vercel-Id: cdg1::abc\r\n"
+                      . "Set-Cookie: a=1\r\nSet-Cookie: b=2\r\n");
+ok(($h['content-type'] ?? '') === 'text/html', 'header names come back lowercased');
+ok(($h['set-cookie'] ?? '') === 'a=1, b=2', 'repeated headers are joined rather than lost',
+   (string) ($h['set-cookie'] ?? 'missing'));
+
+// Only the last block: an early-hints or continue response is not the response.
+$h = $parse->invoke($f, "HTTP/1.1 103 Early Hints\r\nLink: </a.css>\r\n\r\nHTTP/1.1 200 OK\r\nServer: real\r\n");
+ok(($h['server'] ?? '') === 'real' && !isset($h['link']),
+   'only the final header block is kept');
+
+$readMap = new ReflectionMethod('Fetcher', 'readMap');
+$readMap->setAccessible(true);
+$map = $readMap->invoke($f, 'https://x.example.com/a.js.map', json_encode(array(
+    'version' => 3,
+    'sources' => array('src/App.tsx', 'node_modules/react/index.js', '../src/lib/utils.ts'),
+    'sourcesContent' => array('// mine', '// somebody else\'s', '// also mine'),
+)));
+ok(is_array($map) && count($map['sources']) === 2, 'dependencies are left out of the reading',
+   is_array($map) ? implode(',', $map['sources']) : 'null');
+ok(is_array($map) && strpos($map['content'], "somebody else") === false,
+   'and so is their source');
+ok($readMap->invoke($f, 'u', '{"version":3}') === null, 'a map with no sources is not a map');
+ok($readMap->invoke($f, 'u', 'not json at all') === null, 'and neither is anything unparseable');
+
+$dataUri = new ReflectionMethod('Fetcher', 'decodeDataUri');
+$dataUri->setAccessible(true);
+ok($dataUri->invoke($f, 'data:application/json;base64,' . base64_encode('{"a":1}')) === '{"a":1}',
+   'an inline base64 source map is decoded without a second request');
+ok($dataUri->invoke($f, 'data:application/json,%7B%22a%22%3A1%7D') === '{"a":1}',
+   'and so is a percent-encoded one');
 
 ok($cacheProp->getValue(new Fetcher()) === array(), 'a new Fetcher starts with an empty cache');
 

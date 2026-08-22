@@ -28,12 +28,20 @@ turned on the optional admin panel (see [Privacy](#privacy)).
 
 - **Live page** — fetches a URL and up to four of its own stylesheets and scripts,
   then reads it the way you would with View Source open: builder fingerprints
-  first, then structure, then the look of the thing.
-- **Whole site** — tick the box and it follows links from that page, reads as
-  many as it can manage in about twenty seconds (up to fifty), and compares them
-  against each other. This is not the page check run fifty times: a signal only
-  counts site-wide when a quarter of the pages carry it, and whether the pages
-  *resemble* each other is itself evidence no single page can give you. Honours
+  first, then structure, then the look of the thing. When the page builds itself
+  in the browser it reads the bundle rather than the empty shell it serves — a
+  `className` is a string literal, and a minifier has no reason to touch the
+  inside of a string — and when the bundle points at a source map it reads the
+  original source, comments and all. The response headers are read too, for what
+  somebody configured rather than for where it happens to be hosted.
+- **Whole site** — tick the box and it follows links from that page *and* from
+  its sitemap, reads as many as it can manage in about twenty seconds (up to
+  fifty), and compares them against each other. This is not the page check run
+  fifty times: a signal only counts site-wide when a quarter of the pages carry
+  it, and whether the pages *resemble* each other is itself evidence no single
+  page can give you. The sitemap earns its place twice: it lists pages the
+  navigation never links to, and its `lastmod` column is a dated record of a
+  site being worked on that nobody thinks to fake. Honours
   `robots.txt` and finishes inside a shared-hosting request — on a slow site
   that means fewer pages, and the report says how many it managed.
 - **Pasted code** — reads a source file in any language for the tells that survive
@@ -80,13 +88,13 @@ Evidence is ranked, because evidence is not equal:
 | Platform fingerprint | `cdn.gpteng.co`, a `lovable-tagger` marker, a builder's generator meta tag | 4.5 — decisive |
 | Repository history | a big-bang first commit, 600 lines in four minutes, a run of "fix typo" | 0.6–1.4 |
 | Site-wide | every page one template with the words swapped; or pages from visibly different eras | 0.7–1.2 |
-| Structural | uniform comment density, the same problem solved several ways, code wired to nothing | 0.6–1.1 |
-| Code style | what-not-why comments, swallowed exceptions, tests that assert nothing | 0.4–1.3 |
-| Content & security | generic testimonials, placeholder secrets, textbook-insecure defaults | 0.4–0.9 |
-| Aesthetic | indigo gradients, Inter, three identical cards | 0.25–0.45, **capped as a group** |
+| Structural | a scaffold nobody renamed, uniform comment density, the same problem solved several ways | 0.35–1.1 |
+| Code style | what-not-why comments, swallowed exceptions, tests that assert nothing | 0.4–1.4 |
+| Content & security | generic testimonials, a key shipped to the browser, auth decided in localStorage | 0.35–0.9 |
+| Aesthetic | indigo gradients, Inter, three identical cards | 0.25–0.5, **capped as a group** |
 | Human authorship | ticket references, exasperated comments, commented-out code, mixed indentation | subtracts |
 
-Six rules the scoring will not break:
+Seven rules the scoring will not break:
 
 1. Aesthetic evidence is capped. A subject with nothing but aesthetic tells cannot
    exceed **55%**, however purple it is.
@@ -94,14 +102,19 @@ Six rules the scoring will not break:
    code that swallows its exceptions usually over-wraps them too — so tripping eight
    weak style tells must never outweigh one hard fingerprint. Fingerprints are the
    only category with no ceiling.
-3. No reading reaches 0% or 100%. The scale is clamped to 3–97.
-4. Thin input is pulled toward the middle and reports insufficient confidence,
-   rather than being quietly guessed at.
-5. Confidence never exceeds *moderate* without a platform fingerprint — pattern
+3. **Inference stops short of identification.** Without a fingerprint no reading
+   passes **92%**, however many families of evidence agree. The category ceilings
+   stop one family running away; this stops several near their ceilings from adding
+   up to the number a builder naming itself would produce.
+4. No reading reaches 0% or 100%. The scale is clamped to 3–97.
+5. Thin input is pulled toward the middle and reports insufficient confidence,
+   rather than being quietly guessed at. Thin means *nothing to read* — a page that
+   serves 300 bytes of markup and half a megabyte of readable bundle is not thin.
+6. Confidence never exceeds *moderate* without a platform fingerprint — pattern
    reading without repository history has not earned more than that.
-6. Human signals are first-class and weighted on the same scale as the rest.
+7. Human signals are first-class and weighted on the same scale as the rest.
 
-All 96 signals, with their weights and reasoning, are in
+All 104 signals, with their weights and reasoning, are in
 **[docs/SIGNALS.md](docs/SIGNALS.md)** — generated from `lib/Catalog.php`, so the
 documentation cannot drift from the code.
 

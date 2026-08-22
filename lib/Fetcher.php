@@ -39,6 +39,30 @@ class Fetcher
     const MAX_ASSETS = 4;
 
     /**
+     * Source maps: how many, and how much of one to take.
+     *
+     * A map is the single most valuable thing a deployed page can hand over.
+     * `sourcesContent` carries the pre-build source — comments, names, the
+     * whole of what a minifier normally destroys — so one map turns a page
+     * that could only be read for style into a page that can be read for code.
+     * Maps are also the largest thing on a site: 2 MB is common and 20 MB
+     * happens, so the cap is deliberate and the budget is two of them.
+     */
+    const MAX_MAPS = 2;
+    const MAX_MAP_BYTES = 2097152;   // 2 MB
+    const MAP_TIMEOUT = 6;
+
+    /**
+     * Total wall clock the maps may have, whatever their number.
+     *
+     * Two maps at the per-request timeout would be twelve seconds on top of a
+     * document and four assets, which is more than the thirty this is allowed
+     * on shared hosting. The budget makes the second map opportunistic: it is
+     * read when the first was quick and skipped when it was not.
+     */
+    const MAP_BUDGET = 8.0;
+
+    /**
      * Vetted addresses per host, for the lifetime of this Fetcher.
      *
      * A whole-site crawl calls assertSafe() on the same host for the entry
@@ -54,7 +78,25 @@ class Fetcher
     private $safeHostCache = array();
 
     /**
-     * @return array{url:string,body:string,status:int,assets:array<string,string>,contentType:string}
+     * Whether to follow sourceMappingURL.
+     *
+     * On by default, and turned off for a whole-site crawl: reading one page's
+     * original source is worth several seconds when that page is the whole
+     * analysis, and is not worth it when those seconds come out of the budget
+     * for the other forty-nine pages.
+     *
+     * @var bool
+     */
+    private $readSourceMaps = true;
+
+    /** Stop following source maps, for callers that would rather have pages. */
+    public function skipSourceMaps(): void
+    {
+        $this->readSourceMaps = false;
+    }
+
+    /**
+     * @return array{url:string,body:string,status:int,assets:array<string,string>,contentType:string,headers:array<string,string>,sourceMaps:array<int,array<string,mixed>>}
      * @throws FetchError
      */
     public function fetchSite(string $url): array
@@ -73,6 +115,9 @@ class Fetcher
         }
 
         $doc['assets'] = $this->fetchAssets($doc['url'], $doc['body']);
+        $doc['sourceMaps'] = $this->readSourceMaps
+            ? $this->fetchSourceMaps($doc['url'], $doc['assets'])
+            : array();
         return $doc;
     }
 
@@ -91,7 +136,17 @@ class Fetcher
         return $this->get($this->normalize($url), $maxBytes, $timeout);
     }
 
-    /** @return array<string,string> */
+    /**
+     * The page's own stylesheets and scripts, best ones first.
+     *
+     * Order matters because the budget is four files. A page commonly links a
+     * consent banner, a chat widget and a font loader before it links the
+     * bundle that actually contains the site, and taking them in document
+     * order spends the whole allowance on the furniture. Candidates are ranked
+     * so the application bundle and the stylesheet are fetched first.
+     *
+     * @return array<string,string>
+     */
     private function fetchAssets(string $baseUrl, string $html): array
     {
         $base = parse_url($baseUrl);
@@ -110,10 +165,8 @@ class Fetcher
             foreach ($m[1] as $href) $urls[] = $href;
         }
 
-        $out = array();
+        $candidates = array();
         foreach ($urls as $raw) {
-            if (count($out) >= self::MAX_ASSETS) break;
-
             $abs = $this->resolveUrl($baseUrl, $raw);
             if ($abs === null) continue;
 
@@ -121,7 +174,24 @@ class Fetcher
             if (!$p || !isset($p['host']) || strcasecmp($p['host'], $base['host']) !== 0) {
                 continue; // same-origin only: no third-party CDNs
             }
-            if (isset($out[$abs])) continue;
+            if (isset($candidates[$abs])) continue;
+            $candidates[$abs] = $this->assetRank($abs);
+        }
+
+        // Rank descending, first-seen order breaking ties, so the choice is the
+        // same on every run and on every PHP version.
+        $order = array_keys($candidates);
+        $position = array_flip($order);
+        usort($order, function ($a, $b) use ($candidates, $position) {
+            if ($candidates[$a] === $candidates[$b]) {
+                return $position[$a] <=> $position[$b];
+            }
+            return $candidates[$b] <=> $candidates[$a];
+        });
+
+        $out = array();
+        foreach ($order as $abs) {
+            if (count($out) >= self::MAX_ASSETS) break;
 
             try {
                 $r = $this->get($abs, self::MAX_ASSET_BYTES, self::ASSET_TIMEOUT);
@@ -137,7 +207,179 @@ class Fetcher
     }
 
     /**
-     * @return array{url:string,body:string,status:int,contentType:string,assets:array<string,string>}
+     * How much this asset is worth spending one of four slots on.
+     *
+     * The stylesheet is top because a compiled Tailwind sheet lists every
+     * utility the site actually uses, which is most of what the aesthetic
+     * checks want. Then the application bundle, then anything else. Known
+     * furniture — analytics, consent, chat, polyfills — is pushed to the back
+     * even when it is served from the site's own domain.
+     */
+    private function assetRank(string $url): int
+    {
+        $path = strtolower((string) parse_url($url, PHP_URL_PATH));
+
+        if (preg_match('~(?:gtag|gtm|analytics|consent|cookie|tarteaucitron|axeptio|didomi|hotjar|clarity|recaptcha|polyfill|jquery|widget|chat|intercom|crisp|tawk)~', $path)) {
+            return -10;
+        }
+        if (substr($path, -4) === '.css') {
+            return 100;
+        }
+        // Vite, Next, Nuxt, CRA and Remix all name their entry bundle in one of
+        // these shapes.
+        if (preg_match('~/(?:assets/)?(?:index|main|app|entry|client|bundle)[.-][a-z0-9_-]{4,}\.js$~', $path)
+            || preg_match('~/_next/static/chunks/(?:main|app|pages/_app)[^/]*\.js$~', $path)
+            || preg_match('~/_nuxt/(?:entry|index)\.[a-z0-9]+\.js$~', $path)) {
+            return 90;
+        }
+        if (preg_match('~/(?:assets|static|_next|_nuxt|build|dist)/~', $path)) {
+            return 60;
+        }
+        if (substr($path, -3) === '.js') {
+            return 40;
+        }
+        return 10;
+    }
+
+    /**
+     * Follow the sourceMappingURL of the scripts we already have.
+     *
+     * A source map is not a probe: the asset itself points at it, and a
+     * browser with dev tools open fetches exactly this file. What comes back
+     * is the source as it was written — before the minifier removed the
+     * comments, the names and everything else the code checks read — which is
+     * the difference between "the scripts were bundled, so nothing could be
+     * read" and an actual reading.
+     *
+     * @param array<string,string> $assets
+     * @return array<int,array{url:string,sources:string[],content:string}>
+     */
+    private function fetchSourceMaps(string $baseUrl, array $assets): array
+    {
+        $base = parse_url($baseUrl);
+        if (!$base || !isset($base['host'])) {
+            return array();
+        }
+
+        $deadline = microtime(true) + self::MAP_BUDGET;
+        $out = array();
+        foreach ($assets as $assetUrl => $body) {
+            if (count($out) >= self::MAX_MAPS) break;
+            if (!preg_match('~\.js(?:[?#]|$)~i', $assetUrl)) continue;
+
+            // The annotation is the last line of the file by convention, so
+            // only the tail is searched: scanning a megabyte of minified
+            // JavaScript for it costs more than the fetch does.
+            $tail = strlen($body) > 4096 ? substr($body, -4096) : $body;
+            if (!preg_match('~(?://|/\*)[#@]\s*sourceMappingURL=([^\s*\'"]+)~', $tail, $m)) {
+                continue;
+            }
+            $ref = trim($m[1]);
+
+            // Inline maps cost nothing: the payload is already in hand.
+            if (stripos($ref, 'data:') === 0) {
+                $decoded = $this->decodeDataUri($ref);
+                if ($decoded !== null) {
+                    $map = $this->readMap($assetUrl . ' (inline)', $decoded);
+                    if ($map !== null) $out[] = $map;
+                }
+                continue;
+            }
+
+            if (microtime(true) >= $deadline) {
+                break; // out of map budget; the page still gets its ordinary read
+            }
+
+            $abs = $this->resolveUrl($assetUrl, $ref);
+            if ($abs === null) continue;
+            $p = parse_url($abs);
+            if (!$p || !isset($p['host']) || strcasecmp($p['host'], $base['host']) !== 0) {
+                continue;
+            }
+
+            try {
+                $r = $this->get($abs, self::MAX_MAP_BYTES, self::MAP_TIMEOUT);
+            } catch (FetchError $e) {
+                continue; // a missing map is the normal case, not a failure
+            }
+            if ($r['status'] >= 400 || $r['body'] === '') {
+                continue;
+            }
+            $map = $this->readMap($abs, $r['body']);
+            if ($map !== null) {
+                $out[] = $map;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Pull the original paths and sources out of a source map.
+     *
+     * Only the site's own files are kept. A map covers every dependency that
+     * went into the bundle as well, and reading node_modules would be reading
+     * somebody else's code and attributing it to whoever deployed this page.
+     *
+     * @return array{url:string,sources:string[],content:string}|null
+     */
+    private function readMap(string $url, string $json): ?array
+    {
+        $data = json_decode($json, true);
+        if (!is_array($data) || empty($data['sources']) || !is_array($data['sources'])) {
+            return null;
+        }
+
+        $sources = array();
+        $content = '';
+        $contents = isset($data['sourcesContent']) && is_array($data['sourcesContent'])
+            ? $data['sourcesContent'] : array();
+
+        foreach ($data['sources'] as $i => $src) {
+            $src = (string) $src;
+            if ($src === '') continue;
+            if (preg_match('~(?:^|/)(?:node_modules|vendor|bower_components)/~', $src)) {
+                continue;
+            }
+            $sources[] = $src;
+
+            if (strlen($content) < self::MAX_ASSET_BYTES
+                && isset($contents[$i]) && is_string($contents[$i])) {
+                $content .= "\n" . $contents[$i];
+            }
+        }
+
+        if (!$sources) {
+            return null;
+        }
+        return array(
+            'url'     => $url,
+            'sources' => $sources,
+            'content' => strlen($content) > self::MAX_ASSET_BYTES
+                ? substr($content, 0, self::MAX_ASSET_BYTES) : $content,
+        );
+    }
+
+    /** Decode a base64 or percent-encoded data: URI, or give up quietly. */
+    private function decodeDataUri(string $uri): ?string
+    {
+        $comma = strpos($uri, ',');
+        if ($comma === false) {
+            return null;
+        }
+        $headerPart = substr($uri, 0, $comma);
+        $payload = substr($uri, $comma + 1);
+        if (strlen($payload) > self::MAX_MAP_BYTES) {
+            return null;
+        }
+        if (stripos($headerPart, ';base64') !== false) {
+            $decoded = base64_decode($payload, true);
+            return $decoded === false ? null : $decoded;
+        }
+        return rawurldecode($payload);
+    }
+
+    /**
+     * @return array{url:string,body:string,status:int,contentType:string,assets:array<string,string>,headers:array<string,string>}
      * @throws FetchError
      */
     private function get(string $url, int $maxBytes, int $timeout): array
@@ -169,6 +411,7 @@ class Fetcher
                 'body'        => $res['body'],
                 'status'      => $res['status'],
                 'contentType' => $res['contentType'],
+                'headers'     => $res['headers'],
                 'assets'      => array(),
             );
         }
@@ -177,7 +420,7 @@ class Fetcher
 
     /**
      * @param string[] $pinned addresses assertSafe() already vetted for this host
-     * @return array{status:int,body:string,contentType:string,location:string}
+     * @return array{status:int,body:string,contentType:string,location:string,headers:array<string,string>}
      */
     private function curlGet(string $url, int $maxBytes, int $timeout, array $pinned = array()): array
     {
@@ -244,10 +487,11 @@ class Fetcher
             'body'        => $this->toUtf8(substr($body, 0, $maxBytes), $ctype),
             'contentType' => $ctype,
             'location'    => $location,
+            'headers'     => $this->parseHeaders($headers),
         );
     }
 
-    /** @return array{status:int,body:string,contentType:string,location:string} */
+    /** @return array{status:int,body:string,contentType:string,location:string,headers:array<string,string>} */
     private function streamGet(string $url, int $maxBytes, int $timeout): array
     {
         if (!ini_get('allow_url_fopen')) {
@@ -276,7 +520,9 @@ class Fetcher
         $status = 200;
         $ctype = '';
         $location = '';
+        $raw = array();
         foreach ((array) ($meta['wrapper_data'] ?? array()) as $h) {
+            $raw[] = (string) $h;
             if (preg_match('~^HTTP/[\d.]+\s+(\d{3})~i', (string) $h, $m)) $status = (int) $m[1];
             if (preg_match('~^content-type:\s*(.+)$~i', (string) $h, $m))  $ctype = trim($m[1]);
             if (preg_match('~^location:\s*(.+)$~i', (string) $h, $m))      $location = trim($m[1]);
@@ -287,7 +533,51 @@ class Fetcher
             'body'        => $this->toUtf8($body, $ctype),
             'contentType' => $ctype,
             'location'    => $location,
+            'headers'     => $this->parseHeaders(implode("\r\n", $raw)),
         );
+    }
+
+    /**
+     * Response headers, lowercased, last hop only.
+     *
+     * Repeated names are joined rather than overwritten, because the ones that
+     * repeat — Set-Cookie above all — are the ones where the second value
+     * matters as much as the first.
+     *
+     * @return array<string,string>
+     */
+    private function parseHeaders(string $raw): array
+    {
+        $out = array();
+        // cURL hands back every hop when it follows redirects itself. It does
+        // not here, but a 100 Continue or an early-hints block still produces
+        // more than one status line, and only the final set describes the
+        // response that was actually read.
+        $blocks = preg_split('~\r?\n\r?\n~', trim($raw));
+        $last = is_array($blocks) ? (string) end($blocks) : $raw;
+
+        foreach (preg_split('~\r?\n~', $last) as $line) {
+            $pos = strpos($line, ':');
+            if ($pos === false || $pos === 0) {
+                continue;
+            }
+            $name = strtolower(trim(substr($line, 0, $pos)));
+            $value = trim(substr($line, $pos + 1));
+            if ($name === '' || $value === '') {
+                continue;
+            }
+            if (isset($out[$name])) {
+                $out[$name] .= ', ' . $value;
+            } else {
+                $out[$name] = $value;
+            }
+            // A header block is normally a dozen lines. Anything sending
+            // hundreds is not worth carrying into the analyser.
+            if (count($out) >= 60) {
+                break;
+            }
+        }
+        return $out;
     }
 
     /**

@@ -186,6 +186,23 @@ signals are required before the verdict language firms up.
 **Masking is cheap.** Renaming, comment-stripping, minifying or running an
 "AI humaniser" defeats stylistic detection. → minified assets are excluded from
 code-level analysis entirely, and the interface says so, rather than scoring noise.
+Two things survive a minifier, and both are read: the contents of string literals,
+which is where a `className` and a headline live, and a source map, which hands
+back the file as it was written. Neither is a way round the limit — a build that
+ships no map and a page that renders its text from data are both unreadable at the
+code level, and are reported as such.
+
+**A short document is not a short page.** A client-rendered application serves an
+empty mount point; its markup is a few hundred bytes and its interface is half a
+megabyte of JavaScript. → "thin input" is measured on everything that could be
+read, not on the document, so a single-page app is neither damped toward the middle
+nor given a confidence it did not earn.
+
+**Deployment is not authorship.** A page served from Vercel or Netlify says nothing
+about who wrote it, and both host as much hand-written work as generated. → the
+platform is recorded as a fact in `stats` and carries no weight. What is scored
+from the response is header hygiene, because a content security policy is something
+a person configured.
 
 **Tells are decaying**, but the security profile persists. → `se.*` signals are
 weighted to outlast the stylistic ones.

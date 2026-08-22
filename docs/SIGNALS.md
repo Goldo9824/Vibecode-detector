@@ -10,19 +10,19 @@ weight of each signal found, positive for AI, negative for human. The total goes
 a logistic curve to become the percentage. As a rough guide, a weight of 0.7 doubles the
 odds; 4.5 ends the argument.
 
-There are **96 signals** across 9 categories.
+There are **104 signals** across 9 categories.
 
 | Category | Signals | Direction |
 |---|---|---|
 | [Platform fingerprint](#platform-fingerprint) | 7 | raises the score |
 | [Repository history](#repository-history) | 11 | raises the score |
-| [Site-wide](#site-wide) | 6 | raises the score |
-| [Structural](#structural) | 9 | raises the score |
+| [Site-wide](#site-wide) | 8 | raises the score |
+| [Structural](#structural) | 12 | raises the score |
 | [Code style](#code-style) | 23 | raises the score |
 | [Content](#content) | 7 | raises the score |
-| [Security profile](#security-profile) | 3 | raises the score |
+| [Security profile](#security-profile) | 5 | raises the score |
 | [Aesthetic](#aesthetic) | 16 | raises the score |
-| [Human authorship](#human-authorship) | 14 | lowers the score |
+| [Human authorship](#human-authorship) | 15 | lowers the score |
 
 ---
 
@@ -166,6 +166,12 @@ One page on an older stack, another rebuilt more recently; inconsistent markup c
 
 Routes that exist, appear in the navigation, and carry almost nothing. The scaffolding was generated along with everything else and nobody came back to write the content.
 
+### The sitemap records months of edits
+
+`xs.sitemap_history` · weight **0.8** (moderate)
+
+Pages last modified across a spread of dates rather than all at once. This is a record of a site being worked on over time, kept by the tooling rather than by the author, and it is tedious to fabricate.
+
 ### Pages genuinely differ in shape
 
 `xs.varied_pages` · weight **0.8** (moderate)
@@ -177,6 +183,12 @@ Substantial variation in length, structure and density from one page to the next
 `xs.deep_content` · weight **0.7** (moderate)
 
 At least one page carrying substantially more prose than the rest — an article, a manual, a history. Volume of specific writing is the least automatable thing on a website.
+
+### The sitemap was written in one pass
+
+`xs.sitemap_one_pass` · weight **0.7** (moderate)
+
+Every URL in sitemap.xml carries the same <lastmod>, or none carries one at all. A sitemap that grew alongside a site records when each page last changed; one generated with the site records the day the site was generated.
 
 ### Every page is the same weight
 
@@ -207,6 +219,12 @@ Two HTTP clients, three date helpers, four validation styles. Local perfection w
 
 Humans cluster comments around the parts that were hard. A flat comment rate from top to bottom is the signature of a generator that documents every line equally.
 
+### The starter template was never renamed
+
+`st.untouched_scaffold` · weight **0.95** (strong)
+
+The document still identifies itself as the scaffold it was created from: a title of "Vite + React + TS", the description create-next-app writes, a stock favicon at /vite.svg. These are the first things anyone who cared about the page would change, and the last things anyone who only prompted it would notice.
+
 ### Every function carries a docblock, including trivial ones
 
 `st.docblock_on_everything` · weight **0.9** (moderate)
@@ -218,6 +236,18 @@ Uniform, complete docblocks on getters and one-line helpers alike.
 `st.dead_code` · weight **0.8** (moderate)
 
 Complete components, routes or helpers that nothing imports or calls.
+
+### The default generated component stack, whole
+
+`st.generated_stack` · weight **0.7** (moderate)
+
+Radix primitives, class-variance-authority, tailwind-merge, Lucide and a toast library, all together and all at their defaults. Any one of these is an ordinary choice; the full set arriving at once is the component kit these builders scaffold from, adopted rather than assembled.
+
+### The browser is the whole application
+
+`st.client_only_backend` · weight **0.6** (moderate)
+
+A database called straight from the page, or localStorage standing in for one. There is no server-side anything: what the tool could generate in one file it did, and what would have needed a second system it worked around.
 
 ### Explanatory file-header block
 
@@ -444,11 +474,23 @@ The most durable family. Syntax correctness in generated code has climbed past 9
 
 Literals such as "your-secret-key", "change-me" or an inline credential where an environment variable belongs.
 
+### A credential shipped to the browser
+
+`se.exposed_client_key` · weight **0.85** (moderate)
+
+A project key, a service token or a model-provider key sitting in the page's own JavaScript, where anyone can read it. Some of these are meant to be public and safe only behind row-level rules nobody set; others — a provider key, or an SDK started with its own escape hatch for running in a browser — are never meant to leave a server.
+
 ### Authentication or ownership checks missing at the boundary
 
 `se.weak_auth` · weight **0.7** (moderate)
 
 Endpoints that authenticate but never check whether this user owns this row, or tokens issued without expiry.
+
+### Authentication decided in the browser
+
+`se.client_side_auth` · weight **0.65** (moderate)
+
+A login flag, a role or an admin bit kept in localStorage and trusted. It looks like auth and demonstrates like auth, and it is bypassed by editing one value in dev tools, which is the difference between generating the shape of a feature and building one.
 
 ### Textbook-insecure defaults
 
@@ -622,17 +664,17 @@ jQuery, table layouts, hand-written includes, vendor-prefixed CSS: an accretion 
 
 Real prices, dates, addresses, named people, opening hours: details that had to come from somewhere.
 
+### Response headers somebody configured
+
+`hu.hardened_headers` · weight **0.45** (weak)
+
+A content security policy with real directives in it, HSTS with a long max-age, a permissions policy. Nothing generates these: they are written by a person who thought about the deployment, usually after being told to.
+
 ### Abbreviated, idiomatic identifiers
 
 `hu.abbrevs` · weight **0.4** (weak)
 
 authSvc, cfg, mgr, activeSub. Shorthand that assumes a reader who already has the context.
-
-### Output of a real build pipeline
-
-`hu.build_stripped` · weight **0.4** (weak)
-
-Minified, comment-stripped, content-hashed assets: someone set up a toolchain and ran it.
 
 ### A footer that has fallen out of date
 
@@ -645,6 +687,12 @@ A copyright year or "last updated" date already in the past. Generated pages are
 `hu.real_media` · weight **0.4** (weak)
 
 Photographs at irregular sizes from irregular sources, rather than one generated hero image.
+
+### Output of a build pipeline
+
+`hu.build_stripped` · weight **0.2** (weak)
+
+Minified, comment-stripped, content-hashed assets. This used to mean somebody set a toolchain up; it is now what every generator emits by default too, so it carries much less than it did and is withheld entirely when the same page is carrying a builder fingerprint or an untouched scaffold.
 
 
 ---

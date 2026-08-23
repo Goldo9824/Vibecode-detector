@@ -152,6 +152,27 @@ point: they read the *state* a project was left in.
 - Navigation offering top-level pages the server answers with an error. Links rot
   deep in a site, not in the nav of a front page. → `xs.broken_nav_links`
 
+### Stylesheets
+
+Nothing used to read them: a served CSS file was skipped for not being
+JavaScript, and inline `<style>` blocks were never opened at all. A stylesheet
+that no minifier has touched is the file exactly as it was written, and three
+habits in it are worth reading — all three about whether anyone expected to
+open the file again.
+
+- Declarations sorted A to Z. People group them by what they do — position,
+  then box, then type, then colour — because that is the order a rule is read
+  back in. The bar is set where chance runs out: two rules of four properties
+  in order is one time in five hundred. A linter enforcing alphabetical order
+  is the one good innocent explanation. → `cd.css_alphabetical`
+- Every rule body crushed onto one line, in a file that was never minified.
+  Minifiers do this to the whole stylesheet and take the newlines with it.
+  → `cd.css_one_line`
+- A label on every block — Header, Hero, Footer — and not one comment saying
+  why a value is what it is. Stylesheets accumulate the opposite: a magic
+  number with an explanation attached, a hack with a browser named next to it.
+  → `cd.css_labelled_sections`
+
 ### People, contact and prose
 
 - Testimonial faces served by pravatar, randomuser.me, DiceBear or a placeholder

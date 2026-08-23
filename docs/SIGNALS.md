@@ -10,7 +10,7 @@ weight of each signal found, positive for AI, negative for human. The total goes
 a logistic curve to become the percentage. As a rough guide, a weight of 0.7 doubles the
 odds; 4.5 ends the argument.
 
-There are **117 signals** across 9 categories.
+There are **120 signals** across 9 categories.
 
 | Category | Signals | Direction |
 |---|---|---|
@@ -18,7 +18,7 @@ There are **117 signals** across 9 categories.
 | [Repository history](#repository-history) | 11 | raises the score |
 | [Site-wide](#site-wide) | 9 | raises the score |
 | [Structural](#structural) | 17 | raises the score |
-| [Code style](#code-style) | 24 | raises the score |
+| [Code style](#code-style) | 27 | raises the score |
 | [Content](#content) | 11 | raises the score |
 | [Security profile](#security-profile) | 5 | raises the score |
 | [Aesthetic](#aesthetic) | 16 | raises the score |
@@ -392,6 +392,12 @@ Banner comments such as # ===== User Authentication ===== used as navigation ins
 
 A factory, a provider and a memo to hold a boolean. The problem fitted in six lines and the solution takes sixty. Generated code reaches for a pattern because patterns are what it has seen, not because this problem needed one.
 
+### CSS declarations in alphabetical order
+
+`cd.css_alphabetical` · weight **0.6** (moderate)
+
+Properties inside the rules are sorted A to Z. People group declarations by what they do — position, then box, then type, then colour — because that is how you read a rule back. Alphabetical order is what you get when nobody is reading it back. One innocent explanation, and it is a good one: a linter set to enforce exactly this.
+
 ### Formal, grammatically complete error messages
 
 `cd.formal_errors` · weight **0.6** (moderate)
@@ -410,11 +416,23 @@ Curly quotes and em dashes in code, comments or markup, which an editor does not
 
 Names like currentLoggedInUserAuthTokenValue, where a human would have written the same thing in a third of the characters.
 
+### Every block of the stylesheet labelled, nothing explained
+
+`cd.css_labelled_sections` · weight **0.55** (moderate)
+
+A comment naming each section — Header, Buttons, Footer — and not one comment saying why any value is what it is. Stylesheets accumulate the opposite: a magic number with an explanation attached, a hack with a browser named next to it.
+
 ### Debug logging left in shipped code
 
 `cd.console_noise` · weight **0.5** (weak)
 
 Dense, uniform console output that was never cleaned up.
+
+### Every CSS rule crushed onto one line
+
+`cd.css_one_line` · weight **0.5** (weak)
+
+Rule bodies written as a single line each, in a stylesheet that has otherwise not been minified. Minifiers do this to whole files and strip the newlines with it; this is the shape of CSS emitted a rule at a time and never opened again.
 
 ### Optional chaining and fallbacks on everything
 

@@ -46,7 +46,9 @@ configured a database for the optional admin panel (see [Privacy](#privacy)).
   that means fewer pages, and the report says how many it managed.
 - **Pasted code** — reads a source file in any language for the tells that survive
   in text: comment habits, error handling, naming, dependency incoherence, the
-  security profile.
+  security profile. Stylesheets get their own reading — declaration order, rules
+  crushed onto one line, a label on every block and a reason for nothing — and
+  a page's own CSS files and `<style>` blocks go through it too.
 - **Git history** — paste the output of `git log` and it reads how the code
   *arrived*: one enormous opening commit, hundreds of lines in minutes, a trail
   of one-line fixes behind it. This is the strongest evidence the tool has, and
@@ -128,7 +130,7 @@ Eight rules the scoring will not break:
    capped at 1.5×, applies inside the category ceilings rather than around them,
    and does not apply to fingerprints at all.
 
-All 117 signals, with their weights and reasoning, are in
+All 120 signals, with their weights and reasoning, are in
 **[docs/SIGNALS.md](docs/SIGNALS.md)** — generated from `lib/Catalog.php`, so the
 documentation cannot drift from the code.
 

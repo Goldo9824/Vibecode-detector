@@ -87,16 +87,28 @@ final class CodeAnalyzer
             $this->r->note('Short samples are exactly where automated detection performs worst. Anything under about 50 lines should be read as a hint, and several hundred lines gives a far more stable reading.');
         }
 
-        $this->checkComments();
-        $this->checkAssistantTraces();
-        $this->checkConventions();
-        $this->checkErrorHandling();
-        $this->checkNaming();
-        $this->checkTests();
-        $this->checkStructure();
-        $this->checkSecurity();
-        $this->checkTypography();
-        $this->checkHumanMarks();
+        // A stylesheet gets the checks that mean something about a stylesheet.
+        // Running the rest over one finds "data" in a class name and calls it a
+        // domain-free identifier, which is a fact about the checks rather than
+        // about the file.
+        if ($this->lang === 'css') {
+            $this->checkComments();
+            $this->checkAssistantTraces();
+            $this->checkStylesheet();
+            $this->checkTypography();
+            $this->checkHumanMarks();
+        } else {
+            $this->checkComments();
+            $this->checkAssistantTraces();
+            $this->checkConventions();
+            $this->checkErrorHandling();
+            $this->checkNaming();
+            $this->checkTests();
+            $this->checkStructure();
+            $this->checkSecurity();
+            $this->checkTypography();
+            $this->checkHumanMarks();
+        }
 
         $this->r->note('Source alone cannot see the repository history, which is the single most reliable structural signal available: one enormous initial commit followed by a trail of "fix typo" commits is far harder to fake than anything in the file itself.');
 
@@ -285,7 +297,9 @@ final class CodeAnalyzer
 
         $phrases = '~(?:'
             . 'sure[,!]|certainly[,!]|of course[,!]|absolutely[,!]|great question|'
-            . 'here\'?s (?:a|the|how|an) |here is (?:a|the|an) |'
+            // Guarded on the left, because "unless t-here is a reason" is a
+            // sentence a person writes and "here is a" is not in it.
+            . '(?<![a-z])here\'?s (?:a|the|how|an) |(?<![a-z])here is (?:a|the|an) |'
             . 'let\'?s (?:start|begin|create|build|add|make|fetch|define|write|go|dive|take a look)|'
             . 'i\'?(?:ve|ll) (?:added|created|updated|refactored|implemented|assumed|used)|'
             . 'feel free to|hope this helps|let me know if|'
@@ -984,6 +998,179 @@ final class CodeAnalyzer
         }
     }
 
+    // ------------------------------------------------------------- stylesheets
+
+    /**
+     * A stylesheet, which nothing here used to read.
+     *
+     * CSS carries habits as plainly as any other file, and a served stylesheet
+     * that has not been minified is the file exactly as it was written. Three
+     * of those habits are worth reading, and all three are about the same
+     * thing: whether anybody expected to open the file again.
+     */
+    private function checkStylesheet(): void
+    {
+        $rules = $this->cssRules();
+        if (count($rules) < 4) {
+            return;
+        }
+
+        // --- Declarations in alphabetical order -----------------------------
+        //
+        // Ordering matters because a rule is read back in the order it is
+        // written: position, then box, then type, then colour. Alphabetical is
+        // the order you choose when the rule is output rather than read.
+        $sorted = 0;
+        $eligible = 0;
+        $strong = 0;
+        $firstSorted = null;
+        foreach ($rules as $rule) {
+            $props = $rule['props'];
+            if (count($props) < 3) {
+                continue;
+            }
+            $eligible++;
+            $ordered = $props;
+            usort($ordered, 'strcasecmp');
+            if ($props === $ordered) {
+                $sorted++;
+                if (count($props) >= 4) {
+                    $strong++;
+                }
+                if ($firstSorted === null) {
+                    $firstSorted = $rule;
+                }
+            }
+        }
+
+        // Three declarations land in order by chance one time in six, so the
+        // bar is set on the rules where chance runs out: two rules of four
+        // properties in order is already one time in five hundred.
+        if ($eligible >= 4 && $strong >= 2 && $sorted / $eligible >= 0.8) {
+            $evidence = array(Excerpt::plain(sprintf(
+                '%d of %d rules with three or more declarations are in alphabetical order', $sorted, $eligible), $sorted));
+            if ($firstSorted !== null) {
+                $evidence[] = $this->at($firstSorted['line'], $sorted)
+                    ->withText(implode(', ', array_slice($firstSorted['props'], 0, 6)));
+            }
+            $this->r->flag('cd.css_alphabetical', $evidence, $sorted);
+        }
+
+        // --- Rule bodies crushed onto one line ------------------------------
+        //
+        // Only worth saying about a file a minifier has not touched: minifying
+        // does this to the whole stylesheet and takes the newlines with it, so
+        // a file with one rule per line was written that way.
+        if (!$this->isMinified()) {
+            $oneLine = array();
+            foreach ($rules as $rule) {
+                if ($rule['inline'] && count($rule['props']) >= 2) {
+                    $oneLine[] = $rule;
+                }
+            }
+            if (count($oneLine) >= 5 && count($oneLine) / count($rules) >= 0.7) {
+                $first = $oneLine[0];
+                $this->r->flag('cd.css_one_line', array(
+                    Excerpt::plain(sprintf('%d of %d rules written as a single line each, in a stylesheet that was never minified',
+                        count($oneLine), count($rules)), count($oneLine)),
+                    $this->at($first['line'], count($oneLine)),
+                ), count($oneLine));
+            }
+        }
+
+        // --- Labelled everywhere, explained nowhere -------------------------
+        $labels = array();
+        $reasons = 0;
+        foreach ($this->commentLines() as $ln => $text) {
+            $body = trim(preg_replace('~^/\*+|\*+/$|^\*+~', '', trim($text)) ?? '');
+            $body = trim($body, " \t*-=");
+            if ($body === '') {
+                continue;
+            }
+            if (Text::looksLikeWhy($body)) {
+                $reasons++;
+                continue;
+            }
+            // A label is a name, not a sentence: a few words, no verb doing any
+            // work, nothing to learn from it that the selector below does not
+            // already say.
+            if (str_word_count($body) <= 4 && strlen($body) <= 40 && !preg_match('~[.;:]$~', $body)) {
+                $labels[$ln] = $body;
+            }
+        }
+
+        if (count($labels) >= 5 && $reasons === 0) {
+            $evidence = array(Excerpt::plain(sprintf(
+                '%d section labels and not one comment explaining a value', count($labels)), count($labels)));
+            foreach (array_slice(array_keys($labels), 0, 3) as $ln) {
+                $evidence[] = $this->at($ln);
+            }
+            $this->r->flag('cd.css_labelled_sections', $evidence, count($labels));
+        }
+    }
+
+    /**
+     * The rules in a stylesheet: where each starts, what it declares, and
+     * whether its body sits on one line.
+     *
+     * Comments and at-rule preambles are stripped first so that a media query
+     * does not read as a rule with no declarations, and the whole thing is
+     * bounded because a design system's stylesheet can run to thousands.
+     *
+     * @return array<int,array{line:int,props:string[],inline:bool}>
+     */
+    private function cssRules(): array
+    {
+        $src = (string) preg_replace('~/\*.*?\*/~s', '', $this->src);
+        $rules = array();
+        $offset = 0;
+
+        while (count($rules) < 400 && preg_match('~\{([^{}]*)\}~s', $src, $m, PREG_OFFSET_CAPTURE, $offset)) {
+            $body = $m[1][0];
+            $at = (int) $m[0][1];
+            $offset = $at + strlen($m[0][0]);
+
+            $props = array();
+            foreach (explode(';', $body) as $decl) {
+                if (!preg_match('~^\s*([-a-zA-Z][-a-zA-Z0-9]*)\s*:~', $decl, $p)) {
+                    continue;
+                }
+                $props[] = strtolower($p[1]);
+            }
+            if (!$props) {
+                continue;
+            }
+
+            $rules[] = array(
+                'line'   => substr_count(substr($src, 0, $at), "\n"),
+                'props'  => $props,
+                'inline' => strpos($m[0][0], "\n") === false,
+            );
+        }
+
+        return $rules;
+    }
+
+    /**
+     * Has this file been through a minifier?
+     *
+     * Long lines alone are not enough — a stylesheet of one-line rules has
+     * short lines and is not minified, which is exactly the case being told
+     * apart here. The tell is the absence of the spacing a person leaves
+     * behind: no space after a colon, no blank lines, no indentation.
+     */
+    private function isMinified(): bool
+    {
+        $n = max(1, count($this->lines));
+        $avg = strlen($this->src) / $n;
+        if ($avg > 300) {
+            return true;
+        }
+        $spaced = preg_match_all('~:\s~', $this->src);
+        $decls  = max(1, preg_match_all('~:~', $this->src));
+        return ($spaced / $decls) < 0.4;
+    }
+
     // ----------------------------------------------------------------- helpers
 
     /**
@@ -1034,7 +1221,10 @@ final class CodeAnalyzer
                 continue;
             }
             // Trailing comment on a code line.
-            if (preg_match('~\S\s+(//[^\n]{3,}|#[^\n]{3,})$~', $line, $m)) {
+            $trailing = $this->hashComments()
+                ? '~\S\s+(//[^\n]{3,}|#[^\n]{3,})$~'
+                : '~\S\s+(//[^\n]{3,})$~';
+            if (preg_match($trailing, $line, $m)) {
                 $out[$i] = trim($m[1]);
             }
         }
@@ -1043,7 +1233,23 @@ final class CodeAnalyzer
 
     private function isCommentLine(string $t): bool
     {
-        return (bool) preg_match('~^(//|#(?!!\[)|\*|<!--|--\s)~', $t);
+        if ($this->hashComments() && preg_match('~^#(?!!\[)~', $t)) {
+            return true;
+        }
+        return (bool) preg_match('~^(//|\*|<!--|--\s)~', $t);
+    }
+
+    /**
+     * Is a hash a comment in this language?
+     *
+     * It is in Python, PHP and shell. It is not in CSS, where `#main {` is an
+     * id selector and `#0f172a` is a colour — and reading those as comments
+     * finds a year in a hex value and reports the stylesheet as carrying
+     * outside context, which is the exact opposite of what it says.
+     */
+    private function hashComments(): bool
+    {
+        return in_array($this->lang, array('python', 'php', 'sql', 'unknown'), true);
     }
 
     /** Fraction of adjacent pairs that are in order. */

@@ -255,6 +255,16 @@ final class Catalog
             'cd.main_guard' => self::mk($c, $ai, 0.4, 'Entry-point guard on a module nothing runs',
                 'if __name__ == "__main__": on a library module that is only ever imported.'),
 
+            // Stylesheets, which until now nobody read. A served CSS file that
+            // has not been through a minifier is a file exactly as somebody —
+            // or something — wrote it, and it keeps its habits.
+            'cd.css_alphabetical' => self::mk($c, $ai, 0.6, 'CSS declarations in alphabetical order',
+                'Properties inside the rules are sorted A to Z. People group declarations by what they do — position, then box, then type, then colour — because that is how you read a rule back. Alphabetical order is what you get when nobody is reading it back. One innocent explanation, and it is a good one: a linter set to enforce exactly this.'),
+            'cd.css_one_line' => self::mk($c, $ai, 0.5, 'Every CSS rule crushed onto one line',
+                'Rule bodies written as a single line each, in a stylesheet that has otherwise not been minified. Minifiers do this to whole files and strip the newlines with it; this is the shape of CSS emitted a rule at a time and never opened again.'),
+            'cd.css_labelled_sections' => self::mk($c, $ai, 0.55, 'Every block of the stylesheet labelled, nothing explained',
+                'A comment naming each section — Header, Buttons, Footer — and not one comment saying why any value is what it is. Stylesheets accumulate the opposite: a magic number with an explanation attached, a hack with a browser named next to it.'),
+
             'cd.uniform_function_length' => self::mk($c, $ai, 0.5, 'Every function is the same length',
                 'Function bodies cluster tightly around one size. Human files are lumpy — a three-line helper next to a hundred-line one nobody has split yet — because they were written at different times for different reasons.'),
 

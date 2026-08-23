@@ -1981,6 +1981,38 @@ final class SiteAnalyzer
         return $this->documents = $docs;
     }
 
+    /**
+     * The stylesheet the document carries itself.
+     *
+     * Read on the same terms as a file: bounded, skipped when it is too small
+     * to have habits, and skipped when it has been minified, because then the
+     * habits are the build tool's rather than the author's.
+     */
+    private function checkInlineStyles(): void
+    {
+        if (!preg_match_all('~<style\b[^>]*>(.*?)</style>~is', $this->html, $m)) {
+            return;
+        }
+
+        $css = '';
+        foreach ($m[1] as $block) {
+            $css .= "\n" . $block;
+            if (strlen($css) > 200000) {
+                break;
+            }
+        }
+        if (strlen(trim($css)) < 400) {
+            return;
+        }
+
+        $lines = substr_count($css, "\n") + 1;
+        if ((strlen($css) / max(1, $lines)) > 300) {
+            return; // minified into the document; nothing of the author left in it
+        }
+
+        (new CodeAnalyzer($css, 'inline <style>'))->analyze($this->r);
+    }
+
     /** The file name an asset is worth being called in a report. */
     private static function assetLabel(string $url): string
     {
@@ -2072,6 +2104,10 @@ final class SiteAnalyzer
      * Same-origin scripts and stylesheets get the code-level treatment, unless
      * they have been through a minifier — in which case the style signal has
      * already been normalised away and reading it would be inventing evidence.
+     *
+     * Stylesheets are read for the same reason scripts are, and were the
+     * obvious gap: a served CSS file that no minifier has touched is the file
+     * exactly as somebody wrote it, comments and declaration order and all.
      */
     private function checkAssets(): void
     {
@@ -2087,12 +2123,16 @@ final class SiteAnalyzer
                 $minified++;
                 continue;
             }
-            if (!preg_match('~\.js(?:[?#]|$)~i', $url)) continue;
+            if (!preg_match('~\.(?:js|css)(?:[?#]|$)~i', $url)) continue;
 
             $readable++;
-            $sub = new CodeAnalyzer($body);
+            $sub = new CodeAnalyzer($body, self::assetLabel($url));
             $sub->analyze($this->r); // signals merge into the same report
         }
+
+        // The page's own <style> blocks, which are a stylesheet that never got
+        // a file. On a single-file page they are the entire stylesheet.
+        $this->checkInlineStyles();
 
         $this->r->stat('assetsReadable', $readable);
         $this->r->stat('assetsMinified', $minified);

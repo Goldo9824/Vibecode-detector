@@ -1931,6 +1931,80 @@ $order = function (array $catalog) {
 ok($order(Catalog::all()) === $order(array_reverse(Catalog::all(), true)),
    'the doc ordering is identical when the catalogue is reversed');
 
+// ------------------------------------------------------------ code: CSS
+
+group('Reading a stylesheet');
+
+$generatedCss = '';
+foreach (array('header' => 'Header', 'hero' => 'Hero', 'features' => 'Features',
+               'pricing' => 'Pricing', 'testimonials' => 'Testimonials', 'footer' => 'Footer') as $cls => $label) {
+    $generatedCss .= "/* {$label} */\n"
+        . ".{$cls} { align-items: center; background: #0f172a; color: #ffffff; display: flex; padding: 4rem 2rem; }\n\n";
+}
+$r = (new CodeAnalyzer($generatedCss))->analyze();
+ok($r->toArray()['stats']['language'] === 'css', 'reads the paste as CSS');
+ok($r->has('cd.css_alphabetical'), 'catches declarations sorted A to Z');
+ok($r->has('cd.css_one_line'), 'catches rule bodies crushed onto one line');
+ok($r->has('cd.css_labelled_sections'), 'catches a label on every block and a reason for nothing');
+
+// Grouped by what the declarations do, which is how a rule is read back.
+$humanCss = "/* The masthead sticks, because the nav doubles as the section index\n"
+    . "   on long pages and losing it costs the reader their place. */\n"
+    . ".masthead {\n  position: sticky;\n  top: 0;\n  display: flex;\n  padding: 1rem 2rem;\n"
+    . "  /* 3px, not 4: 4 collides with the focus ring on Safari 16. */\n  border-bottom: 3px solid #ded5c2;\n"
+    . "  background: #f6f2e9;\n}\n\n"
+    . ".card {\n  position: relative;\n  padding: 1.5rem;\n  margin-bottom: 2rem;\n  border: 1px solid #ded5c2;\n  background: #fffdf8;\n}\n\n"
+    . ".card h3 {\n  margin: 0 0 .5rem;\n  font-size: 1rem;\n  font-weight: 600;\n  color: #17140f;\n}\n\n"
+    . ".footer {\n  margin-top: 4rem;\n  padding: 2rem;\n  font-size: .875rem;\n  color: #6b6456;\n}\n\n"
+    . ".footer a {\n  text-decoration: underline;\n  color: inherit;\n}\n";
+$r = (new CodeAnalyzer($humanCss))->analyze();
+ok(!$r->has('cd.css_alphabetical'), 'leaves declarations grouped by what they do alone');
+ok(!$r->has('cd.css_one_line'), 'and rules written out over several lines');
+ok(!$r->has('cd.css_labelled_sections'), 'a stylesheet that explains a value is not a labelled one');
+ok($r->has('hu.why_comments'), 'and the explanation counts the other way');
+
+// Minified CSS is one line per rule too, and says nothing about its author.
+$minified = '';
+foreach (range(1, 8) as $i) {
+    $minified .= ".c{$i}{display:flex;padding:1rem;color:#fff;background:#111}\n";
+}
+ok(!(new CodeAnalyzer($minified))->analyze()->has('cd.css_one_line'),
+   'a minified stylesheet is the build tool\'s shape, not the author\'s');
+
+// A hash is a colour and an id selector in CSS, not a comment.
+$colours = ".a { color: #0f172a; }\n#main { background: #1e293b; }\n#nav { color: #2024; }\n"
+    . str_repeat(".x { padding: 1rem; }\n", 20);
+$r = (new CodeAnalyzer($colours))->analyze();
+ok(!$r->has('hu.why_comments'), 'a hex colour is not a comment carrying outside context');
+ok(!$r->has('hu.ticket_refs'), 'and an id selector is not a ticket reference');
+
+// The assistant-chatter phrases need their left edge guarded.
+$prose = "/* Corners are square unless there is a reason for them not to be. */\n"
+    . ".a { color: red; }\n";
+ok(!(new CodeAnalyzer($prose))->analyze()->has('cd.assistant_chatter'),
+   '"unless there is a reason" is a sentence, not the assistant talking');
+ok((new CodeAnalyzer("// Sure! Here is a comprehensive solution.\nfunction a(){return 1}\n"))->analyze()->has('cd.assistant_chatter'),
+   'and the real thing still fires');
+
+// Stylesheets reach the analyser from a page, as files and as <style> blocks.
+$page = '<!DOCTYPE html><html lang="en"><head><title>Flow</title>'
+    . '<link rel="stylesheet" href="/assets/style.css"></head><body>'
+    . str_repeat('<p>Copy on the page.</p>', 30) . '</body></html>';
+$r = (new SiteAnalyzer('https://flow.example.com/', $page,
+     array('https://flow.example.com/assets/style.css' => $generatedCss)))->analyze();
+ok($r->has('cd.css_alphabetical'), 'a served stylesheet is read, not skipped for not being JavaScript');
+$labelled = null;
+foreach ($r->signals() as $s) {
+    if ($s->id === 'cd.css_labelled_sections') $labelled = $s;
+}
+ok($labelled !== null && $labelled->evidence[1]->source === 'style.css',
+   'and its evidence names the file it came from');
+
+$inline = '<!DOCTYPE html><html lang="en"><head><title>Flow</title><style>' . $generatedCss . '</style></head><body>'
+    . str_repeat('<p>Copy on the page.</p>', 30) . '</body></html>';
+ok((new SiteAnalyzer('https://flow.example.com/', $inline))->analyze()->has('cd.css_one_line'),
+   'a <style> block in the document is read the same way');
+
 // ------------------------------------------------------- evidence: context
 
 group('Evidence carries the code around it');

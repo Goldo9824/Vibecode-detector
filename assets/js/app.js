@@ -228,20 +228,64 @@
 
       wrap.appendChild(summary);
 
+      if (s.occurrences > 1) {
+        var badge = el('span', 'occurrences', '\u00d7' + s.occurrences);
+        badge.title = 'found ' + s.occurrences + ' times; repeated findings weigh more';
+        summary.appendChild(badge);
+      }
+
       var body = el('div', 'signal-body');
       body.appendChild(el('p', null, s.detail));
 
-      if (s.evidence && s.evidence.length) {
+      var excerpts = s.excerpts && s.excerpts.length ? s.excerpts : null;
+      if (excerpts) {
         var list = el('ul', 'excerpts');
-        s.evidence.forEach(function (line) {
-          list.appendChild(el('li', null, line));
+        excerpts.forEach(function (item) {
+          list.appendChild(renderExcerpt(item));
         });
         body.appendChild(list);
+      } else if (s.evidence && s.evidence.length) {
+        // A report from an older version of the API: strings, no surroundings.
+        var flat = el('ul', 'excerpts');
+        s.evidence.forEach(function (line) {
+          flat.appendChild(el('li', null, line));
+        });
+        body.appendChild(flat);
       }
 
       wrap.appendChild(body);
       host.appendChild(wrap);
     });
+  }
+
+  // One piece of evidence: what was matched, where, how often, and the code
+  // it was sitting in. The surroundings are the point — a line on its own is
+  // something to take on trust, and this page is built not to be taken on trust.
+  function renderExcerpt(item) {
+    var li = el('li');
+    li.appendChild(el('span', 'excerpt-text', item.text));
+
+    var bits = [];
+    if (item.source) bits.push(item.source);
+    if (item.line) bits.push('line ' + item.line);
+    if (item.count > 1) bits.push('\u00d7' + item.count);
+    if (bits.length) {
+      li.appendChild(el('span', 'excerpt-where', bits.join(' \u00b7 ')));
+    }
+
+    if (item.context && item.context.length) {
+      var pre = el('pre', 'excerpt-context');
+      var code = el('code');
+      item.context.forEach(function (row) {
+        var line = el('span', 'ctx-line' + (row.match ? ' is-match' : ''));
+        line.appendChild(el('span', 'ctx-n', row.n == null ? '' : String(row.n)));
+        line.appendChild(el('span', 'ctx-code', row.code === '' ? '\u00a0' : row.code));
+        code.appendChild(line);
+      });
+      pre.appendChild(code);
+      li.appendChild(pre);
+    }
+    return li;
   }
 
   function renderPages(data) {

@@ -10,19 +10,19 @@ weight of each signal found, positive for AI, negative for human. The total goes
 a logistic curve to become the percentage. As a rough guide, a weight of 0.7 doubles the
 odds; 4.5 ends the argument.
 
-There are **104 signals** across 9 categories.
+There are **117 signals** across 9 categories.
 
 | Category | Signals | Direction |
 |---|---|---|
 | [Platform fingerprint](#platform-fingerprint) | 7 | raises the score |
 | [Repository history](#repository-history) | 11 | raises the score |
-| [Site-wide](#site-wide) | 8 | raises the score |
-| [Structural](#structural) | 12 | raises the score |
-| [Code style](#code-style) | 23 | raises the score |
-| [Content](#content) | 7 | raises the score |
+| [Site-wide](#site-wide) | 9 | raises the score |
+| [Structural](#structural) | 17 | raises the score |
+| [Code style](#code-style) | 24 | raises the score |
+| [Content](#content) | 11 | raises the score |
 | [Security profile](#security-profile) | 5 | raises the score |
 | [Aesthetic](#aesthetic) | 16 | raises the score |
-| [Human authorship](#human-authorship) | 15 | lowers the score |
+| [Human authorship](#human-authorship) | 17 | lowers the score |
 
 ---
 
@@ -196,10 +196,22 @@ Every URL in sitemap.xml carries the same <lastmod>, or none carries one at all.
 
 Pages within a few percent of each other in size and element count. Real sites are lumpy because real content is lumpy: an About page is not the same length as a pricing table.
 
+### The navigation promises pages that do not exist
+
+`xs.broken_nav_links` · weight **0.65** (moderate)
+
+Top-level links in the site's own navigation answer with an error. Links rot over years, but they rot deep in a site; a front page pointing at a pricing page that was never built is a page nobody clicked before publishing.
+
 
 ## Structural
 
 The shape of the whole rather than the style of the line. These are the hardest signals to produce by accident and the hardest to remove by editing, which is why they carry the most weight after fingerprints.
+
+### Served straight from the development server
+
+`st.dev_server_page` · weight **1.6** (strong)
+
+The document loads unbundled TypeScript or JSX modules, or the dev server's own client script. Nothing was built for production: what is online is the editor's preview, published as-is.
 
 ### Navigational section comments survive in production
 
@@ -231,6 +243,12 @@ The document still identifies itself as the scaffold it was created from: a titl
 
 Uniform, complete docblocks on getters and one-line helpers alike.
 
+### Forms that submit nowhere
+
+`st.form_to_nowhere` · weight **0.85** (moderate)
+
+A contact or signup form with no action, no endpoint and no handler behind it. The page looks like it collects something and collects nothing, which is what a generated interface does before anybody wires it up.
+
 ### Fully-built code wired to nothing
 
 `st.dead_code` · weight **0.8** (moderate)
@@ -261,11 +279,29 @@ A banner comment at the top of the file restating the filename and describing th
 
 Standard library, third-party, then local, sorted within each group, with no organic accretion.
 
+### The whole application in one file
+
+`st.single_file_page` · weight **0.55** (moderate)
+
+Markup, styles and behaviour in a single document, at a size nobody maintains that way. This is what one prompt returns and what a project acquires a directory for on about day two.
+
+### None of the furniture a published page acquires
+
+`st.no_seo_furniture` · weight **0.5** (weak)
+
+No description, no canonical, no social card, no favicon — on a page otherwise built to be shown to people. Anyone who has ever shared a link fixes this the first time it looks wrong in a message.
+
 ### Empty client-rendered shell with a hashed bundle
 
 `st.spa_shell` · weight **0.45** (weak)
 
 An almost-empty root div plus a single hashed asset bundle. This is the default output shape of the generator stack, but hand-built single-page apps look identical, so it is only a starting point.
+
+### Still on the platform's own preview domain
+
+`st.preview_host` · weight **0.4** (weak)
+
+The site answers on a deployment platform's default subdomain with no custom domain in front of it. Plenty of real projects live there too, which is why this is weighted as a nudge rather than a finding.
 
 ### Textbook-complete document scaffold
 
@@ -404,6 +440,12 @@ data2, result_final, handleClick2, newFunction: the residue of re-prompting unti
 
 Stub bodies and "implement this" markers that were never returned to.
 
+### Every function is the same length
+
+`cd.uniform_function_length` · weight **0.5** (weak)
+
+Function bodies cluster tightly around one size. Human files are lumpy — a three-line helper next to a hundred-line one nobody has split yet — because they were written at different times for different reasons.
+
 ### Every branch has its counterpart
 
 `cd.over_symmetric_branches` · weight **0.45** (weak)
@@ -421,17 +463,35 @@ if __name__ == "__main__": on a library module that is only ever imported.
 
 What the page says, as opposed to how it is built. Placeholder people, house-voice marketing copy and navigation that goes nowhere.
 
+### Contact details nobody can reach
+
+`ct.placeholder_contact` · weight **0.75** (moderate)
+
+An @example.com address, a 555 phone number, 123 Main Street, or social links pointing at the platform's home page rather than an account. A business that wants to be contacted fixes these before launch; a demo never had to.
+
 ### Statistically generic placeholder people
 
 `ct.generic_names` · weight **0.7** (moderate)
 
 Testimonials from the most common names in the training data, with titles like "Verified User" or "Head of Operations".
 
+### Testimonial faces from an avatar service
+
+`ct.stock_avatars` · weight **0.7** (moderate)
+
+The people quoted on the page are served by pravatar, randomuser.me, DiceBear or a placeholder image host. Whoever built it needed a face in that slot and took the first one available, which means there was no person to photograph.
+
 ### Emoji used as the icon system
 
 `ct.emoji_icons` · weight **0.6** (moderate)
 
 A rocket for performance, a lightbulb for smart. Emoji do not inherit colour, adapt to dark mode or scale cleanly, so this reliably means the page never went through design review.
+
+### The model's sentence rhythm
+
+`ct.llm_prose` · weight **0.6** (moderate)
+
+Not the vocabulary but the shape: "it's not just X, it's Y", "whether you're X or Y", the three-item list where two would do, the sentence that opens by naming the era we live in. Human marketing copy uses these; it does not use all of them at once.
 
 ### Copy in the house model voice
 
@@ -456,6 +516,12 @@ Suspiciously tidy numbers doing persuasive work: 10,000+ users, 99.9% uptime, 10
 `ct.dead_links` · weight **0.4** (weak)
 
 A full nav and footer where most links are href="#".
+
+### Alt text written as image descriptions
+
+`ct.model_alt_text` · weight **0.4** (weak)
+
+Every image carries a long, evenly-worded description of what is in the picture. Real alt text is uneven — terse where the image is decorative, specific where it matters, missing where somebody forgot.
 
 ### Three tiers with the middle one starred
 
@@ -634,6 +700,12 @@ WordPress, Wix, Squarespace, Webflow, Shopify. These predate the current generat
 
 Models do not typo. A page carrying "recieve" or "seperate" was typed by somebody, and typos are one of the few tells that masking makes worse rather than better, since cleaning them up is exactly what nobody bothers to do.
 
+### Content dated across months or years
+
+`hu.content_dates` · weight **0.6** (moderate)
+
+Published dates, "last updated" lines or changelog entries spread over real time. Somebody came back to this page after the day it was made, which is the one thing a single generation pass cannot produce.
+
 ### Inconsistent formatting
 
 `hu.inconsistent_format` · weight **0.6** (moderate)
@@ -663,6 +735,12 @@ jQuery, table layouts, hand-written includes, vendor-prefixed CSS: an accretion 
 `hu.long_tail_copy` · weight **0.5** (weak)
 
 Real prices, dates, addresses, named people, opening hours: details that had to come from somewhere.
+
+### Accessibility somebody actually did
+
+`hu.a11y_care` · weight **0.45** (weak)
+
+A skip link, reduced-motion handling, focus-visible styles, labelled inputs: work that no visitor sees and no generator is asked for. It is done by people who have been told off about it before.
 
 ### Response headers somebody configured
 

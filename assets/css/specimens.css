@@ -319,3 +319,49 @@
 @media (prefers-reduced-motion: reduce) {
   .s-mouse, .s-mouse i, .s-track { animation: none !important; }
 }
+
+/* the form that goes nowhere */
+.s-form { text-align: center; }
+.s-form-title { margin: 0 0 .6rem; font-size: .9375rem; color: var(--s-ink); font-weight: 600; }
+.s-form-row { display: flex; gap: .5rem; justify-content: center; flex-wrap: wrap; }
+.s-form-row input {
+  flex: 1 1 12rem;
+  min-width: 0;
+  padding: .5rem .7rem;
+  font: inherit;
+  font-size: .75rem;
+  color: var(--s-ink);
+  background: var(--s-bg-2);
+  border: 1px solid var(--s-line);
+  border-radius: 9999px;
+}
+.s-form-row button {
+  padding: .5rem 1rem;
+  font: inherit;
+  font-size: .75rem;
+  color: #fff;
+  background: linear-gradient(135deg, var(--s-indigo), var(--s-violet));
+  border: 0;
+  border-radius: 9999px;
+  cursor: pointer;
+}
+.s-form-note { margin: .7rem 0 0; font-size: .6875rem; color: var(--s-muted); }
+
+/* faces from an avatar service */
+.s-faces { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; text-align: center; }
+@container (max-width: 26rem) { .s-faces { grid-template-columns: 1fr; } }
+.s-face { margin: 0; }
+.s-face figcaption { margin-top: .45rem; font-size: .6875rem; color: var(--s-muted); }
+.s-face b { color: var(--s-ink); }
+.s-face .s-avatar { width: 3rem; height: 3rem; margin: 0 auto; display: block; }
+.s-avatar-a { background: linear-gradient(135deg, #a5b4fc, #6366f1); }
+.s-avatar-b { background: linear-gradient(135deg, #c4b5fd, #8b5cf6); }
+.s-avatar-c { background: linear-gradient(135deg, #93c5fd, #6366f1); }
+.s-face-src {
+  grid-column: 1 / -1;
+  margin: .2rem 0 0;
+  font-family: var(--mono);
+  font-size: .625rem;
+  color: var(--s-muted);
+  overflow-wrap: anywhere;
+}

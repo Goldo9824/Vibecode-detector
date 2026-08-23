@@ -165,6 +165,7 @@ VisitLog::record('/');
         <p class="eyebrow">Method</p>
         <h2>How the number is arrived at</h2>
         <p>Every signal carries a weight in log-odds, and the weights are summed against a starting assumption that a given page is <em>not</em> generated. The result goes through a logistic curve to become a percentage. That is the whole trick, and it matters far less than which signals are weighted how.</p>
+        <p>How often a tell fired counts too. One comment restating the line under it is a coincidence; thirteen of them is a habit, and the habits are the thing being read. Each signal is scored with its occurrence count, worth up to half again its weight and no more &mdash; the difference between one and ten matters, the difference between forty and eighty is the length of the file. A builder&rsquo;s fingerprint is exempt: finding it three times identifies it exactly as well as finding it once.</p>
 
         <h3>Evidence is not equal, so it is not weighted equally</h3>
         <ol class="ladder">
@@ -184,6 +185,7 @@ VisitLog::record('/');
           <li>A reading never reaches 0% or 100%. Certainty is not available here.</li>
           <li>Short input is explicitly discounted rather than quietly guessed at &mdash; where &ldquo;short&rdquo; means nothing to read, not a short document. A page that builds itself in the browser is read from its bundle.</li>
           <li>Signals pointing at human authorship subtract, and they are weighted as heavily as the ones pointing the other way.</li>
+          <li>Repetition is bounded. A count can lift a signal by at most half again, it works inside the category ceilings rather than around them, and it never applies to a fingerprint.</li>
         </ul>
 
         <p>The full catalogue, with every signal, its weight, and why it earns that weight, is in <a href="<?= h(VCD_REPO_URL) ?>/blob/main/docs/SIGNALS.md" rel="noopener">docs/SIGNALS.md</a>.</p>

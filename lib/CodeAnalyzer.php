@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/Report.php';
+require_once __DIR__ . '/Evidence.php';
 
 /**
  * Reads a pasted source file and looks for the tells.
@@ -24,12 +25,38 @@ final class CodeAnalyzer
     private $lang;
     /** @var Report */
     private $r;
+    /** @var SourceContext */
+    private $ctx;
 
-    public function __construct(string $source)
+    public function __construct(string $source, string $label = '')
     {
         $this->src   = str_replace(array("\r\n", "\r"), "\n", $source);
         $this->lines = explode("\n", $this->src);
         $this->lang  = self::detectLanguage($this->src);
+        // Every line-anchored finding below reports through this, so the reader
+        // sees the match sitting in its own code rather than on its own.
+        $this->ctx   = new SourceContext($this->src, $label);
+    }
+
+    /** The excerpt for a 0-based line index, with the code above and below it. */
+    private function at(int $index, int $count = 1): Excerpt
+    {
+        return $this->ctx->line($index, $count);
+    }
+
+    /**
+     * An identifier, shown where it first appears and counted where it is used.
+     *
+     * The per-item count is how often the name occurs, which is the thing a
+     * reader wants to know about a name: one appearance is a declaration,
+     * fourteen is a habit running through the file.
+     */
+    private function ident(string $name): Excerpt
+    {
+        $uses = preg_match_all('~\b' . preg_quote($name, '~') . '\b~', $this->src);
+        $ex = $this->ctx->find($name, max(1, (int) $uses));
+        $ex->text = $name;
+        return $ex;
     }
 
     public function language(): string
@@ -88,7 +115,7 @@ final class CodeAnalyzer
         $emoji = array();
         foreach ($comments as $ln => $text) {
             if (Text::hasEmoji($text)) {
-                $emoji[] = 'line ' . ($ln + 1) . ': ' . $text;
+                $emoji[] = $this->at($ln);
             }
         }
         if ($emoji) {
@@ -99,7 +126,7 @@ final class CodeAnalyzer
         $banners = array();
         foreach ($comments as $ln => $text) {
             if (preg_match('~(={3,}|-{3,}|\*{3,}|_{3,})\s*[A-Za-z][^=\-*_]{2,40}\s*(={3,}|-{3,}|\*{3,}|_{3,})~', $text)) {
-                $banners[] = 'line ' . ($ln + 1) . ': ' . $text;
+                $banners[] = $this->at($ln);
             }
         }
         if (count($banners) >= 2) {
@@ -110,7 +137,7 @@ final class CodeAnalyzer
         $what = array();
         foreach ($comments as $ln => $text) {
             if ($this->isWhatComment($text, $ln)) {
-                $what[] = 'line ' . ($ln + 1) . ': ' . $text;
+                $what[] = $this->at($ln);
             }
         }
         if (count($what) >= 3) {
@@ -202,9 +229,9 @@ final class CodeAnalyzer
         $empty = count(array_filter($counts, function ($c) { return $c === 0; }));
         if ($cv < 0.45 && $empty === 0) {
             $this->r->flag('st.uniform_comment_density', array(
-                sprintf('comment lines per eighth of the file: %s', implode(', ', $counts)),
-                sprintf('spread (coefficient of variation) %.2f — human files usually exceed 0.6', $cv),
-            ));
+                Excerpt::plain(sprintf('comment lines per eighth of the file: %s', implode(', ', $counts))),
+                Excerpt::plain(sprintf('spread (coefficient of variation) %.2f — human files usually exceed 0.6', $cv)),
+            ), 1); // a distribution is one finding about the file, however many comments it counted
         }
     }
 
@@ -229,7 +256,7 @@ final class CodeAnalyzer
                     // Is the function body a one-liner? Then the docblock is ceremony.
                     $body = isset($this->lines[$i + 1]) ? trim($this->lines[$i + 1]) : '';
                     if (preg_match('~^(return|\$this->|self::)~', $body)) {
-                        $trivial[] = 'line ' . ($i + 1) . ': ' . trim($line);
+                        $trivial[] = $this->at($i);
                     }
                 }
                 break;
@@ -238,9 +265,9 @@ final class CodeAnalyzer
 
         if ($funcs >= 4 && $documented >= $funcs && count($trivial) >= 1) {
             $this->r->flag('st.docblock_on_everything', array_merge(
-                array(sprintf('%d of %d functions carry a docblock, including one-line accessors', $documented, $funcs)),
+                array(Excerpt::plain(sprintf('%d of %d functions carry a docblock, including one-line accessors', $documented, $funcs), $documented)),
                 $trivial
-            ));
+            ), $documented);
         }
     }
 
@@ -269,7 +296,7 @@ final class CodeAnalyzer
 
         foreach ($this->commentLines() as $ln => $text) {
             if (preg_match($phrases, $text)) {
-                $chatter[] = 'line ' . ($ln + 1) . ': ' . $text;
+                $chatter[] = $this->at($ln);
             }
         }
         if ($chatter) {
@@ -287,7 +314,7 @@ final class CodeAnalyzer
         foreach ($endpointPatterns as $re) {
             if (preg_match_all($re, $this->src, $m)) {
                 foreach ($m[0] as $hit) {
-                    $stubs[] = trim($hit);
+                    $stubs[] = $this->ctx->find(trim($hit));
                 }
             }
         }
@@ -315,7 +342,7 @@ final class CodeAnalyzer
                 );
 
                 if ($restates || $filler) {
-                    $tautological[] = '@param ' . $hit[1] . ' - ' . trim($hit[2]);
+                    $tautological[] = $this->ctx->find($hit[0])->withText('@param ' . $hit[1] . ' - ' . trim($hit[2]));
                 }
             }
         }
@@ -385,26 +412,27 @@ final class CodeAnalyzer
 
         if ($tries >= 3 && $tries >= $funcs * 0.7) {
             $this->r->flag('cd.blanket_try', array(
-                sprintf('%d try blocks across roughly %d functions', $tries, $funcs),
-            ));
+                Excerpt::plain(sprintf('%d try blocks across roughly %d functions', $tries, $funcs), $tries),
+                $this->ctx->find('try'),
+            ), $tries);
         }
 
         $swallowed = array();
 
         // catch (e) { console.error(...) }  and nothing else
         if (preg_match_all('~catch\s*\([^)]*\)\s*\{\s*(?:console\.(?:error|log|warn)\([^)]*\);?\s*)?\}~', $this->src, $m)) {
-            foreach ($m[0] as $hit) $swallowed[] = $hit;
+            foreach ($m[0] as $hit) $swallowed[] = $this->ctx->find($hit);
         }
         // except Exception: pass   /   except: pass
         if (preg_match_all('~except[^\n:]*:\s*\n\s*pass~', $this->src, $m)) {
-            foreach ($m[0] as $hit) $swallowed[] = $hit;
+            foreach ($m[0] as $hit) $swallowed[] = $this->ctx->find($hit);
         }
         // catch (Throwable $e) { // ignore }
         if (preg_match_all('~catch\s*\([^)]*\)\s*\{\s*(?://[^\n]*|/\*.*?\*/)?\s*\}~s', $this->src, $m)) {
-            foreach ($m[0] as $hit) $swallowed[] = $hit;
+            foreach ($m[0] as $hit) $swallowed[] = $this->ctx->find($hit);
         }
         if (preg_match_all('~catch\s*\([^)]*\)\s*\{\s*return\s+(null|false|undefined|\[\]|\{\})\s*;?\s*\}~', $this->src, $m)) {
-            foreach ($m[0] as $hit) $swallowed[] = $hit;
+            foreach ($m[0] as $hit) $swallowed[] = $this->ctx->find($hit);
         }
 
         if (count($swallowed) >= 2) {
@@ -417,8 +445,9 @@ final class CodeAnalyzer
         $per100 = count($this->lines) > 0 ? $logs / (count($this->lines) / 100) : 0;
         if ($logs >= 5 && $per100 >= 2.0) {
             $this->r->flag('cd.console_noise', array(
-                sprintf('%d debug logging calls, about %.1f per 100 lines', $logs, $per100),
-            ));
+                Excerpt::plain(sprintf('%d debug logging calls, about %.1f per 100 lines', $logs, $per100), $logs),
+                $this->ctx->find('console.log'),
+            ), $logs);
         }
 
         // Emoji in log and status output. Cleaned up even less often than
@@ -427,7 +456,7 @@ final class CodeAnalyzer
         if (preg_match_all('~(?:console\.\w+|print|println|printf|echo|logger?\.\w+|log)\s*\(\s*[`\'"]([^`\'"]{0,120})~u', $this->src, $m)) {
             foreach ($m[1] as $str) {
                 if (Text::hasEmoji($str)) {
-                    $logEmoji[] = $str;
+                    $logEmoji[] = $this->ctx->find($str);
                 }
             }
         }
@@ -440,8 +469,8 @@ final class CodeAnalyzer
         $accesses = max(1, preg_match_all('~[a-zA-Z_$)\]]\s*\.\s*[a-zA-Z_$]~', $this->src));
         if ($chains >= 8 && ($chains / $accesses) > 0.28) {
             $this->r->flag('cd.defensive_chaining', array(
-                sprintf('%d optional-chain or nullish-fallback operators across %d property accesses', $chains, $accesses),
-            ));
+                Excerpt::plain(sprintf('%d optional-chain or nullish-fallback operators across %d property accesses', $chains, $accesses), $chains),
+            ), $chains);
         }
 
         // An else for every if.
@@ -449,8 +478,8 @@ final class CodeAnalyzer
         $elses = preg_match_all('~(?<![\w$])else\b~', $this->src);
         if ($ifs >= 5 && $elses >= $ifs * 0.85) {
             $this->r->flag('cd.over_symmetric_branches', array(
-                sprintf('%d if statements and %d else branches: nearly every path has a counterpart', $ifs, $elses),
-            ));
+                Excerpt::plain(sprintf('%d if statements and %d else branches: nearly every path has a counterpart', $ifs, $elses), $elses),
+            ), $elses);
         }
 
         // Formal, complete error messages.
@@ -458,7 +487,7 @@ final class CodeAnalyzer
         if (preg_match_all('~["\']((?:The|An?|Your|This|Please)\s+[^"\']{18,120}\.)["\']~', $this->src, $m)) {
             foreach ($m[1] as $msg) {
                 if (preg_match('~\b(is|are|was|were|must|cannot|could not|does not|has not|should)\b~i', $msg)) {
-                    $formal[] = $msg;
+                    $formal[] = $this->ctx->find($msg);
                 }
             }
         }
@@ -482,7 +511,7 @@ final class CodeAnalyzer
             if (strlen($id) < 20) continue;
             $words = Text::wordCount($id);
             if ($words >= 4) {
-                $verbose[] = $id;
+                $verbose[] = $this->ident($id);
                 // One name this long is already the whole tell; a second is
                 // confirmation, not a requirement.
                 if (strlen($id) >= 28 && $words >= 5) {
@@ -491,7 +520,9 @@ final class CodeAnalyzer
             }
         }
         if (count($verbose) >= 2 || $egregious) {
-            $this->r->flag('cd.verbose_names', $verbose);
+            // The tell is how many names were built this way, not how often
+            // each one is called, so the signal counts the names.
+            $this->r->flag('cd.verbose_names', $verbose, count($verbose));
         }
 
         $lazy = array();
@@ -499,11 +530,11 @@ final class CodeAnalyzer
             if (preg_match('~^(data|result|response|res|temp|tmp|item|value|arr|obj|list|output|input|handler|handle\w*|new\w*|final\w*|test|foo|bar)\d$~i', $id)
                 || preg_match('~^\w+_(final|new|old|copy|v\d|2)$~i', $id)
                 || preg_match('~^(newFunction|myFunction|doStuff|doSomething|processData|handleData)\d*$~i', $id)) {
-                $lazy[] = $id;
+                $lazy[] = $this->ident($id);
             }
         }
         if (count($lazy) >= 2) {
-            $this->r->flag('cd.lazy_names', $lazy);
+            $this->r->flag('cd.lazy_names', $lazy, count($lazy));
         }
 
         // Vocabulary that names no business.
@@ -525,14 +556,14 @@ final class CodeAnalyzer
         $vagueFns = array();
         if (preg_match_all('~\b(?:function|def|const)\s+(process|handle|manage|do|get|set|transform|convert)(Data|Item|Stuff|Things?|Result|Object|Info|Values?)\b~i', $this->src, $m, PREG_SET_ORDER)) {
             foreach ($m as $hit) {
-                $vagueFns[] = $hit[1] . $hit[2] . '()';
+                $vagueFns[] = $this->ident($hit[1] . $hit[2]);
             }
         }
         if (count($present) >= 3 || ($vagueFns && count($present) >= 1)) {
             $this->r->flag('cd.generic_domain_names', array_merge(
                 $vagueFns,
-                array('names carrying no domain: ' . implode(', ', array_slice($present, 0, 6)))
-            ));
+                array(Excerpt::plain('names carrying no domain: ' . implode(', ', array_slice($present, 0, 6)), count($present)))
+            ), count($present) + count($vagueFns));
         }
 
         // Ceremony classes with nothing to justify them.
@@ -541,7 +572,11 @@ final class CodeAnalyzer
             $helpers = array_unique($m[1]);
         }
         if (count($helpers) >= 3) {
-            $this->r->flag('cd.helper_pileup', $helpers);
+            $found = array();
+            foreach ($helpers as $name) {
+                $found[] = $this->ident($name);
+            }
+            $this->r->flag('cd.helper_pileup', $found, count($helpers));
         }
 
         // A pattern deployed on a problem that did not need one.
@@ -567,7 +602,7 @@ final class CodeAnalyzer
                 }
                 if (preg_match('~\b(?:true|false|!\s*\w+|toggle|isEnabled|enabled|visible|open)\b~i', $body)
                     && !preg_match('~\b(?:switch|case|extends|implements|async|await|fetch|query)\b~i', $body)) {
-                    $ceremony[] = $name . ' exists to hold a boolean';
+                    $ceremony[] = $this->ctx->find($name)->withText($name . ' exists to hold a boolean');
                 }
             }
         }
@@ -583,11 +618,11 @@ final class CodeAnalyzer
         foreach ($idents as $id) {
             if (preg_match('~(?:^|[a-z])(Svc|Cfg|Mgr|Ctx|Idx|Buf|Repo|Auth|Btn|El|Ln|Msg|Qty|Amt)(?:[A-Z]|$)~', $id)
                 || preg_match('~^(cfg|svc|mgr|ctx|idx|buf|acc|prev|curr|dst|src|tmp|qty|amt)[A-Z0-9_]~', $id)) {
-                $abbrev[] = $id;
+                $abbrev[] = $this->ident($id);
             }
         }
         if (count($abbrev) >= 3) {
-            $this->r->flag('hu.abbrevs', array_slice($abbrev, 0, 4));
+            $this->r->flag('hu.abbrevs', $abbrev, count($abbrev));
         }
     }
 
@@ -609,7 +644,7 @@ final class CodeAnalyzer
         );
         foreach ($patterns as $re) {
             if (preg_match_all($re, $this->src, $m)) {
-                foreach ($m[0] as $hit) $hollow[] = $hit;
+                foreach ($m[0] as $hit) $hollow[] = $this->ctx->find($hit);
             }
         }
 
@@ -617,7 +652,7 @@ final class CodeAnalyzer
         if (preg_match_all('~\b(?:it|test)\s*\(\s*[\'"][^\'"]+[\'"]\s*,\s*(?:async\s*)?\(\s*\)\s*=>\s*\{(.*?)\n\s*\}\s*\)~s', $this->src, $m)) {
             foreach ($m[1] as $i => $body) {
                 if (!preg_match('~\b(expect|assert|should)\b~', $body)) {
-                    $hollow[] = 'test case with no assertion in its body';
+                    $hollow[] = $this->ctx->find(trim($body))->withText('test case with no assertion in its body');
                 }
             }
         }
@@ -629,8 +664,8 @@ final class CodeAnalyzer
             $this->r->flag('cd.empty_tests', $hollow);
         } elseif ($assertions >= 6 && $negatives === 0) {
             $this->r->flag('cd.empty_tests', array(
-                sprintf('%d assertions and not one negative or error path among them', $assertions),
-            ));
+                Excerpt::plain(sprintf('%d assertions and not one negative or error path among them', $assertions)),
+            ), 1); // the absence of a negative path is one finding, not one per assertion
         }
     }
 
@@ -651,10 +686,9 @@ final class CodeAnalyzer
             $vals = array_values($imports);
             if ($contiguous && $this->sortedRuns($vals) >= 0.85) {
                 $this->r->flag('st.import_block_sorted', array(
-                    sprintf('%d imports in one contiguous block, ordered', count($vals)),
-                    $vals[0],
-                    $vals[count($vals) - 1],
-                ));
+                    Excerpt::plain(sprintf('%d imports in one contiguous block, ordered', count($vals)), count($vals)),
+                    $this->at($keys[0]),
+                ), count($vals));
             }
         }
 
@@ -685,7 +719,7 @@ final class CodeAnalyzer
             }
             if (count($found) >= 2) {
                 $duplicated++;
-                $mixed[] = $name . ' handled ' . count($found) . ' ways: ' . implode(', ', $found);
+                $mixed[] = Excerpt::plain($name . ' handled ' . count($found) . ' ways: ' . implode(', ', $found), count($found));
             }
             if (count($found) >= 3) {
                 $duplicated += 2; // one family done three ways is the finding on its own
@@ -701,7 +735,7 @@ final class CodeAnalyzer
             if (preg_match('~(TODO|FIXME)\s*:?\s*(implement|add|handle|complete|finish|replace this|actual)~i', $line)
                 || preg_match('~^\s*(?://|#)\s*(Implementation goes here|Your code here|Add your .* here)~i', $line)
                 || preg_match('~\braise NotImplementedError\b~', $line)) {
-                $todo[] = 'line ' . ($i + 1) . ': ' . trim($line);
+                $todo[] = $this->at($i);
             }
         }
         if ($todo) {
@@ -717,8 +751,64 @@ final class CodeAnalyzer
             }
         }
 
+        // Every function the same size.
+        $this->checkFunctionRhythm();
+
         // Dead code: defined and never referenced again.
         $this->checkDeadCode();
+    }
+
+    /**
+     * Whether the functions are all the same size.
+     *
+     * Measured between declarations rather than by parsing bodies, which is
+     * enough: what is being looked for is not the exact length but the absence
+     * of variation. A file written over months has a two-line helper next to a
+     * ninety-line function nobody has got round to splitting, because both were
+     * written for reasons that had nothing to do with each other. A file
+     * written in one pass, to one instruction, comes out evenly portioned.
+     */
+    private function checkFunctionRhythm(): void
+    {
+        $starts = array();
+        foreach ($this->lines as $i => $line) {
+            if (self::isDeclaration($line)) {
+                $starts[] = $i;
+            }
+        }
+        if (count($starts) < 5) {
+            return; // four functions is not a rhythm
+        }
+
+        $lengths = array();
+        for ($i = 0, $n = count($starts); $i < $n - 1; $i++) {
+            $len = $starts[$i + 1] - $starts[$i];
+            // A run of one-line declarations is an interface or a list of
+            // arrow-function exports, not a set of bodies to compare.
+            if ($len >= 3) {
+                $lengths[] = $len;
+            }
+        }
+        if (count($lengths) < 4) {
+            return;
+        }
+
+        $mean = array_sum($lengths) / count($lengths);
+        if ($mean < 5) {
+            return;
+        }
+        $cv = Text::stddev($lengths) / $mean;
+
+        // Human files sit well above 0.45 here; below 0.22 every body is within
+        // a couple of lines of every other one.
+        if ($cv < 0.22) {
+            $this->r->flag('cd.uniform_function_length', array(
+                Excerpt::plain(sprintf('%d functions averaging %d lines each, spread %.2f — human files rarely fall below 0.45',
+                    count($lengths) + 1, (int) round($mean), $cv), count($lengths) + 1),
+                Excerpt::plain('lengths, in order: ' . implode(', ', array_slice($lengths, 0, 10))),
+                $this->at($starts[0]),
+            ), count($lengths) + 1);
+        }
     }
 
     private function checkDeadCode(): void
@@ -734,7 +824,7 @@ final class CodeAnalyzer
                     $name = trim(preg_replace('~\s+as\s+.*$~', '', trim($name)) ?? '');
                     if ($name === '' || strlen($name) < 2) continue;
                     if (preg_match_all('~\b' . preg_quote($name, '~') . '\b~', $this->src) <= 1) {
-                        $dead[] = $name . ' is imported and never used';
+                        $dead[] = $this->ctx->find($name)->withText($name . ' is imported and never used');
                     }
                 }
             }
@@ -752,11 +842,11 @@ final class CodeAnalyzer
             }
             $uses = preg_match_all('~\b' . preg_quote($name, '~') . '\b~', $this->src);
             if ($uses === 1 && !preg_match('~\b(export|module\.exports|public)\b[^\n]*\b' . preg_quote($name, '~') . '\b~', $this->src)) {
-                $dead[] = $name . '() is defined and never referenced';
+                $dead[] = $this->ctx->find($name)->withText($name . '() is defined and never referenced');
             }
         }
         if (count($dead) >= 3) {
-            $this->r->flag('st.dead_code', $dead);
+            $this->r->flag('st.dead_code', $dead, count($dead));
         }
     }
 
@@ -824,7 +914,7 @@ final class CodeAnalyzer
         $hits = array();
         foreach ($this->lines as $i => $line) {
             if (preg_match('~[\x{2018}\x{2019}\x{201C}\x{201D}\x{2014}]~u', $line)) {
-                $hits[] = 'line ' . ($i + 1) . ': ' . trim($line);
+                $hits[] = $this->at($i);
             }
         }
         if (count($hits) >= 2) {
@@ -845,13 +935,13 @@ final class CodeAnalyzer
         foreach ($comments as $ln => $text) {
             $body = trim($text);
             if (Text::looksLikeWhy($body)) {
-                $why[] = 'line ' . ($ln + 1) . ': ' . $body;
+                $why[] = $this->at($ln);
             }
             if (preg_match('~(?:#\d{2,}|\b[A-Z]{2,8}-\d+\b|(?:github|gitlab|jira|linear|atlassian)\.[a-z]{2,}/|\bcf\.?\s|see\s+(?:issue|ticket|bug|PR)\b)~i', $body)) {
-                $tickets[] = 'line ' . ($ln + 1) . ': ' . $body;
+                $tickets[] = $this->at($ln);
             }
             if (preg_match('~\b(HACK|XXX|WTF|UGH|ARGH|sigh|do ?n[\'o]?t touch|no idea why|god knows|for some reason|somehow|apparently|used to be|blame|sorry|yikes|gross|nasty|horrible|stupid|dumb|cursed|jank\w*|footgun|magic\b|voodoo)\b~i', $body)) {
-                $informal[] = 'line ' . ($ln + 1) . ': ' . $body;
+                $informal[] = $this->at($ln);
             }
         }
 
@@ -865,12 +955,12 @@ final class CodeAnalyzer
             $body = trim(preg_replace('~^\s*(//+|#+|/\*+|\*+)\s*~', '', $text));
             if ($body === '') continue;
             if (preg_match('~[;{}]\s*$~', $body) && preg_match('~[=(]~', $body)) {
-                $dead[] = 'line ' . ($ln + 1) . ': ' . $body;
+                $dead[] = $this->at($ln);
             } elseif (preg_match('~^(if|for|while|return|const|let|var|def|print|echo|\$\w+\s*=)\b~', $body)) {
-                $dead[] = 'line ' . ($ln + 1) . ': ' . $body;
+                $dead[] = $this->at($ln);
             } elseif (preg_match('~^[a-z_$][\w.$]*\([^()]*\)\s*;?(?:\s|$)~i', $body)) {
                 // A bare call sitting at the head of a comment: switched-off code.
-                $dead[] = 'line ' . ($ln + 1) . ': ' . $body;
+                $dead[] = $this->at($ln);
             }
         }
         if (count($dead) >= 2) {
@@ -885,8 +975,8 @@ final class CodeAnalyzer
         }
         if ($tabs > 2 && $spaces > 2 && count($this->lines) > 30) {
             $this->r->flag('hu.inconsistent_format', array(
-                sprintf('%d lines indented with tabs, %d with spaces, in one file', $tabs, $spaces),
-            ));
+                Excerpt::plain(sprintf('%d lines indented with tabs, %d with spaces, in one file', $tabs, $spaces), min($tabs, $spaces)),
+            ), min($tabs, $spaces));
         }
 
         if (preg_match('~\$\(document\)\.ready|jQuery\(|\$\.ajax\(|\.live\(|var\s+\w+\s*=\s*function~', $this->src)) {

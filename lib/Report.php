@@ -2,12 +2,28 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/Catalog.php';
+require_once __DIR__ . '/Evidence.php';
 
 /**
- * A single piece of evidence found in the subject.
+ * A finding, the excerpts behind it, and how often it fired.
  */
 final class Signal
 {
+    /**
+     * How far repetition can push a signal's weight.
+     *
+     * A tell found once is a coincidence candidate; the same tell found thirty
+     * times is a habit, and habits are what this tool actually reads. So the
+     * count earns weight — but on a log scale and with a ceiling, because the
+     * difference between one occurrence and ten is real and the difference
+     * between forty and eighty is the length of the file.
+     *
+     *   1 occurrence  x1.00     8 occurrences  x1.46
+     *   3 occurrences x1.24    10 or more      x1.50
+     */
+    const REPETITION_MAX  = 0.5;
+    const REPETITION_RATE = 0.22;
+
     /** @var string */
     public $id;
     /** @var string */
@@ -20,10 +36,15 @@ final class Signal
     public $weight;
     /** @var string */
     public $detail;
-    /** @var string[] */
+    /** @var Excerpt[] */
     public $evidence;
+    /** @var int total occurrences found, which can exceed the excerpts kept */
+    public $occurrences;
 
-    public function __construct(string $id, array $meta, array $evidence)
+    /**
+     * @param Excerpt[] $evidence
+     */
+    public function __construct(string $id, array $meta, array $evidence, int $occurrences = 0)
     {
         $this->id        = $id;
         $this->label     = $meta['label'];
@@ -32,6 +53,14 @@ final class Signal
         $this->weight    = (float) $meta['weight'];
         $this->detail    = $meta['detail'];
         $this->evidence  = $evidence;
+
+        if ($occurrences <= 0) {
+            $occurrences = 0;
+            foreach ($evidence as $item) {
+                $occurrences += $item->count;
+            }
+        }
+        $this->occurrences = max(1, $occurrences);
     }
 
     public function strength(): string
@@ -39,8 +68,44 @@ final class Signal
         return Catalog::strengthOf($this->weight);
     }
 
+    /**
+     * The multiplier repetition earns this signal.
+     *
+     * Fingerprints are exempt. A builder naming itself in the page is a positive
+     * identification, and finding its badge three times identifies it exactly as
+     * hard as finding it once.
+     */
+    public function repetitionFactor(): float
+    {
+        if ($this->category === Catalog::CAT_FINGERPRINT || $this->occurrences <= 1) {
+            return 1.0;
+        }
+        return 1.0 + min(self::REPETITION_MAX, self::REPETITION_RATE * log((float) $this->occurrences));
+    }
+
+    /** Weight as scored: the catalogue weight, with repetition counted in. */
+    public function effectiveWeight(): float
+    {
+        return $this->weight * $this->repetitionFactor();
+    }
+
+    /** The excerpt texts alone, which is what the evidence field used to be. */
+    public function evidenceText(): array
+    {
+        $out = array();
+        foreach ($this->evidence as $item) {
+            $out[] = $item->text;
+        }
+        return $out;
+    }
+
     public function toArray(): array
     {
+        $items = array();
+        foreach ($this->evidence as $item) {
+            $items[] = $item->toArray();
+        }
+
         return array(
             'id'            => $this->id,
             'label'         => $this->label,
@@ -50,7 +115,13 @@ final class Signal
             'strength'      => $this->strength(),
             'weight'        => round($this->weight, 2),
             'detail'        => $this->detail,
-            'evidence'      => array_values($this->evidence),
+            // Kept as a flat list of strings for anything that consumed it
+            // before excerpts carried their surroundings.
+            'evidence'      => $this->evidenceText(),
+            'excerpts'      => $items,
+            'occurrences'   => $this->occurrences,
+            'repetition'    => round($this->repetitionFactor(), 2),
+            'scoredWeight'  => round($this->effectiveWeight(), 2),
         );
     }
 }
@@ -134,13 +205,26 @@ final class Report
         $this->target = $target;
     }
 
+    /** Excerpts kept per signal. The rest are counted, not shown. */
+    const EVIDENCE_SHOWN = 4;
+
     /**
-     * Record a signal. Evidence lines are short excerpts shown to the user so
-     * they can check the reasoning rather than trust the number.
+     * Record a signal.
      *
-     * @param string[] $evidence
+     * Evidence is what the reader checks instead of trusting the number, so it
+     * is kept as excerpts rather than sentences: each one carries the lines
+     * around the match and how many times that pattern fired.
+     *
+     * Callers may pass plain strings — a measurement or a list of names has no
+     * line to point at — and those become contextless excerpts. Everything the
+     * caller passes is counted even though only the first few are shown, so a
+     * habit that fired forty times scores as forty, not as the four displayed.
+     *
+     * @param array<int,string|Excerpt> $evidence
+     * @param int $occurrences override when the caller counted hits the
+     *                         evidence list does not enumerate
      */
-    public function flag(string $id, array $evidence = array()): void
+    public function flag(string $id, array $evidence = array(), int $occurrences = 0): void
     {
         $meta = Catalog::get($id);
         if ($meta === null) {
@@ -149,17 +233,29 @@ final class Report
         if (isset($this->signals[$id])) {
             return; // each signal fires at most once
         }
-        $clean = array();
-        foreach ($evidence as $line) {
-            $line = Report::excerpt((string) $line);
-            if ($line !== '' && !in_array($line, $clean, true)) {
-                $clean[] = $line;
+
+        $kept  = array();
+        $seen  = array();
+        $found = 0;
+
+        foreach ($evidence as $item) {
+            $ex = ($item instanceof Excerpt) ? $item : Excerpt::plain((string) $item);
+            if ($ex->isEmpty()) {
+                continue;
             }
-            if (count($clean) >= 4) {
-                break;
+            $found += $ex->count;
+
+            $key = $ex->key();
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            if (count($kept) < self::EVIDENCE_SHOWN) {
+                $kept[] = $ex;
             }
         }
-        $this->signals[$id] = new Signal($id, $meta, $clean);
+
+        $this->signals[$id] = new Signal($id, $meta, $kept, $occurrences > 0 ? $occurrences : $found);
     }
 
     public function note(string $text): void
@@ -172,6 +268,12 @@ final class Report
     public function stat(string $key, $value): void
     {
         $this->stats[$key] = $value;
+    }
+
+    /** A stat already recorded, or null. Checks that build on earlier ones read it. */
+    public function statValue(string $key)
+    {
+        return isset($this->stats[$key]) ? $this->stats[$key] : null;
     }
 
     public function setSubtitle(string $s): void
@@ -210,6 +312,16 @@ final class Report
         return $n;
     }
 
+    /** Every hit behind every signal, which is what the header line counts. */
+    public function countOccurrences(): int
+    {
+        $n = 0;
+        foreach ($this->signals as $s) {
+            $n += $s->occurrences;
+        }
+        return $n;
+    }
+
     public function hasFingerprint(): bool
     {
         foreach ($this->signals as $s) {
@@ -232,7 +344,9 @@ final class Report
             if (!isset($groups[$key])) {
                 $groups[$key] = array('category' => $s->category, 'direction' => $s->direction, 'total' => 0.0);
             }
-            $groups[$key]['total'] += $s->weight;
+            // Repetition counts here, not at the catalogue weight: how often a
+            // tell fired is a property of this subject, not of the tell.
+            $groups[$key]['total'] += $s->effectiveWeight();
         }
 
         foreach ($groups as $group) {
@@ -360,10 +474,15 @@ final class Report
         // list — and the signal ids baked into a certificate — differ between
         // hosts running the same code on the same input.
         usort($signals, function ($a, $b) {
-            if ($a['weight'] === $b['weight']) {
-                return strcmp($a['id'], $b['id']);
+            // Ranked on the weight that was scored, so a tell that fired forty
+            // times reads above one that fired once at the same catalogue weight.
+            if ($a['scoredWeight'] === $b['scoredWeight']) {
+                if ($a['weight'] === $b['weight']) {
+                    return strcmp($a['id'], $b['id']);
+                }
+                return $b['weight'] <=> $a['weight'];
             }
-            return $b['weight'] <=> $a['weight'];
+            return $b['scoredWeight'] <=> $a['scoredWeight'];
         });
 
         return array(
@@ -380,6 +499,7 @@ final class Report
                 'converging'  => $this->countAi(true),
                 'human'       => $this->countHuman(),
                 'fingerprint' => $this->hasFingerprint() ? 1 : 0,
+                'occurrences' => $this->countOccurrences(),
             ),
             'stats'      => $this->stats,
             'notes'      => $this->notes,

@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/Report.php';
+require_once __DIR__ . '/Evidence.php';
 
 /**
  * Reads a pasted git log.
@@ -27,11 +28,23 @@ final class GitAnalyzer
     private $commits = array();
     /** @var Report */
     private $r;
+    /** @var SourceContext */
+    private $ctx;
 
     public function __construct(string $log)
     {
         $this->raw = str_replace(array("\r\n", "\r"), "\n", $log);
         $this->commits = $this->parse($this->raw);
+        // The log is the document here, so a commit's surroundings are the
+        // commits either side of it — which is exactly what makes a run of
+        // one-line fixes or a single evening's work legible.
+        $this->ctx = new SourceContext($this->raw);
+    }
+
+    /** One commit subject, quoted, shown among the commits around it. */
+    private function commitLine(string $subject, int $count = 1): Excerpt
+    {
+        return $this->ctx->find($subject, $count)->withText('"' . Report::excerpt($subject, 70) . '"');
     }
 
     /** @return array<int,array<string,mixed>> */
@@ -273,7 +286,7 @@ final class GitAnalyzer
         }
 
         if ($bursts) {
-            $this->r->flag('gh.velocity', array_slice($bursts, 0, 3));
+            $this->r->flag('gh.velocity', array_slice($bursts, 0, 3), count($bursts));
         }
     }
 
@@ -336,11 +349,11 @@ final class GitAnalyzer
             if ($words >= 8 && preg_match('~^(add|implement|create|build|set ?up|integrate|develop)\b~i', $s)
                 && preg_match('~\b(with|using|including|and|for)\b~i', $s)
                 && preg_match('~\b(auth\w*|api|endpoint|component|dashboard|integration|validation|middleware|schema|jwt|oauth|crud|responsive|payment|database|routing|state management)\b~i', $s)) {
-                $prompt[] = '"' . Report::excerpt($s, 80) . '"';
+                $prompt[] = $this->commitLine($s);
             }
         }
         if (count($prompt) >= 2) {
-            $this->r->flag('gh.prompt_messages', $prompt);
+            $this->r->flag('gh.prompt_messages', $prompt, count($prompt));
         }
 
         // Interchangeable messages.
@@ -348,36 +361,36 @@ final class GitAnalyzer
         $generic = array();
         foreach ($subjects as $s) {
             if (preg_match($genericRe, trim($s))) {
-                $generic[] = '"' . $s . '"';
+                $generic[] = $this->commitLine($s);
             }
         }
         if (count($generic) >= 3 && count($generic) / $total >= 0.3) {
             $this->r->flag('gh.generic_messages', array_merge(
-                array(sprintf('%d of %d subjects carry no information', count($generic), $total)),
-                array_slice(array_unique($generic), 0, 3)
-            ));
+                array(Excerpt::plain(sprintf('%d of %d subjects carry no information', count($generic), $total))),
+                array_slice($generic, 0, 3)
+            ), count($generic));
         }
 
         // Tracked work.
         $refs = array();
         foreach ($subjects as $s) {
             if (preg_match('~(#\d{1,6}\b|\b[A-Z]{2,8}-\d{1,6}\b)~', $s, $m)) {
-                $refs[] = '"' . Report::excerpt($s, 70) . '"';
+                $refs[] = $this->commitLine($s);
             }
         }
         if (count($refs) >= 2) {
-            $this->r->flag('gh.issue_refs', array_slice($refs, 0, 4));
+            $this->r->flag('gh.issue_refs', array_slice($refs, 0, 4), count($refs));
         }
 
         // Audible frustration.
         $mess = array();
         foreach ($subjects as $s) {
             if (preg_match('~\b(oops|argh|ugh|whoops|sigh|dammit|damn|finally|actually|for real|this time|please work|why (?:is|does|won\'?t)|forgot|stupid|revert the revert|no really|last try|hopefully)\b~i', $s)) {
-                $mess[] = '"' . Report::excerpt($s, 70) . '"';
+                $mess[] = $this->commitLine($s);
             }
         }
         if ($mess) {
-            $this->r->flag('gh.human_mess', array_slice($mess, 0, 4));
+            $this->r->flag('gh.human_mess', array_slice($mess, 0, 4), count($mess));
         }
     }
 
@@ -422,11 +435,11 @@ final class GitAnalyzer
         $branchy = array();
         foreach ($this->commits as $c) {
             if (preg_match('~^(merge|revert)\b~i', $c['subject'])) {
-                $branchy[] = '"' . Report::excerpt($c['subject'], 70) . '"';
+                $branchy[] = $this->commitLine($c['subject']);
             }
         }
         if ($branchy) {
-            $this->r->flag('gh.merges_and_reverts', array_slice($branchy, 0, 4));
+            $this->r->flag('gh.merges_and_reverts', array_slice($branchy, 0, 4), count($branchy));
         }
     }
 

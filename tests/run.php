@@ -136,7 +136,7 @@ $builder = '<!DOCTYPE html><html><head><title>x</title></head><body>'
     . '<script src="https://cdn.databutton.com/app.js"></script></body></html>';
 $r3 = (new SiteAnalyzer('https://x.example.com/', $builder))->analyze();
 ok($r3->has('fp.builder_other'), 'identifies a long-tail builder by name');
-ok(strpos(implode(' ', $r3->signals()[0]->evidence), 'Databutton') !== false,
+ok(strpos(implode(' ', $r3->signals()[0]->evidenceText()), 'Databutton') !== false,
    'names the specific builder in the evidence');
 
 // ------------------------------------------------- site: newer human tells
@@ -432,7 +432,7 @@ ok($r->has('se.weak_auth'), 'catches a token signed with no expiry');
 // is where redaction has to hold. Catalogue copy quoting the pattern is fine.
 $leaked = array();
 foreach ($r->signals() as $s) {
-    foreach ($s->evidence as $line) {
+    foreach ($s->evidenceText() as $line) {
         if (stripos($line, 'your-secret-key') !== false) $leaked[] = $s->id;
     }
 }
@@ -579,7 +579,7 @@ $r = (new SiteSurvey('https://example.com/', pageSet($allPages)))->analyze();
 ok($r->has('ct.placeholder_copy'), 'the same signal on every page is counted');
 $ev = '';
 foreach ($r->signals() as $s) {
-    if ($s->id === 'ct.placeholder_copy') $ev = implode(' ', $s->evidence);
+    if ($s->id === 'ct.placeholder_copy') $ev = implode(' ', $s->evidenceText());
 }
 ok(strpos($ev, 'of 6 pages') !== false, 'and says how many pages carried it', $ev);
 
@@ -1004,7 +1004,7 @@ ok($r->has('cd.tautological_params'), 'catches @param that restates the signatur
 
 $ev = '';
 foreach ($r->signals() as $s) {
-    if ($s->id === 'cd.assistant_chatter') $ev = implode(' | ', $s->evidence);
+    if ($s->id === 'cd.assistant_chatter') $ev = implode(' | ', $s->evidenceText());
 }
 ok(stripos($ev, "Here's a robust") !== false || stripos($ev, 'Sure!') !== false,
    'and shows which sentence gave it away', $ev);
@@ -1930,6 +1930,255 @@ $order = function (array $catalog) {
 };
 ok($order(Catalog::all()) === $order(array_reverse(Catalog::all(), true)),
    'the doc ordering is identical when the catalogue is reversed');
+
+// ------------------------------------------------------- evidence: context
+
+group('Evidence carries the code around it');
+
+$withContext = "<?php\n"
+    . "function a() { return 1; }\n"
+    . "// Set the total\n"
+    . "\$total = 1;\n"
+    . "// Get the user\n"
+    . "\$user = getUser();\n"
+    . "// Update the cache\n"
+    . "\$cache->update();\n"
+    . "// Calculate the sum\n"
+    . "\$sum = array_sum(\$rows);\n"
+    . str_repeat("\$x = 1;\n", 30);
+
+$r = (new CodeAnalyzer($withContext))->analyze();
+$what = null;
+foreach ($r->signals() as $s) {
+    if ($s->id === 'cd.what_comments') $what = $s;
+}
+ok($what !== null, 'the what-comment signal still fires');
+if ($what !== null) {
+    $first = $what->evidence[0];
+    ok($first instanceof Excerpt, 'evidence arrives as an excerpt, not a string');
+    ok($first->line !== null, 'the excerpt knows which line it was found on');
+    ok(count($first->context) > 1, 'the excerpt carries the lines around the match',
+       'got ' . count($first->context));
+
+    $matched = 0;
+    $before = 0;
+    $after = 0;
+    foreach ($first->context as $row) {
+        if ($row['match']) { $matched++; continue; }
+        if ($matched === 0) $before++; else $after++;
+    }
+    ok($matched === 1, 'exactly one context line is the match itself');
+    ok($before >= 1 && $after >= 1, 'there is code above it and code below it',
+       "{$before} above, {$after} below");
+
+    $arr = $what->toArray();
+    ok(isset($arr['excerpts'][0]['context']), 'the context survives into the JSON payload');
+    ok(is_array($arr['evidence']) && is_string($arr['evidence'][0]),
+       'the flat evidence strings are still published for older readers');
+}
+
+// A minified bundle has no lines above and below, so the window is characters.
+$minified = 'var a=1;' . str_repeat('function q' . 'z(){return 0}', 40) . 'const KEY="lovable-tagger";' . str_repeat('var b=2;', 40);
+$ex = Excerpt::locate($minified, 'lovable-tagger');
+ok($ex->line === 1, 'a hit in a minified bundle still reports its line');
+ok(count($ex->context) === 1 && strlen($ex->context[0]['code']) < 500,
+   'and shows a bounded window around the hit rather than the whole line',
+   isset($ex->context[0]) ? (string) strlen($ex->context[0]['code']) : 'none');
+ok(strpos($ex->context[0]['code'], 'lovable-tagger') !== false,
+   'the window is centred on what was matched');
+
+// Credentials never travel in the surroundings, whatever found them.
+$secretFile = "const config = {\n"
+    . "  name: 'app',\n"
+    . "  apiKey: 'sk-live-AAAAAAAAAAAAAAAAAAAAAAAA',\n"
+    . "  token: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abcdef',\n"
+    . "};\n";
+$redacted = Excerpt::atLine(explode("\n", $secretFile), 2)->toArray();
+$printed = json_encode($redacted);
+ok(strpos($printed, 'sk-live-AAAA') === false, 'a vendor key is masked inside the context');
+ok(strpos($printed, 'eyJhbGciOiJIUzI1NiJ9') === false, 'so is a JWT on a neighbouring line');
+
+// --------------------------------------------------- evidence: how often
+
+group('How often a signal fired counts');
+
+$once = new Report('code', 'x');
+$once->flag('cd.what_comments', array(Excerpt::plain('a comment restating its line')));
+
+$often = new Report('code', 'x');
+$lines = array();
+for ($i = 0; $i < 12; $i++) {
+    $lines[] = Excerpt::plain('comment number ' . $i . ' restating its line');
+}
+$often->flag('cd.what_comments', $lines);
+
+ok($once->signals()[0]->occurrences === 1, 'one excerpt is one occurrence');
+ok($often->signals()[0]->occurrences === 12, 'twelve excerpts are twelve occurrences');
+ok($often->signals()[0]->effectiveWeight() > $once->signals()[0]->effectiveWeight(),
+   'a habit repeated weighs more than one that fired once');
+ok($often->score() > $once->score(), 'and the score moves with it',
+   $once->score() . ' vs ' . $often->score());
+
+// The multiplier is bounded: forty occurrences is not four times ten.
+$flood = new Report('code', 'x');
+$flood->flag('cd.what_comments', array(Excerpt::plain('one')), 400);
+ok($flood->signals()[0]->repetitionFactor() <= 1.5 + 1e-9,
+   'repetition can never more than half again a signal\'s weight',
+   (string) $flood->signals()[0]->repetitionFactor());
+
+// Evidence beyond what is displayed is still counted.
+$many = new Report('code', 'x');
+$shown = array();
+for ($i = 0; $i < 9; $i++) {
+    $shown[] = Excerpt::plain('hit ' . $i);
+}
+$many->flag('cd.what_comments', $shown);
+ok(count($many->signals()[0]->evidence) === 4, 'only four excerpts are shown');
+ok($many->signals()[0]->occurrences === 9, 'but all nine are counted');
+
+// A fingerprint is an identification, and identifications do not accumulate.
+$fp = new Report('url', 'x');
+$fp->flag('fp.lovable', array(Excerpt::plain('the tagger')), 25);
+ok($fp->signals()[0]->repetitionFactor() === 1.0,
+   'finding a builder badge three times identifies it exactly once');
+
+// -------------------------------------------------- new site-side signals
+
+group('Further ways to tell');
+
+$devServer = '<!DOCTYPE html><html lang="en"><head><title>My App</title>'
+    . '<script type="module" src="/@vite/client"></script>'
+    . '<script type="module" src="/src/main.tsx"></script></head><body><div id="root"></div>'
+    . str_repeat('<p>Some copy that the page renders anyway.</p>', 30) . '</body></html>';
+$r = (new SiteAnalyzer('https://demo.example.com/', $devServer))->analyze();
+ok($r->has('st.dev_server_page'), 'catches a page served straight from the dev server');
+
+$local = '<!DOCTYPE html><html lang="en"><head><title>Shop</title></head><body>'
+    . '<img src="http://localhost:5173/hero.png" alt="hero">'
+    . str_repeat('<p>Copy.</p>', 30) . '</body></html>';
+ok((new SiteAnalyzer('https://shop.example.com/', $local))->analyze()->has('st.dev_server_page'),
+   'and a page still pointing at localhost');
+
+$preview = '<!DOCTYPE html><html lang="en"><head><title>Thing</title></head><body><p>Hi</p></body></html>';
+ok((new SiteAnalyzer('https://my-app-3f2a.vercel.app/', $preview))->analyze()->has('st.preview_host'),
+   'notes a site still on the platform\'s own subdomain');
+ok(!(new SiteAnalyzer('https://shop.example.com/', $preview))->analyze()->has('st.preview_host'),
+   'and says nothing about a site with its own domain');
+
+$formPage = '<!DOCTYPE html><html lang="en"><head><title>Contact</title></head><body>'
+    . '<form><input type="text" name="name"><input type="email" name="email">'
+    . '<textarea name="msg"></textarea><button type="submit">Send</button></form>'
+    . str_repeat('<p>We would love to hear from you about anything at all.</p>', 20)
+    . '</body></html>';
+ok((new SiteAnalyzer('https://thing.example.com/', $formPage))->analyze()->has('st.form_to_nowhere'),
+   'catches a contact form with nothing behind it');
+
+$wiredForm = str_replace('<form>', '<form action="https://formspree.io/f/abc" method="post">', $formPage);
+ok(!(new SiteAnalyzer('https://thing.example.com/', $wiredForm))->analyze()->has('st.form_to_nowhere'),
+   'and leaves a form that actually posts somewhere alone');
+
+$avatars = '<!DOCTYPE html><html lang="en"><head><title>Team</title></head><body>'
+    . '<img src="https://i.pravatar.cc/150?img=3" alt="a"><img src="https://randomuser.me/api/portraits/men/4.jpg" alt="b">'
+    . '<p>Contact us at hello@example.com or call (555) 123-4567.</p>'
+    . '<a href="https://twitter.com/"></a><a href="https://facebook.com/"></a>'
+    . str_repeat('<p>Copy about the team and what they do.</p>', 20) . '</body></html>';
+$r = (new SiteAnalyzer('https://team.example.com/', $avatars))->analyze();
+ok($r->has('ct.stock_avatars'), 'catches testimonial faces from an avatar service');
+ok($r->has('ct.placeholder_contact'), 'catches contact details nobody can reach');
+
+$prose = '<!DOCTYPE html><html lang="en"><head><title>Flow</title></head><body>'
+    . '<p>In today\'s fast-paced world, teams need more than just another tool.</p>'
+    . '<p>It\'s not just a dashboard, it\'s a way of working.</p>'
+    . '<p>Whether you\'re a founder or an operator, we help you elevate your workflow.</p>'
+    . '<p>Fast, simple, and reliable. Built, tested, and trusted. Plan, build, and ship.</p>'
+    . str_repeat('<p>More ordinary copy to give the page something to read.</p>', 20)
+    . '</body></html>';
+ok((new SiteAnalyzer('https://flow.example.com/', $prose))->analyze()->has('ct.llm_prose'),
+   'catches the model\'s sentence rhythm');
+
+$plainCopy = '<!DOCTYPE html><html lang="en"><head><title>Bakery</title></head><body>'
+    . str_repeat('<p>We bake bread every morning and sell it until it runs out.</p>', 30)
+    . '</body></html>';
+ok(!(new SiteAnalyzer('https://bakery.example.fr/', $plainCopy))->analyze()->has('ct.llm_prose'),
+   'and leaves plain copy alone');
+
+$dated = '<!DOCTYPE html><html lang="en"><head><title>Notes</title></head><body>'
+    . '<article><time datetime="2023-04-11">11 April 2023</time><p>A post.</p></article>'
+    . '<article><time datetime="2024-01-08">8 January 2024</time><p>Another post.</p></article>'
+    . '<article><time datetime="2025-06-02">2 June 2025</time><p>A third post.</p></article>'
+    . str_repeat('<p>Body copy under the posts.</p>', 20) . '</body></html>';
+ok((new SiteAnalyzer('https://notes.example.com/', $dated))->analyze()->has('hu.content_dates'),
+   'reads dated content as a mark of time passing');
+
+$careful = '<!DOCTYPE html><html lang="en"><head><title>Forms</title>'
+    . '<style>@media (prefers-reduced-motion: reduce){*{animation:none}}</style></head><body>'
+    . '<a href="#main" class="skip">Skip to content</a><main id="main">'
+    . '<form action="/subscribe" method="post">'
+    . '<label for="e">Email</label><input id="e" name="email">'
+    . '<label for="n">Name</label><input id="n" name="name"></form>'
+    . str_repeat('<p>Copy under the form.</p>', 20) . '</main></body></html>';
+ok((new SiteAnalyzer('https://forms.example.com/', $careful))->analyze()->has('hu.a11y_care'),
+   'reads accessibility work nobody was asked for as human');
+
+// A page in one enormous file, and a page with none of the publishing furniture.
+$single = '<!DOCTYPE html><html lang="en"><head><title>One</title><style>'
+    . str_repeat('.a{color:#111;padding:4px;margin:2px}', 200) . '</style></head><body>'
+    . str_repeat('<section><h2>A section</h2><p>Copy inside it, at some length.</p></section>', 160)
+    . '<script>' . str_repeat('function go(){return 1}', 200) . '</script></body></html>';
+ok((new SiteAnalyzer('https://one.example.com/', $single))->analyze()->has('st.single_file_page'),
+   'catches an entire application living in one document');
+
+$bare = '<!DOCTYPE html><html lang="en"><head><title>Product</title>'
+    . '<script src="/assets/index-Ba7Xk9Lm.js"></script></head><body>'
+    . str_repeat('<p>A built page with plenty of copy for people to read.</p>', 40)
+    . '</body></html>';
+ok((new SiteAnalyzer('https://product.example.com/', $bare))->analyze()->has('st.no_seo_furniture'),
+   'catches a built page that never acquired a description, a card or a favicon');
+
+$furnished = str_replace('</head>',
+    '<meta name="description" content="A product for people."><meta property="og:title" content="Product">'
+    . '<link rel="canonical" href="https://product.example.com/"><link rel="icon" href="/favicon.ico"></head>', $bare);
+ok(!(new SiteAnalyzer('https://product.example.com/', $furnished))->analyze()->has('st.no_seo_furniture'),
+   'and says nothing about a page that has them');
+
+// Alt text written the way a model describes a photograph.
+$alts = '<!DOCTYPE html><html lang="en"><head><title>Gallery</title></head><body>'
+    . '<img src="/a.jpg" alt="A modern office space with people working at desks">'
+    . '<img src="/b.jpg" alt="A smiling woman holding a laptop in a bright room">'
+    . '<img src="/c.jpg" alt="A group of colleagues discussing charts on a screen">'
+    . '<img src="/d.jpg" alt="An abstract illustration of connected nodes and lines">'
+    . str_repeat('<p>Copy under the gallery.</p>', 20) . '</body></html>';
+ok((new SiteAnalyzer('https://gallery.example.com/', $alts))->analyze()->has('ct.model_alt_text'),
+   'catches alt text written as image descriptions');
+
+// Functions all cut to the same length.
+$even = "<?php\n";
+for ($i = 0; $i < 8; $i++) {
+    $even .= "function step{$i}(\$input)\n{\n    \$value = \$input + {$i};\n    \$value = \$value * 2;\n    return \$value;\n}\n\n";
+}
+ok((new CodeAnalyzer($even))->analyze()->has('cd.uniform_function_length'),
+   'catches a file where every function is the same size');
+
+$uneven = "<?php\nfunction tiny(\$a)\n{\n    return \$a;\n}\n\n";
+$uneven .= "function big(\$rows)\n{\n" . str_repeat("    \$out[] = \$rows;\n", 40) . "    return \$out;\n}\n\n";
+$uneven .= "function mid(\$x)\n{\n" . str_repeat("    \$x++;\n", 9) . "    return \$x;\n}\n\n";
+$uneven .= "function other(\$y)\n{\n    return \$y - 1;\n}\n\n";
+$uneven .= "function last(\$z)\n{\n" . str_repeat("    \$z++;\n", 20) . "    return \$z;\n}\n";
+ok(!(new CodeAnalyzer($uneven))->analyze()->has('cd.uniform_function_length'),
+   'and leaves a file with lumpy functions alone');
+
+// Navigation pointing at pages the server does not have.
+$missing = array('https://demo.example.com/pricing' => 404, 'https://demo.example.com/docs' => 404);
+$survey = (new SiteSurvey('https://demo.example.com/', pageSet(array(
+    stubPage('home'), stubPage('about'), stubPage('team'),
+)), array(), array(), $missing))->analyze();
+ok($survey->has('xs.broken_nav_links'), 'catches a nav promising pages that do not exist');
+
+$deep = array('https://demo.example.com/blog/2019/old-post' => 404);
+$survey = (new SiteSurvey('https://demo.example.com/', pageSet(array(
+    stubPage('home'), stubPage('about'), stubPage('team'),
+)), array(), array(), $deep))->analyze();
+ok(!$survey->has('xs.broken_nav_links'), 'and treats one rotten deep link as the ordinary decay it is');
 
 // ------------------------------------------------------------------ catalog
 

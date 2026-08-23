@@ -65,7 +65,7 @@ if ($crawl) {
     }
 
     $entry = $pages[0]['url'];
-    $result = (new SiteSurvey($entry, $pages, $crawler->notes(), $crawler->sitemap()))->analyze()->toArray();
+    $result = (new SiteSurvey($entry, $pages, $crawler->notes(), $crawler->sitemap(), $crawler->missing()))->analyze()->toArray();
 } else {
     try {
         $doc = $fetcher->fetchSite($url);

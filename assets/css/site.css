@@ -427,9 +427,11 @@ label.field code {
 
 .signal-body {
   padding: .75rem 0 .25rem 1.85rem;
-  max-width: 60ch;
+  /* Wider than the prose it contains, because the evidence under it is code
+     and code that wraps at the reading measure is code nobody can read. */
+  max-width: 78ch;
 }
-.signal-body p { margin: 0 0 .6rem; color: var(--ink-2); font-size: .9375rem; }
+.signal-body p { margin: 0 0 .6rem; max-width: 60ch; color: var(--ink-2); font-size: .9375rem; }
 
 .excerpts { margin: 0; padding: 0; list-style: none; }
 .excerpts li {
@@ -438,10 +440,58 @@ label.field code {
   background: var(--paper-3);
   border-left: 2px solid var(--rule-2);
   padding: .4rem .6rem;
-  margin-bottom: .35rem;
+  margin-bottom: .5rem;
   overflow-wrap: anywhere;
   color: var(--ink-2);
 }
+
+/* how often a signal fired: the number is part of the reading, not decoration */
+.occurrences {
+  font-family: var(--mono);
+  font-size: .625rem;
+  color: var(--ink-3);
+  border: 1px solid var(--rule-2);
+  border-radius: 999px;
+  padding: 0 .35rem;
+  white-space: nowrap;
+}
+.signal summary { grid-template-columns: 1.25rem minmax(0, 1fr) auto auto; }
+
+.excerpt-text { display: block; color: var(--ink); }
+.excerpt-where {
+  display: block;
+  margin-top: .15rem;
+  font-size: .625rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* the lines above and below the match, which are the reason any of this is
+   checkable rather than takeable on trust */
+.excerpt-context {
+  margin: .45rem 0 0;
+  padding: .35rem 0;
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  overflow-x: auto;
+  font-size: .6875rem;
+  line-height: 1.5;
+}
+.excerpt-context code { display: block; min-width: max-content; }
+.ctx-line { display: block; padding: 0 .5rem; white-space: pre; }
+.ctx-line.is-match { background: var(--red-soft); }
+.signal.is-human .ctx-line.is-match { background: rgba(63, 107, 74, .12); }
+.ctx-n {
+  display: inline-block;
+  width: 3.5ch;
+  margin-right: .75ch;
+  text-align: right;
+  color: var(--ink-3);
+  user-select: none;
+}
+.ctx-code { color: var(--ink-2); }
+.ctx-line.is-match .ctx-code { color: var(--ink); }
 
 /* per-page breakdown, whole-site mode */
 
@@ -615,6 +665,7 @@ section.band { padding: clamp(2.5rem, 6vw, 4rem) 0; border-top: 1px solid var(--
   .verdict { grid-template-columns: 1fr; }
   .signal summary { grid-template-columns: 1.25rem minmax(0, 1fr); }
   .signal-tags { grid-column: 2; }
+  .occurrences { grid-column: 2; justify-self: start; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -156,6 +156,9 @@ final class Catalog
             'xs.uniform_page_size' => self::mk($w, $ai, 0.7, 'Every page is the same weight',
                 'Pages within a few percent of each other in size and element count. Real sites are lumpy because real content is lumpy: an About page is not the same length as a pricing table.'),
 
+            'xs.broken_nav_links' => self::mk($w, $ai, 0.65, 'The navigation promises pages that do not exist',
+                'Top-level links in the site\'s own navigation answer with an error. Links rot over years, but they rot deep in a site; a front page pointing at a pricing page that was never built is a page nobody clicked before publishing.'),
+
             'xs.style_drift' => self::mk($w, $hu, 1.0, 'Pages from different eras',
                 'One page on an older stack, another rebuilt more recently; inconsistent markup conventions between sections. Drift like this is what accretion looks like, and it is expensive to fake.'),
             'xs.varied_pages' => self::mk($w, $hu, 0.8, 'Pages genuinely differ in shape',
@@ -190,6 +193,19 @@ final class Catalog
                 'A banner comment at the top of the file restating the filename and describing the module\'s purpose in prose. Humans write these for libraries other people consume; generators write them for every file including the ones nobody reads.'),
             'st.full_scaffold' => self::mk($s, $ai, 0.35, 'Textbook-complete document scaffold',
                 'Complete head, full meta and social tags, alt text and ARIA labels everywhere, arriving fully formed rather than accreting over time. This is also just good practice, hence the low weight.'),
+
+            // The build step that never ran, and the shapes a page takes when
+            // nobody came back to it after the first version worked.
+            'st.dev_server_page' => self::mk($s, $ai, 1.6, 'Served straight from the development server',
+                'The document loads unbundled TypeScript or JSX modules, or the dev server\'s own client script. Nothing was built for production: what is online is the editor\'s preview, published as-is.'),
+            'st.form_to_nowhere' => self::mk($s, $ai, 0.85, 'Forms that submit nowhere',
+                'A contact or signup form with no action, no endpoint and no handler behind it. The page looks like it collects something and collects nothing, which is what a generated interface does before anybody wires it up.'),
+            'st.no_seo_furniture' => self::mk($s, $ai, 0.5, 'None of the furniture a published page acquires',
+                'No description, no canonical, no social card, no favicon — on a page otherwise built to be shown to people. Anyone who has ever shared a link fixes this the first time it looks wrong in a message.'),
+            'st.single_file_page' => self::mk($s, $ai, 0.55, 'The whole application in one file',
+                'Markup, styles and behaviour in a single document, at a size nobody maintains that way. This is what one prompt returns and what a project acquires a directory for on about day two.'),
+            'st.preview_host' => self::mk($s, $ai, 0.4, 'Still on the platform\'s own preview domain',
+                'The site answers on a deployment platform\'s default subdomain with no custom domain in front of it. Plenty of real projects live there too, which is why this is weighted as a nudge rather than a finding.'),
 
             // ---- Code style -------------------------------------------------
             'cd.emoji_comments' => self::mk($c, $ai, 1.3, 'Emoji inside code comments',
@@ -239,6 +255,9 @@ final class Catalog
             'cd.main_guard' => self::mk($c, $ai, 0.4, 'Entry-point guard on a module nothing runs',
                 'if __name__ == "__main__": on a library module that is only ever imported.'),
 
+            'cd.uniform_function_length' => self::mk($c, $ai, 0.5, 'Every function is the same length',
+                'Function bodies cluster tightly around one size. Human files are lumpy — a three-line helper next to a hundred-line one nobody has split yet — because they were written at different times for different reasons.'),
+
             // ---- Content ------------------------------------------------------
             'ct.generic_names' => self::mk($t, $ai, 0.7, 'Statistically generic placeholder people',
                 'Testimonials from the most common names in the training data, with titles like "Verified User" or "Head of Operations".'),
@@ -254,6 +273,15 @@ final class Catalog
                 'Lorem ipsum, "Coming soon", "Your text here" on a live page.'),
             'ct.dead_links' => self::mk($t, $ai, 0.4, 'Navigation that goes nowhere',
                 'A full nav and footer where most links are href="#".'),
+
+            'ct.stock_avatars' => self::mk($t, $ai, 0.7, 'Testimonial faces from an avatar service',
+                'The people quoted on the page are served by pravatar, randomuser.me, DiceBear or a placeholder image host. Whoever built it needed a face in that slot and took the first one available, which means there was no person to photograph.'),
+            'ct.llm_prose' => self::mk($t, $ai, 0.6, 'The model\'s sentence rhythm',
+                'Not the vocabulary but the shape: "it\'s not just X, it\'s Y", "whether you\'re X or Y", the three-item list where two would do, the sentence that opens by naming the era we live in. Human marketing copy uses these; it does not use all of them at once.'),
+            'ct.placeholder_contact' => self::mk($t, $ai, 0.75, 'Contact details nobody can reach',
+                'An @example.com address, a 555 phone number, 123 Main Street, or social links pointing at the platform\'s home page rather than an account. A business that wants to be contacted fixes these before launch; a demo never had to.'),
+            'ct.model_alt_text' => self::mk($t, $ai, 0.4, 'Alt text written as image descriptions',
+                'Every image carries a long, evenly-worded description of what is in the picture. Real alt text is uneven — terse where the image is decorative, specific where it matters, missing where somebody forgot.'),
 
             // ---- Security profile ------------------------------------------
             // The most durable family: syntax correctness climbed past 95% while
@@ -332,6 +360,11 @@ final class Catalog
                 'authSvc, cfg, mgr, activeSub. Shorthand that assumes a reader who already has the context.'),
             'hu.build_stripped' => self::mk($h, $hu, 0.2, 'Output of a build pipeline',
                 'Minified, comment-stripped, content-hashed assets. This used to mean somebody set a toolchain up; it is now what every generator emits by default too, so it carries much less than it did and is withheld entirely when the same page is carrying a builder fingerprint or an untouched scaffold.'),
+            'hu.content_dates' => self::mk($h, $hu, 0.6, 'Content dated across months or years',
+                'Published dates, "last updated" lines or changelog entries spread over real time. Somebody came back to this page after the day it was made, which is the one thing a single generation pass cannot produce.'),
+            'hu.a11y_care' => self::mk($h, $hu, 0.45, 'Accessibility somebody actually did',
+                'A skip link, reduced-motion handling, focus-visible styles, labelled inputs: work that no visitor sees and no generator is asked for. It is done by people who have been told off about it before.'),
+
             'hu.real_media' => self::mk($h, $hu, 0.4, 'Real and varied media',
                 'Photographs at irregular sizes from irregular sources, rather than one generated hero image.'),
         );

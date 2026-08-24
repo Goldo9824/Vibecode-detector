@@ -39,28 +39,38 @@ and the connection, because PHP's HTTP clients do not expose connect-to-IP pinni
 without extension-level support that shared hosting may not have. Reports that
 demonstrate a practical exploit are welcome and will be taken seriously.
 
-**2. Certificate integrity (`lib/bootstrap.php`, `api/certificate.php`).**
+**2. The page-picture endpoint (`api/snapshot.php`, `lib/Snapshot.php`).** The
+second place a stranger's input turns into an outbound request, and the only
+place this server passes another server's bytes back to a visitor under its own
+domain. The address is HMAC-signed by this installation, so the endpoint answers
+only for pages it offered a picture of; what comes back is served only when its
+magic number says it is an image, under `default-src 'none'; sandbox` and
+`nosniff`; and nothing is written to disk at any point. In scope: any way to
+have it fetch an address it never signed, to get a non-image served from this
+domain, or to make the signature check pass for an address it should not.
+
+**3. Certificate integrity (`lib/bootstrap.php`, `api/certificate.php`).**
 Certificates are HMAC-SHA256 signed over a compact payload and verified with
 `hash_equals`. The PDF is rendered from the *verified* payload, and the signal list
 is rebuilt from catalogue ids rather than from posted text, so a tampered link
 cannot inject arbitrary content into a certificate. Anything that lets a certificate
 be forged, or that gets unverified input into the rendered PDF, is in scope.
 
-**3. Key handling.** `data/secret.key` is generated with `random_bytes(32)` on first
+**4. Key handling.** `data/secret.key` is generated with `random_bytes(32)` on first
 use, written `0600`, and denied by `.htaccess` in two independent ways. Any path
 that exposes it is in scope. If the data directory is not writable the code falls
 back to a key derived from the installation path — this is documented, weaker, and
 reports about it are welcome as hardening suggestions rather than vulnerabilities.
 
-**4. Output handling.** Analysed content is echoed back as evidence excerpts. It is
+**5. Output handling.** Analysed content is echoed back as evidence excerpts. It is
 JSON-encoded and inserted with `textContent`, never `innerHTML`, and the page is
 served under a CSP with `default-src 'none'`. Any route to XSS through analysed
 content is in scope.
 
-**5. Resource exhaustion.** Per-IP rate limiting is file-based and deliberately
+**6. Resource exhaustion.** Per-IP rate limiting is file-based and deliberately
 fails open. Reports of a way to pin the server's CPU or fill its disk are in scope.
 
-**6. Admin panel (`admin/`, `lib/AdminAuth.php`).** Password-gated, session-based,
+**7. Admin panel (`admin/`, `lib/AdminAuth.php`).** Password-gated, session-based,
 with a per-form CSRF token and a rate-limited login. `data/admin-password.php` and
 `data/db-config.php` are denied the same two ways as `data/secret.key`, and no
 admin route is reachable without a valid session. In scope: anything that reaches

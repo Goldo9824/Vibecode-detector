@@ -133,6 +133,13 @@ jobs:
           [ "$code" = "400" ] || { echo "::error::expected 400, got $code"; exit 1; }
           echo "forgery refused"
 
+      - name: The page picture refuses an address it never signed
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+                  "http://127.0.0.1:8080/api/snapshot.php?u=https%3A%2F%2Fexample.com%2F&t=deadbeef")
+          [ "$code" = "403" ] || { echo "::error::expected 403, got $code"; exit 1; }
+          echo "unsigned picture request refused"
+
       - name: The fetcher refuses local addresses
         run: |
           for target in "http://127.0.0.1:8080/" "http://169.254.169.254/" "http://localhost/"; do

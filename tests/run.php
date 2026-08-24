@@ -24,6 +24,7 @@ require_once dirname(__DIR__) . '/lib/Pager.php';
 require_once dirname(__DIR__) . '/lib/AdminUi.php';
 require_once dirname(__DIR__) . '/lib/Num.php';
 require_once dirname(__DIR__) . '/lib/Seo.php';
+require_once dirname(__DIR__) . '/lib/Snapshot.php';
 
 $passed = 0;
 $failed = 0;
@@ -1202,6 +1203,58 @@ $mixed->flag('cd.blanket_try', array('x'));
 $mixed->flag('hu.why_comments', array('x'));
 $mixed->flag('hu.ticket_refs', array('x'));
 between($mixed->score(), 15, 45, 'opposing evidence pulls the score down');
+
+// ----------------------------------------------------------- page pictures
+
+group('The picture of the front page');
+
+$shotConfig = VCD_DATA . '/snapshot-config.php';
+$hadShotConfig = is_readable($shotConfig);
+
+ok(Snapshot::enabled(), 'a fresh checkout offers a picture');
+
+$desc = Snapshot::descriptor('https://flowsync.example.com/');
+ok($desc !== null && strpos($desc['url'], 'api/snapshot.php?u=') !== false, 'the report carries an address to fetch it from');
+ok($desc !== null && $desc['provider'] !== '', 'and names whoever renders it');
+ok($desc !== null && strpos($desc['url'], rawurlencode('https://flowsync.example.com/')) !== false, 'the address it pictures is the one analysed');
+
+// The endpoint answers for addresses this installation handed out and no
+// others, which is what keeps it from being an open image proxy.
+$token = Snapshot::token('https://flowsync.example.com/');
+ok(Snapshot::tokenValid('https://flowsync.example.com/', $token), 'a token this site issued is accepted');
+ok(!Snapshot::tokenValid('https://elsewhere.example.com/', $token), 'the same token for another address is not');
+ok(!Snapshot::tokenValid('https://flowsync.example.com/', str_repeat('0', 32)), 'an invented token is not');
+
+ok(Snapshot::addressable('https://example.com/'), 'a public address can be pictured');
+ok(!Snapshot::addressable('http://localhost/'), 'localhost cannot');
+ok(!Snapshot::addressable('http://192.168.1.4/'), 'a private address cannot');
+ok(!Snapshot::addressable('file:///etc/passwd'), 'a file path cannot');
+ok(Snapshot::descriptor('http://127.0.0.1/') === null, 'and no picture is offered of one');
+
+$request = Snapshot::requestUrl('https://flowsync.example.com/?a=1&b=2');
+ok(strpos($request, 's0.wp.com') !== false, 'the default renderer is the one with no key to sign up for');
+ok(strpos($request, rawurlencode('https://flowsync.example.com/?a=1&b=2')) !== false, 'the target is encoded into the request whole');
+ok(strpos($request, '{enc}') === false && strpos($request, '{w}') === false, 'no placeholder survives into the request');
+
+ok(Snapshot::imageType("\xFF\xD8\xFF\xE0" . str_repeat('x', 40)) === 'image/jpeg', 'a JPEG is recognised by its bytes');
+ok(Snapshot::imageType("\x89PNG\r\n\x1A\n" . str_repeat('x', 40)) === 'image/png', 'so is a PNG');
+ok(Snapshot::imageType('<!doctype html><html>' . str_repeat('x', 40)) === '', 'an HTML error page is not an image whatever it claims');
+ok(Snapshot::imageType('') === '', 'and nor is nothing');
+
+// The off switch is a privacy promise, so it is tested rather than assumed:
+// with pictures off, no report offers one and the endpoint has nothing to
+// answer for.
+if (!$hadShotConfig) {
+    @file_put_contents($shotConfig, "<?php\nreturn array('enabled' => false);\n");
+    Snapshot::forget();
+    ok(!Snapshot::enabled(), 'an operator can switch pictures off');
+    ok(Snapshot::descriptor('https://flowsync.example.com/') === null, 'and then no report offers one');
+    $off = Snapshot::capture('https://flowsync.example.com/');
+    ok($off['state'] === 'off', 'and nothing is fetched from anyone');
+    @unlink($shotConfig);
+    Snapshot::forget();
+    ok(Snapshot::enabled(), 'removing the file puts it back');
+}
 
 // -------------------------------------------------------------- certificate
 

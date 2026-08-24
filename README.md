@@ -62,6 +62,14 @@ not decoration, it feeds the score. You can then download a signed one-page PDF
 certificate, which anyone can check at
 [/verify](https://vibecodedetector.fanficnow.com/verify).
 
+A URL report also carries **a picture of the front page**, above the evidence,
+so you can see at a glance whether the thing being read is the thing you meant —
+a parked domain, a redirect, a login wall and a product site are all obvious in
+a picture and all look similar in a list of excerpts. It is context, never
+evidence: nothing in the score is computed from it. See
+[docs/SNAPSHOTS.md](docs/SNAPSHOTS.md) for who renders it and how to switch it
+off.
+
 ## What it does not do
 
 It does not prove anything, and the interface says so before it says anything else.
@@ -240,7 +248,7 @@ verify.php         certificate verification
 llms.txt           instructions for an AI agent calling api/website.php
 robots.txt         disallows /admin/, points at the sitemap
 sitemap.php        served as /sitemap.xml, built for whatever domain it runs on
-api/               analyze.php, website.php, certificate.php
+api/               analyze.php, website.php, certificate.php, snapshot.php
 admin/             optional password-gated key management and usage dashboard
 lib/
   Catalog.php      every signal, its weight and its reasoning — the source of truth
@@ -251,6 +259,7 @@ lib/
   Crawler.php      polite same-origin crawl, robots.txt and a time budget
   SiteSurvey.php   multi-page aggregation and cross-page comparison
   Fetcher.php      HTTP with SSRF protection
+  Snapshot.php     the picture of the front page, and who renders it
   Db.php           optional MySQL connection, used only by admin/
   ApiKeys.php      API key CRUD, backed by Db.php
   UsageLog.php     usage recording and stats, backed by Db.php
@@ -270,11 +279,20 @@ tools/             doc and asset generators
 
 ## Privacy
 
-No account, no cookies, no third-party analytics, nothing loaded from anyone else's
-server. Pasted code and git history are read once in memory and discarded, never
-written to disk — that's true with or without anything below. Certificates are
-signed rather than stored, which is why verification is a signature check and not a
-lookup — there is nothing to look up.
+No account, no cookies, no third-party analytics, and nothing your browser loads
+from anyone else's server. Pasted code and git history are read once in memory and
+discarded, never written to disk — that's true with or without anything below.
+Certificates are signed rather than stored, which is why verification is a signature
+check and not a lookup — there is nothing to look up.
+
+One thing does leave this server. The picture of the front page is taken by a
+rendering service, because shared hosting cannot render a page, and that service is
+told the address being analysed — an address this server was already fetching, but
+now known to one more party. Your browser is not part of it: the image is passed
+through `api/snapshot.php`, so nothing you load comes from anywhere but here, and
+nothing about the picture is written down at either end. The report names the
+renderer under the picture, and `'enabled' => false` in `data/snapshot-config.php`
+switches the whole thing off — see [docs/SNAPSHOTS.md](docs/SNAPSHOTS.md).
 
 The one opt-in exception: an operator can configure a database for `admin/`
 (see [docs/ADMIN.md](docs/ADMIN.md)) to manage named API keys and to see how the

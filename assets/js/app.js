@@ -225,6 +225,7 @@
     if (data.counts.human) counts += ' · ' + compact(data.counts.human) + ' pointing the other way';
     $('r-counts').textContent = counts;
 
+    renderShot(data);
     renderSignals(data.signals);
     renderPages(data);
     renderTrend(data);
@@ -236,6 +237,56 @@
 
     results.hidden = false;
     results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  var shotTimer = null;
+
+  // A renderer queues a page it has not seen before and answers the first ask
+  // with a placeholder, which reaches us as a 202 and reaches the <img> as a
+  // failure to load. So a miss is a reason to come back, two or three times,
+  // spaced out — and then to stop, because the report is complete without it.
+  var SHOT_WAITS = [2500, 4000, 6000];
+
+  function renderShot(data) {
+    var fig = $('r-shot');
+    var img = $('r-shot-img');
+    var status = $('r-shot-status');
+
+    if (shotTimer) {
+      window.clearTimeout(shotTimer);
+      shotTimer = null;
+    }
+    fig.className = 'shot';
+    img.removeAttribute('src');
+    img.alt = '';
+
+    var shot = data.snapshot;
+    if (!shot || !shot.url) {
+      fig.hidden = true;
+      return;
+    }
+
+    img.alt = 'The front page of ' + data.target;
+    status.textContent = 'Rendering the front page…';
+    $('r-shot-caption').textContent = 'The front page as ' + shot.provider +
+      ' rendered it, passed through this site so your browser never asks them for it. ' +
+      'It is there to show you what was read. Nothing in the reading below is scored on it.';
+    fig.hidden = false;
+
+    var tries = 0;
+    img.onload = function () { fig.className = 'shot is-ready'; };
+    img.onerror = function () {
+      if (tries < SHOT_WAITS.length) {
+        var wait = SHOT_WAITS[tries++];
+        status.textContent = 'Still rendering…';
+        shotTimer = window.setTimeout(function () { img.src = shot.url + '&r=' + tries; }, wait);
+        return;
+      }
+      fig.className = 'shot is-empty';
+      $('r-shot-caption').textContent = '';
+      status.textContent = 'No picture this time. The reading below does not depend on one.';
+    };
+    img.src = shot.url;
   }
 
   function renderSignals(signals) {

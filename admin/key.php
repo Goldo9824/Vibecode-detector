@@ -78,7 +78,7 @@ if ($pdo === null) {
           <tbody>
             <?php foreach ($hosts as $row): ?>
               <tr>
-                <td><?= h((string) $row['target_host']) ?></td>
+                <td><a href="website.php?host=<?= h(rawurlencode((string) $row['target_host'])) ?>&amp;days=30"><?= h((string) $row['target_host']) ?></a></td>
                 <td class="num"><?= (int) $row['n'] ?></td>
               </tr>
             <?php endforeach; ?>

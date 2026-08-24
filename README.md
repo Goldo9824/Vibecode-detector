@@ -223,8 +223,10 @@ AI agent to read and call the endpoint correctly on its own.
 
 An optional, password-gated dashboard at `/admin/` for creating and revoking
 named API keys and seeing usage — total analyses by mode, the most-analysed
-websites, and the same broken down per key. Inert with no database
-configured; see **[docs/ADMIN.md](docs/ADMIN.md)**.
+websites, and the same broken down per key. Every website that has ever been
+analysed has its own searchable, sortable list forty rows to a page, and its
+own page of charts. Inert with no database configured; see
+**[docs/ADMIN.md](docs/ADMIN.md)**.
 
 ## Layout
 
@@ -248,6 +250,9 @@ lib/
   ApiKeys.php      API key CRUD, backed by Db.php
   UsageLog.php     usage recording and stats, backed by Db.php
   AdminAuth.php    admin session, login and CSRF
+  AdminUi.php      how the panel words dates, modes and page numbers
+  Pager.php        page-number arithmetic for a long list
+  Chart.php        charts, drawn as SVG on the server
   Pdf.php          a small PDF 1.4 writer
   Brand.php        the mark, as geometry
   Certificate.php  certificate layout

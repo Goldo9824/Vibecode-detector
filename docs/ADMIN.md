@@ -73,15 +73,54 @@ Visit `/admin/` and log in. From there:
   accepting it right away) without deleting its usage history, so you can
   still see what it was used for afterward.
 - **Usage, last 30 days** — total analyses by mode (live page, whole site,
-  pasted code, git history) across everyone, and the most-analysed websites
-  across all callers.
+  pasted code, git history) across everyone, and the twenty most-analysed
+  websites across all callers. **See all N websites** under that table opens
+  the full list.
 - **View usage** on a key's row — the same breakdown restricted to that one
   key: how many requests, and which websites it pointed at.
+
+Any website name in the panel is a link to that website's own page.
 
 The panel is disallowed in `robots.txt` and every admin page sets
 `X-Robots-Tag`-equivalent `noindex, nofollow`, but that is not access
 control — the password is. Nothing else links to `/admin/` from the public
 site.
+
+## Websites
+
+`admin/websites.php` is every website that has ever been analysed, not just
+the busiest twenty of the last month. Forty rows to a page, with numbered
+pages under the table.
+
+- **Search** matches any part of a host name. A typed `_` or `%` is a literal
+  one — the term is escaped before it reaches `LIKE`, so the box answers the
+  question that was typed.
+- **Window** is all time by default, and switches to the last 7, 30 or 90 days.
+- **Order** is by when each site was last searched by default — the order they
+  came in — and switches to first searched, most analysed, least analysed, or
+  alphabetical.
+
+Every one of those is in the query string rather than in a session, so a view
+you want again is a URL you can bookmark, and a page number past the end of
+the list shows the last page rather than an error.
+
+`admin/websites.php` lists hosts only: pasted code and git history never
+appear there, because they carry no website to attribute an analysis to and
+the pasted content itself is never written down.
+
+### One website
+
+Clicking a host opens `admin/website.php?host=…`: analyses over time as a
+chart, how it was checked (live page vs whole site), whether the request came
+through this site or the API, which key was used, and the most recent
+analyses with the exact addresses submitted. It takes the same window
+switcher as the list.
+
+The chart draws one column per day up to a 90-day window and one per week
+past that — a year of daily columns is a bar a pixel wide, which reads as an
+empty grid rather than as a measurement. On "all time" it covers from the
+first analysis to today, up to a year; the totals above it always cover
+everything.
 
 ## Traffic
 

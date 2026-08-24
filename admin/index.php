@@ -7,6 +7,7 @@ require_once dirname(__DIR__) . '/lib/ApiKeys.php';
 require_once dirname(__DIR__) . '/lib/UsageLog.php';
 require_once dirname(__DIR__) . '/lib/VisitLog.php';
 require_once dirname(__DIR__) . '/lib/Chart.php';
+require_once dirname(__DIR__) . '/lib/AdminUi.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
@@ -64,6 +65,7 @@ $totalCount = 0;
 $topHosts = array();
 $visits = array('views' => 0, 'visitors' => 0, 'bots' => 0, 'busiest' => null);
 $visitDaily = array();
+$hostsEver = 0;
 
 if ($pdo !== null) {
     try {
@@ -71,6 +73,9 @@ if ($pdo !== null) {
         $totalsByMode = UsageLog::totalsByMode($pdo, 30);
         $totalCount = UsageLog::totalCount($pdo, 30);
         $topHosts = UsageLog::topHosts($pdo, 30, null, 20);
+        // Not restricted to the window: the link below promises the whole
+        // list, so the number beside it has to be the whole list.
+        $hostsEver = UsageLog::hostTotal($pdo, 0, '');
         // The headline only. Everything else about traffic lives on visits.php,
         // which is where the window switcher and the breakdowns are.
         $visits = VisitLog::summary($pdo, 30);
@@ -226,19 +231,28 @@ if ($pdo !== null) {
       </div>
 
       <?php if (empty($topHosts)): ?>
-        <p class="hint">No live-page or whole-site checks in the last 30 days yet.</p>
+        <p class="hint">No live-page or whole-site checks in the last 30 days yet.
+           <?php if ($hostsEver > 0): ?>
+             <a href="websites.php">All <?= number_format($hostsEver) ?> websites ever searched &rarr;</a>
+           <?php endif; ?></p>
       <?php else: ?>
+        <h3 class="admin-sub">Busiest websites</h3>
         <table class="admin-table">
           <thead><tr><th>Website</th><th class="num">Analyses</th></tr></thead>
           <tbody>
             <?php foreach ($topHosts as $row): ?>
               <tr>
-                <td><?= h((string) $row['target_host']) ?></td>
+                <td><a href="website.php?host=<?= h(rawurlencode((string) $row['target_host'])) ?>&amp;days=30"><?= h((string) $row['target_host']) ?></a></td>
                 <td class="num"><?= (int) $row['n'] ?></td>
               </tr>
             <?php endforeach; ?>
           </tbody>
         </table>
+
+        <p class="see-more">
+          <a class="btn" href="websites.php">See all <?= number_format($hostsEver) ?> websites</a>
+          <span class="hint">Everything ever searched, searchable and in any order &mdash; not just the busiest twenty of the last thirty days.</span>
+        </p>
       <?php endif; ?>
     </section>
 

@@ -198,3 +198,90 @@ a.range {
 }
 a.range:hover { color: var(--ink); }
 a.range.is-on { color: var(--red); border-bottom-color: var(--red); }
+
+/* The websites list is four columns of mostly numbers and dates, so it gets
+   more room than the key list does. */
+.admin-shell.wide { max-width: 64rem; }
+
+.admin-sub {
+  font-family: var(--mono);
+  font-size: .7rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 400;
+  margin: 0 0 .6rem;
+}
+
+table.admin-table td.when {
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: .78rem;
+  white-space: nowrap;
+}
+table.admin-table td.wrap-any { word-break: break-all; }
+
+.stat .n .of { font-size: .9rem; color: var(--ink-3); }
+/* A date is not a quantity: at 1.6rem it shouts over the numbers beside it. */
+.stat .n.is-date { font-size: 1.05rem; }
+
+/* "See all N websites", under the twenty the front page has room for. */
+.see-more {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1.2rem;
+}
+.see-more .hint { margin: 0; flex: 1 1 18rem; }
+
+.search-form { margin-bottom: 1.5rem; }
+.search-form label.field { display: block; margin-bottom: .3rem; }
+.search-row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+.search-row input[type="search"] {
+  flex: 1 1 20rem;
+  background: var(--paper);
+  border: 1px solid var(--rule-2);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: .875rem;
+  line-height: 1.5;
+  padding: .7rem .8rem;
+  border-radius: 2px;
+}
+.search-row input[type="search"]:focus { border-color: var(--red); outline: none; }
+
+/* Page numbers. Links, so every page of the list is its own URL — the same
+   reason the window switcher above is links and not a <select>. */
+.pager {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  flex-wrap: wrap;
+  margin-top: 1.5rem;
+  font-family: var(--mono);
+  font-size: .8rem;
+}
+.pager .page {
+  display: inline-block;
+  min-width: 2rem;
+  padding: .3rem .5rem;
+  text-align: center;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--ink-2);
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+a.page:hover { border-color: var(--rule-2); color: var(--ink); }
+.pager .page.is-on { border-color: var(--red); color: var(--red); }
+.pager .page.is-off { color: var(--rule-2); border-color: transparent; }
+.pager .page-step { min-width: 0; }
+.pager .page-gap { color: var(--ink-3); padding: 0 .15rem; }
+
+/* A four-column table on a phone either shreds its host names into columns of
+   two letters or it scrolls. Scrolling keeps the names readable and stops the
+   page itself from sliding sideways under the reader. */
+.table-scroll { overflow-x: auto; }
+.table-scroll table.admin-table { min-width: 32rem; }
+.table-scroll td.with-bar .bar-label { word-break: normal; overflow-wrap: anywhere; }

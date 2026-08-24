@@ -7,6 +7,7 @@ require_once dirname(__DIR__) . '/lib/AdminAuth.php';
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 header('X-Frame-Options: DENY');
+header('X-Robots-Tag: noindex, nofollow, noarchive, nosnippet');
 
 if (AdminAuth::isLoggedIn()) {
     header('Location: index.php');
@@ -33,7 +34,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Admin — Vibe Code Detector</title>
-<meta name="robots" content="noindex, nofollow">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../assets/css/site.css?v=<?= h(VCD_VERSION) ?>">
 <link rel="stylesheet" href="../assets/css/admin.css?v=<?= h(VCD_VERSION) ?>">

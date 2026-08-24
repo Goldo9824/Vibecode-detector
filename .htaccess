@@ -18,6 +18,12 @@ Options -Indexes -MultiViews
   # Pretty paths for the two pages that have them.
   RewriteRule ^verify/?$ verify.php [L,QSA]
   RewriteRule ^certificate/?$ api/certificate.php [L,QSA]
+
+  # The sitemap is generated so that a fork on another domain gets its own
+  # addresses rather than this one's, but it has to answer on the name every
+  # crawler looks for. On a host with no mod_rewrite there is simply no
+  # sitemap, which costs nothing a search engine cannot work out by crawling.
+  RewriteRule ^sitemap\.xml$ sitemap.php [L]
 </IfModule>
 
 # Belt and braces for hosts where mod_rewrite is off.
@@ -41,6 +47,12 @@ Options -Indexes -MultiViews
   <FilesMatch "\.(php)$">
     Header set Cache-Control "no-store, no-cache, must-revalidate"
   </FilesMatch>
+
+  # Except the sitemap, which holds nothing private and is fetched by crawlers
+  # that will happily come back tomorrow.
+  <Files "sitemap.php">
+    Header set Cache-Control "public, max-age=86400"
+  </Files>
 </IfModule>
 
 <IfModule mod_expires.c>

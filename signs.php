@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/bootstrap.php';
 require_once __DIR__ . '/lib/Brand.php';
 require_once __DIR__ . '/lib/VisitLog.php';
+require_once __DIR__ . '/lib/Seo.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
@@ -142,17 +143,61 @@ $signs = array(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Visual signs — Vibe Code Detector</title>
-<meta name="description" content="A field guide to the visual tells of a generated web page: the hero pill, the scroll indicator, the gradient headline, the bento grid, the form that goes nowhere, and the rest. Each one rendered live, with what it looks like and when it is innocent.">
+<?php
+  // The list of signs is the page, so it is also the structured data: an
+  // ItemList in the order they appear, each entry named and described in the
+  // words the page uses. Built from $signs rather than typed out again, so a
+  // sign added to the guide cannot go missing from the markup.
+  $signItems = array();
+  foreach ($signs as $i => $sign) {
+      $signItems[] = array(
+          '@type'    => 'ListItem',
+          'position' => $i + 1,
+          'name'     => $sign['name'],
+          'description' => $sign['tell'],
+          'url'      => Seo::url('/signs.php#' . $sign['id']),
+      );
+  }
+?>
+<?= Seo::head(array(
+  'title'       => 'Visual signs of an AI-generated web page — Vibe Code Detector',
+  'description' => 'A field guide to the visual tells of a generated web page: the hero pill, the scroll indicator, the gradient headline, the bento grid, the form that goes nowhere, and the rest. Each one rendered live, with what it looks like and when it is innocent.',
+  'path'        => '/signs.php',
+  'type'        => 'article',
+  'socialTitle' => 'The visual signs of a generated page',
+  'socialDescription' => count($signs) . ' visual tells, each rendered live, with what it looks like and when it is innocent.',
+  'jsonLd'      => array(
+    Seo::siteSchema(),
+    array(
+      '@context'        => 'https://schema.org',
+      '@type'           => 'Article',
+      'headline'        => 'The visual signs of a generated page',
+      'description'     => 'A field guide to the visual tells of a generated web page, each rendered live rather than screenshotted.',
+      'mainEntityOfPage' => Seo::url('/signs.php'),
+      'inLanguage'      => 'en',
+      'isPartOf'        => array('@type' => 'WebSite', 'name' => Seo::SITE_NAME, 'url' => Seo::url('/')),
+    ),
+    array(
+      '@context'        => 'https://schema.org',
+      '@type'           => 'ItemList',
+      'name'            => 'Visual signs of a generated page',
+      'numberOfItems'   => count($signs),
+      'itemListOrder'   => 'https://schema.org/ItemListOrderAscending',
+      'itemListElement' => $signItems,
+    ),
+    array(
+      '@context'        => 'https://schema.org',
+      '@type'           => 'BreadcrumbList',
+      'itemListElement' => array(
+        array('@type' => 'ListItem', 'position' => 1, 'name' => 'Vibe Code Detector', 'item' => Seo::url('/')),
+        array('@type' => 'ListItem', 'position' => 2, 'name' => 'Visual signs', 'item' => Seo::url('/signs.php')),
+      ),
+    ),
+  ),
+)) ?>
 <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/css/site.css?v=<?= h(VCD_VERSION) ?>">
 <link rel="stylesheet" href="assets/css/specimens.css?v=<?= h(VCD_VERSION) ?>">
-<meta property="og:title" content="The visual signs of a generated page">
-<meta property="og:description" content="Fourteen visual tells, each rendered live, with what it looks like and when it is innocent.">
-<meta property="og:type" content="article">
-<meta property="og:url" content="<?= h(vcd_site_url()) ?>/signs.php">
-<meta property="og:image" content="<?= h(vcd_site_url()) ?>/assets/img/social-preview.png">
-<meta name="twitter:card" content="summary_large_image">
 </head>
 <body>
 

@@ -223,8 +223,14 @@ AI agent to read and call the endpoint correctly on its own.
 
 An optional, password-gated dashboard at `/admin/` for creating and revoking
 named API keys and seeing usage — total analyses by mode, the most-analysed
-websites, and the same broken down per key. Inert with no database
-configured; see **[docs/ADMIN.md](docs/ADMIN.md)**.
+websites, and the same broken down per key. Every website that has ever been
+analysed has its own searchable, sortable list forty rows to a page, and its
+own page of charts. Inert with no database configured; see
+**[docs/ADMIN.md](docs/ADMIN.md)**.
+
+How the public pages describe themselves to a search engine — titles,
+canonicals, Open Graph, structured data and the sitemap — is in
+**[docs/SEARCH.md](docs/SEARCH.md)**.
 
 ## Layout
 
@@ -232,7 +238,8 @@ configured; see **[docs/ADMIN.md](docs/ADMIN.md)**.
 index.php          the page
 verify.php         certificate verification
 llms.txt           instructions for an AI agent calling api/website.php
-robots.txt         disallows /admin/
+robots.txt         disallows /admin/, points at the sitemap
+sitemap.php        served as /sitemap.xml, built for whatever domain it runs on
 api/               analyze.php, website.php, certificate.php
 admin/             optional password-gated key management and usage dashboard
 lib/
@@ -248,6 +255,11 @@ lib/
   ApiKeys.php      API key CRUD, backed by Db.php
   UsageLog.php     usage recording and stats, backed by Db.php
   AdminAuth.php    admin session, login and CSRF
+  AdminUi.php      how the panel words dates, modes and page numbers
+  Num.php          counters past a thousand: 1.2k, 17k, 1.5M
+  Seo.php          title, canonical, Open Graph and structured data
+  Pager.php        page-number arithmetic for a long list
+  Chart.php        charts, drawn as SVG on the server
   Pdf.php          a small PDF 1.4 writer
   Brand.php        the mark, as geometry
   Certificate.php  certificate layout

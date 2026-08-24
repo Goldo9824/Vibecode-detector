@@ -160,6 +160,39 @@
     return 'is-human';
   }
 
+  // Counters read past a thousand the same way they do in the admin panel, and
+  // for the same reason: "1.2k" is the answer, "1,247" is four more characters
+  // saying nothing extra. Rounds down, so a count never overstates itself, and
+  // drops the decimal once the leading part hits double figures. Kept in step
+  // with Num::compact() in lib/Num.php — if one changes, change both.
+  var UNITS = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'k']];
+
+  function compact(n) {
+    n = Math.floor(Number(n) || 0);
+    var abs = Math.abs(n);
+    if (abs < 1000) return String(n);
+
+    var sign = n < 0 ? '-' : '';
+    for (var i = 0; i < UNITS.length; i++) {
+      var divisor = UNITS[i][0];
+      if (abs < divisor) continue;
+
+      var tenths = Math.floor(abs / (divisor / 10));
+      var whole = Math.floor(tenths / 10);
+      var frac = tenths % 10;
+      return whole < 10 && frac > 0
+        ? sign + whole + '.' + frac + UNITS[i][1]
+        : sign + whole + UNITS[i][1];
+    }
+    return String(n);
+  }
+
+  // The exact figure is never thrown away — it goes in the title, one hover
+  // away, wherever a shortened one is shown.
+  function exact(n) {
+    return String(Math.floor(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
   function el(tag, className, text) {
     var node = document.createElement(tag);
     if (className) node.className = className;
@@ -187,9 +220,9 @@
     $('r-summary').textContent = data.verdict.summary;
     $('r-confidence').textContent = 'Confidence: ' + data.confidence.label;
 
-    var counts = data.counts.converging + ' converging signal' + (data.counts.converging === 1 ? '' : 's');
-    if (data.stats && data.stats.pages > 1) counts = data.stats.pages + ' pages · ' + counts;
-    if (data.counts.human) counts += ' · ' + data.counts.human + ' pointing the other way';
+    var counts = compact(data.counts.converging) + ' converging signal' + (data.counts.converging === 1 ? '' : 's');
+    if (data.stats && data.stats.pages > 1) counts = compact(data.stats.pages) + ' pages · ' + counts;
+    if (data.counts.human) counts += ' · ' + compact(data.counts.human) + ' pointing the other way';
     $('r-counts').textContent = counts;
 
     renderSignals(data.signals);
@@ -229,8 +262,8 @@
       wrap.appendChild(summary);
 
       if (s.occurrences > 1) {
-        var badge = el('span', 'occurrences', '\u00d7' + s.occurrences);
-        badge.title = 'found ' + s.occurrences + ' times; repeated findings weigh more';
+        var badge = el('span', 'occurrences', '\u00d7' + compact(s.occurrences));
+        badge.title = 'found ' + exact(s.occurrences) + ' times; repeated findings weigh more';
         summary.appendChild(badge);
       }
 
@@ -268,7 +301,7 @@
     var bits = [];
     if (item.source) bits.push(item.source);
     if (item.line) bits.push('line ' + item.line);
-    if (item.count > 1) bits.push('\u00d7' + item.count);
+    if (item.count > 1) bits.push('\u00d7' + compact(item.count));
     if (bits.length) {
       li.appendChild(el('span', 'excerpt-where', bits.join(' \u00b7 ')));
     }

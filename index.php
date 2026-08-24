@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/bootstrap.php';
 require_once __DIR__ . '/lib/Brand.php';
 require_once __DIR__ . '/lib/VisitLog.php';
+require_once __DIR__ . '/lib/Seo.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
@@ -19,19 +20,69 @@ VisitLog::record('/');
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vibe Code Detector — how likely is this AI-generated?</title>
-<meta name="description" content="Paste a URL or some source code and get a percentage reading of how likely it is to be AI-generated, with the evidence shown and the limits stated. Free, no account, open source.">
+<?= Seo::head(array(
+  'title'       => 'Vibe Code Detector — how likely is this AI-generated?',
+  'description' => 'Paste a URL or some source code and get a percentage reading of how likely it is to be AI-generated, with the evidence shown and the limits stated. Free, no account, open source.',
+  'path'        => '/',
+  'socialTitle' => 'Vibe Code Detector',
+  'socialDescription' => 'A percentage reading of how likely a page or a snippet is to be AI-generated — with the evidence shown and the limits stated.',
+  'jsonLd'      => array(
+    Seo::siteSchema(),
+    // What the thing is, in the vocabulary a search engine already has a slot
+    // for. The price is stated because "free" is the question people search
+    // with, and a tool that says nothing is assumed to want a card number.
+    array(
+      '@context'    => 'https://schema.org',
+      '@type'       => 'WebApplication',
+      'name'        => 'Vibe Code Detector',
+      'url'         => Seo::url('/'),
+      'applicationCategory' => 'DeveloperApplication',
+      'operatingSystem'     => 'Any',
+      'browserRequirements' => 'Requires JavaScript',
+      'description' => 'Reads a live page, pasted source, or a git log for the tells of AI generation and returns a percentage with the evidence behind it.',
+      'isAccessibleForFree' => true,
+      'offers'      => array('@type' => 'Offer', 'price' => '0', 'priceCurrency' => 'EUR'),
+      'license'     => VCD_REPO_URL . '/blob/main/LICENSE',
+      'codeRepository' => VCD_REPO_URL,
+    ),
+    // The three questions the page is actually asked, answered in the words it
+    // answers them in on the page itself. Nothing here claims more than the
+    // page does — a rich result that oversells a detector is the one thing
+    // this site must not produce.
+    array(
+      '@context'   => 'https://schema.org',
+      '@type'      => 'FAQPage',
+      'mainEntity' => array(
+        array(
+          '@type' => 'Question',
+          'name'  => 'Can you prove a page was written by AI?',
+          'acceptedAnswer' => array(
+            '@type' => 'Answer',
+            'text'  => 'No. Automated detection of AI-generated source performs near chance in peer-reviewed benchmarks. This shows every piece of evidence it used and expects you to read it. Do not accuse anyone of anything on the strength of a number.',
+          ),
+        ),
+        array(
+          '@type' => 'Question',
+          'name'  => 'What can it look at?',
+          'acceptedAnswer' => array(
+            '@type' => 'Answer',
+            'text'  => 'A live page by URL, a whole site by crawling it, source code you paste in, or a git log. Each one is read for a different set of tells.',
+          ),
+        ),
+        array(
+          '@type' => 'Question',
+          'name'  => 'Is anything stored about what I check?',
+          'acceptedAnswer' => array(
+            '@type' => 'Answer',
+            'text'  => 'Pasted code and pasted git logs are never written down anywhere. With no database configured, nothing at all is stored. An operator who configures one records the mode of each analysis and, for the URL modes, the address checked — never who asked.',
+          ),
+        ),
+      ),
+    ),
+  ),
+)) ?>
 <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/css/site.css?v=<?= h(VCD_VERSION) ?>">
-<meta property="og:title" content="Vibe Code Detector">
-<meta property="og:description" content="A percentage reading of how likely a page or a snippet is to be AI-generated — with the evidence shown and the limits stated.">
-<meta property="og:type" content="website">
-<meta property="og:url" content="<?= h(vcd_site_url()) ?>/">
-<meta property="og:image" content="<?= h(vcd_site_url()) ?>/assets/img/social-preview.png">
-<meta property="og:image:width" content="1280">
-<meta property="og:image:height" content="640">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="<?= h(vcd_site_url()) ?>/assets/img/social-preview.png">
 </head>
 <body>
 

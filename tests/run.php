@@ -20,6 +20,10 @@ require_once dirname(__DIR__) . '/lib/AdminAuth.php';
 require_once dirname(__DIR__) . '/lib/UsageLog.php';
 require_once dirname(__DIR__) . '/lib/VisitLog.php';
 require_once dirname(__DIR__) . '/lib/Chart.php';
+require_once dirname(__DIR__) . '/lib/Pager.php';
+require_once dirname(__DIR__) . '/lib/AdminUi.php';
+require_once dirname(__DIR__) . '/lib/Num.php';
+require_once dirname(__DIR__) . '/lib/Seo.php';
 
 $passed = 0;
 $failed = 0;
@@ -1748,6 +1752,317 @@ $evil = array(array('day' => '2026-08-01', 'views' => 3, 'visitors' => 1));
 $svgEvil = Chart::daily($evil, '<script>alert(1)</script>');
 ok(strpos($svgEvil, '<script>') === false, 'a label cannot inject markup into the chart');
 
+// The single-series chart is the same picture with the line taken off, for a
+// quantity that has no second quantity to draw beside it.
+$single = array();
+foreach (range(1, 30) as $i) {
+    $single[] = array('day' => gmdate('Y-m-d', strtotime('2026-08-01 UTC') + ($i - 1) * 86400), 'n' => $i % 4);
+}
+$seriesSvg = Chart::series($single, 'Analyses per day for example.com');
+ok(strpos($seriesSvg, '<svg') === 0, 'the single-series chart produces an SVG element');
+ok(strpos($seriesSvg, '<polyline') === false, 'and draws no line, because there is nothing to compare');
+$drawn = 0;
+foreach ($single as $row) {
+    if ($row['n'] > 0) {
+        $drawn++;
+    }
+}
+ok(substr_count($seriesSvg, '<rect') === $drawn, 'a day with nothing in it draws nothing',
+   substr_count($seriesSvg, '<rect') . ' columns for ' . $drawn . ' busy days');
+ok(strpos($seriesSvg, 'class="c-bar"') !== false && strpos($seriesSvg, 'fill="#') === false,
+   'and it takes its colour from the stylesheet like every other chart');
+ok(Chart::series(array()) === '', 'no data draws nothing');
+
+// An axis reading "1, 1, 0" says the scale is broken rather than that the
+// traffic is small: the halfway label rounds to the top one and is dropped.
+$tiny = array(array('day' => '2026-08-01', 'n' => 1), array('day' => '2026-08-02', 'n' => 0));
+preg_match_all('~class="c-axis" text-anchor="end">(\d+)<~', Chart::series($tiny), $ticks);
+ok($ticks[1] === array_unique($ticks[1]), 'the axis never labels two gridlines with the same number',
+   implode(',', $ticks[1]));
+$big = array(array('day' => '2026-08-01', 'n' => 40), array('day' => '2026-08-02', 'n' => 10));
+preg_match_all('~class="c-axis" text-anchor="end">(\d+)<~', Chart::series($big), $bigTicks);
+ok($bigTicks[1] === array('0', '20', '40'), 'and a scale with room for three still gets three',
+   implode(',', $bigTicks[1]));
+// An axis is read sideways at nine pixels, so it gets the same shortening as
+// every other counter — five digits on a gridline is false precision.
+$tall = array(array('day' => '2026-08-01', 'n' => 17925), array('day' => '2026-08-02', 'n' => 4));
+preg_match_all('~class="c-axis" text-anchor="end">([^<]*)<~', Chart::series($tall), $tallTicks);
+ok(in_array('17k', $tallTicks[1], true), 'a tall axis is labelled in thousands',
+   implode(',', $tallTicks[1]));
+ok(!in_array('17925', $tallTicks[1], true), 'and never spells the whole number out',
+   implode(',', $tallTicks[1]));
+
+$quietDaily = array(array('day' => '2026-08-01', 'views' => 1, 'visitors' => 1));
+preg_match_all('~class="c-axis" text-anchor="end">(\d+)<~', Chart::daily($quietDaily), $dailyTicks);
+ok($dailyTicks[1] === array_unique($dailyTicks[1]), 'the traffic chart gets the same treatment',
+   implode(',', $dailyTicks[1]));
+
+// A bucket carries its own label, and it has to reach the tooltip.
+$labelled = array(array('day' => '2026-08-01', 'n' => 5, 'label' => '1 Aug – 7 Aug'));
+ok(strpos(Chart::series($labelled), '1 Aug – 7 Aug — 5 analyses') !== false,
+   'a week-long column says which week it is', Chart::series($labelled));
+$flat = array(array('day' => '2026-08-01', 'n' => 0), array('day' => '2026-08-02', 'n' => 0));
+ok(strpos(Chart::series($flat), '<rect') === false, 'and a flat zero window is not a full-height bar');
+ok(strpos(Chart::series($single, '<script>alert(1)</script>'), '<script>') === false,
+   'a label cannot inject markup here either');
+
+// --------------------------------------------------- paging a long list
+
+group('Paging a long list');
+
+// The two things that go wrong with pagination are both arithmetic: a last
+// page one row short, and a strip of numbers that runs off the screen.
+ok(Pager::totalPages(0, 40) === 1, 'an empty list is page 1 of 1');
+ok(Pager::totalPages(40, 40) === 1, 'exactly one page full is one page');
+ok(Pager::totalPages(41, 40) === 2, 'and one more row is a second page');
+ok(Pager::totalPages(400, 40) === 10, 'four hundred websites is ten pages');
+ok(Pager::totalPages(-5, 40) === 1, 'a negative count is still one page');
+
+ok(Pager::clamp(0, 10) === 1, 'a page number below the list is the first page');
+ok(Pager::clamp(99, 10) === 10, 'a stale bookmark past the end is the last page, not an error');
+ok(Pager::clamp(4, 10) === 4, 'and a real page number is left alone');
+ok(Pager::clamp(3, 0) === 1, 'an empty list has nowhere to go but page one');
+
+ok(Pager::offset(1, 40) === 0, 'page one starts at the top');
+ok(Pager::offset(3, 40) === 80, 'page three skips the first eighty');
+ok(Pager::offset(0, 40) === 0, 'and there is no negative offset');
+
+// Short lists get every number; long ones get the ends, the middle, and gaps.
+ok(Pager::window(1, 5) === array(1, 2, 3, 4, 5), 'five pages are all shown',
+   implode(',', Pager::window(1, 5)));
+$mid = Pager::window(20, 40);
+ok($mid[0] === 1 && $mid[count($mid) - 1] === 40, 'the first and last page are always reachable',
+   implode(',', $mid));
+ok(in_array(0, $mid, true), 'with gaps rather than forty numbers', implode(',', $mid));
+ok(in_array(20, $mid, true) && in_array(18, $mid, true) && in_array(22, $mid, true),
+   'and the pages either side of where you are', implode(',', $mid));
+ok(count($mid) <= 11, 'the strip stays short enough to fit on a phone', (string) count($mid));
+
+// A gap costs the same width as the number it hides, so a run of one is spelled out.
+$near = Pager::window(4, 20);
+ok(strpos(implode(',', $near), '1,0,2') === false, 'a gap never stands in for a single page',
+   implode(',', $near));
+ok(Pager::window(1, 0) === array(), 'no pages, no strip');
+
+$q = Pager::query(array('q' => 'example', 'sort' => 'recent', 'days' => 0, 'page' => 3),
+                  array('sort' => 'recent', 'days' => 0));
+ok(strpos($q, 'q=example') !== false && strpos($q, 'page=3') !== false, 'the state of the list is in the URL', $q);
+ok(strpos($q, 'sort=') === false && strpos($q, 'days=') === false,
+   'and the defaults are left out of it, so the plain list has a plain URL', $q);
+ok(Pager::query(array('q' => '', 'page' => null)) === '', 'nothing to say is an empty query string');
+
+// ------------------------------------------------------- counters as read
+
+group('Counters past a thousand');
+
+// Below a thousand nothing changes: a counter that starts abbreviating at
+// three figures is harder to read, not easier.
+ok(Num::compact(0) === '0', 'nothing is nothing');
+ok(Num::compact(42) === '42', 'a small number is left alone');
+ok(Num::compact(999) === '999', 'and so is the last one below the line');
+ok(!Num::isShortened(999) && Num::isShortened(1000), 'the line is at a thousand exactly');
+
+ok(Num::compact(1000) === '1k', 'a thousand is 1k', Num::compact(1000));
+ok(Num::compact(1100) === '1.1k', 'and eleven hundred is 1.1k', Num::compact(1100));
+ok(Num::compact(1000000) === '1M', 'a million is 1M', Num::compact(1000000));
+ok(Num::compact(1250000) === '1.2M', 'and 1.25 million is 1.2M', Num::compact(1250000));
+ok(Num::compact(1000000000) === '1B', 'a billion is 1B', Num::compact(1000000000));
+ok(Num::compact(1500000000000) === '1.5T', 'and a trillion and a half is 1.5T', Num::compact(1500000000000));
+
+// It rounds down. A stats panel that says two thousand when it means one
+// thousand nine hundred and ninety-nine is worse than one that says 1,999.
+ok(Num::compact(1999) === '1.9k', 'it never rounds up', Num::compact(1999));
+ok(Num::compact(1099) === '1k', 'not even to the first decimal', Num::compact(1099));
+ok(Num::compact(9999) === '9.9k', 'right up to the next unit', Num::compact(9999));
+ok(Num::compact(999999) === '999k', 'and across it', Num::compact(999999));
+
+// Four characters is the budget: past ten of a unit the decimal buys nothing.
+ok(Num::compact(12345) === '12k', 'double figures lose the decimal', Num::compact(12345));
+ok(Num::compact(123456) === '123k', 'as do triple', Num::compact(123456));
+foreach (array(1000, 1100, 9999, 12345, 123456, 1250000, 999999999) as $n) {
+    ok(strlen(Num::compact($n)) <= 4, 'a shortened counter is never more than four characters',
+       Num::compact($n));
+}
+
+ok(Num::compact(-1500) === '-1.5k', 'a negative one keeps its sign', Num::compact(-1500));
+ok(Num::exact(1247) === '1,247', 'and the exact figure is still available', Num::exact(1247));
+
+// The panel puts the exact figure in the title, so shortening hides nothing.
+$markup = AdminUi::count(1247);
+ok(strpos($markup, '>1.2k<') !== false, 'the panel shows the short form', $markup);
+ok(strpos($markup, 'title="1,247"') !== false, 'with the exact one a hover away', $markup);
+ok(AdminUi::count(42) === '42', 'and a small number gets no wrapper at all', AdminUi::count(42));
+
+// The browser renders its own counters, so app.js carries the same function.
+// These assert the two halves cannot drift apart unnoticed rather than running
+// the JavaScript, which this runner has no way to do.
+$appJs = (string) file_get_contents(dirname(__DIR__) . '/assets/js/app.js');
+ok(strpos($appJs, 'function compact(n)') !== false, 'app.js has a compact() of its own');
+ok(strpos($appJs, "[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'k']") !== false,
+   'over the same units as Num::compact()');
+ok(strpos($appJs, 'lib/Num.php') !== false, 'and says so, so a change to one sends you to the other');
+
+// ---------------------------------------------------------- search results
+
+group('How this looks in a search result');
+
+// vcd_site_url() caches on first call and something above has already made
+// one, so the base is whatever this run resolved it to rather than a host
+// invented here. That is the address the tags have to agree on either way.
+$base = rtrim(vcd_site_url(), '/');
+$head = Seo::head(array(
+    'title'       => 'A title',
+    'description' => 'A description.',
+    'path'        => '/signs.php',
+    'type'        => 'article',
+));
+
+ok(strpos($head, '<title>A title</title>') !== false, 'the title is the title');
+ok(strpos($head, '<link rel="canonical" href="' . $base . '/signs.php">') !== false,
+   'every page names one canonical address for itself', $base . '/signs.php');
+ok(substr_count($head, 'rel="canonical"') === 1, 'exactly one of them');
+ok(strpos($head, 'og:image" content="' . $base . '/assets/img/social-preview.png"') !== false,
+   'the social image is absolute, because a relative one is not a URL a scraper can fetch');
+ok(strpos($head, 'twitter:title" content="A title"') !== false,
+   'the social title falls back to the page title rather than going missing');
+ok(strpos($head, 'og:type" content="article"') !== false, 'and the type is what the page said it was');
+ok(strpos($head, 'max-image-preview:large') !== false, 'an indexable page asks for a large preview');
+
+// A noindex page says so and stops: there is nothing for Open Graph to do on a
+// page no search engine and no scraper should be showing anyone.
+$noindex = Seo::head(array(
+    'title' => 'Verify', 'description' => 'x', 'path' => '/verify', 'robots' => 'noindex, follow',
+));
+ok(strpos($noindex, 'content="noindex, follow"') !== false, 'a noindex page says noindex');
+ok(strpos($noindex, 'og:image') === false, 'and carries no social card');
+ok(strpos($noindex, 'rel="canonical"') !== false,
+   'but it keeps a canonical, or every certificate payload is a separate page');
+
+// Text from the page is escaped on the way into a tag and into JSON-LD alike.
+$evil = Seo::head(array(
+    'title'       => 'Quote " and <tag>',
+    'description' => 'Ampersand & angle <',
+    'path'        => '/',
+    'jsonLd'      => array(array('@type' => 'Thing', 'name' => '</script><script>alert(1)</script>')),
+));
+ok(strpos($evil, '<tag>') === false, 'a title cannot inject markup');
+ok(strpos($evil, '<script>alert(1)</script>') === false, 'nor can structured data close its own block');
+ok(substr_count($evil, '<script type="application/ld+json">') === 1, 'one block in, one block out');
+
+ok(Seo::url('/') === $base . '/', 'the site root is the site root', Seo::url('/'));
+ok(Seo::url('signs.php') === $base . '/signs.php', 'a bare path is anchored', Seo::url('signs.php'));
+ok(Seo::url('/signs.php') === Seo::url('signs.php'), 'with or without the leading slash');
+ok(strpos(Seo::jsonLd(array('a' => 'b/c')), 'b/c') !== false, 'URLs in structured data stay readable');
+
+// The sitemap has to name the pages worth finding and nothing that is gated,
+// per-request, or an endpoint.
+$sitemapSrc = (string) file_get_contents(dirname(__DIR__) . '/sitemap.php');
+ok(strpos($sitemapSrc, "'/signs.php'") !== false, 'the sitemap lists the field guide');
+ok(strpos($sitemapSrc, '/admin') === false && strpos($sitemapSrc, 'verify') !== false,
+   'and mentions the admin panel nowhere');
+
+$robots = (string) file_get_contents(dirname(__DIR__) . '/robots.txt');
+ok(strpos($robots, 'Disallow: /admin/') !== false, 'robots.txt keeps crawlers out of the panel');
+ok(strpos($robots, 'Sitemap:') !== false, 'and points them at the sitemap');
+
+// Every admin page must send the header as well as the meta tag: the tag only
+// covers HTML that gets as far as being rendered, and a redirect to the login
+// page never does.
+foreach (glob(dirname(__DIR__) . '/admin/*.php') as $adminPage) {
+    $src = (string) file_get_contents($adminPage);
+    ok(strpos($src, "X-Robots-Tag: noindex") !== false,
+       'admin/' . basename($adminPage) . ' sends X-Robots-Tag: noindex');
+}
+
+// ---------------------------------------------- the admin panel's wording
+
+group('How the admin panel says things');
+
+$now = (int) strtotime('2026-08-22 12:00:00 UTC');
+ok(AdminUi::ago('2026-08-22 11:59:30', $now) === 'just now', 'seconds ago is just now',
+   AdminUi::ago('2026-08-22 11:59:30', $now));
+ok(AdminUi::ago('2026-08-22 11:00:00', $now) === '1 hour ago', 'one hour is singular',
+   AdminUi::ago('2026-08-22 11:00:00', $now));
+ok(AdminUi::ago('2026-08-21 12:00:00', $now) === 'yesterday', 'one day ago is yesterday',
+   AdminUi::ago('2026-08-21 12:00:00', $now));
+ok(AdminUi::ago('2026-08-19 12:00:00', $now) === '3 days ago', 'three days ago is three days ago',
+   AdminUi::ago('2026-08-19 12:00:00', $now));
+ok(AdminUi::ago('2026-04-22 12:00:00', $now) === '4 months ago', 'and further back gets coarser',
+   AdminUi::ago('2026-04-22 12:00:00', $now));
+// A database clock a few seconds ahead of this one must not read as the future.
+ok(AdminUi::ago('2026-08-22 12:00:05', $now) === 'just now', 'a clock slightly ahead is not the future',
+   AdminUi::ago('2026-08-22 12:00:05', $now));
+ok(AdminUi::ago(null) === '—' && AdminUi::ago('') === '—' && AdminUi::ago('not a date') === '—',
+   'and nothing, or nonsense, is an em dash');
+
+ok(AdminUi::day('2026-08-22 14:03:11') === '22 Aug 2026', 'a timestamp reads as a date',
+   AdminUi::day('2026-08-22 14:03:11'));
+ok(strpos(AdminUi::when('2026-08-22 14:03:11'), 'UTC') !== false,
+   'and the full stamp says which clock it is on', AdminUi::when('2026-08-22 14:03:11'));
+
+ok(AdminUi::modeLabel('site') === 'Whole site', 'the stored mode code reads as words');
+ok(AdminUi::modeLabel('mystery') === 'mystery', 'and an unknown one comes back unchanged');
+ok(AdminUi::sourceLabel('api') === 'API', 'so does the source');
+
+$strip = AdminUi::pagination(3, 9, array('q' => 'a b'), array(), 'websites.php');
+ok(strpos($strip, 'aria-current="page"') !== false, 'the page you are on is marked, not just coloured');
+ok(strpos($strip, 'q=a+b') !== false, 'the search survives a page change', $strip);
+ok(strpos($strip, '<a class="page" href="websites.php?q=a+b">1</a>') !== false,
+   'and page one is the list without a page number in it', $strip);
+ok(AdminUi::pagination(1, 1) === '', 'one page needs no page numbers');
+
+// ------------------------------------------- the website list's own queries
+
+group('Listing every website that was searched');
+
+// ORDER BY cannot be a bound parameter, so the only safe version of "sort by
+// whatever the query string says" is one where the query string can only name
+// a key in a whitelist.
+ok(array_key_exists('recent', UsageLog::sorts()), 'the default order exists');
+ok(UsageLog::normaliseSort('most') === 'most', 'a known order is kept');
+ok(UsageLog::normaliseSort('n DESC; DROP TABLE usage_log') === 'recent',
+   'and anything else becomes the default rather than reaching SQL');
+ok(UsageLog::normaliseSort('') === 'recent', 'as does an empty one');
+
+// A search box that treats a typed underscore as a wildcard quietly answers a
+// different question from the one that was asked.
+ok(UsageLog::escapeLike('my_site.com') === 'my\_site.com', 'an underscore is a literal underscore',
+   UsageLog::escapeLike('my_site.com'));
+ok(UsageLog::escapeLike('100%') === '100\%', 'and a percent sign does not match the whole table',
+   UsageLog::escapeLike('100%'));
+ok(UsageLog::escapeLike('a\\b') === 'a\\\\b', 'a backslash escapes itself first',
+   UsageLog::escapeLike('a\\b'));
+ok(UsageLog::escapeLike('example.com') === 'example.com', 'and an ordinary host is untouched');
+
+// Same contract as the traffic chart: the days nothing happened are drawn as
+// quiet days, not left out.
+$nowDay = (int) strtotime('2026-08-22 09:15:00 UTC');
+$filledHost = UsageLog::fillDays(array('2026-08-20' => 6), 7, $nowDay);
+ok(count($filledHost) === 7, 'a seven-day window has seven days in it', (string) count($filledHost));
+ok($filledHost[0]['day'] === '2026-08-16' && $filledHost[6]['day'] === '2026-08-22',
+   'starting seven days ago and ending today');
+ok($filledHost[4]['n'] === 6, 'the day with analyses keeps its number');
+ok($filledHost[3]['n'] === 0 && $filledHost[5]['n'] === 0, 'and the quiet days are zeroes, not gaps');
+
+// A year of daily columns is a bar a pixel and a half across, which draws as a
+// gridline rather than as a measurement. Past a quarter the days fold to weeks.
+$year = UsageLog::fillDays(array('2026-08-20' => 4, '2026-08-19' => 2), 365, $nowDay);
+$weeks = UsageLog::bucket($year, 7);
+ok(count($weeks) === 53, 'a year of days folds into fifty-three weeks', (string) count($weeks));
+ok(array_sum(array_column($weeks, 'n')) === 6, 'and folding loses none of the analyses');
+ok($weeks[count($weeks) - 1]['day'] === '2026-08-16',
+   'the last bucket is a whole week ending today, so the newest column is not a short one',
+   $weeks[count($weeks) - 1]['day']);
+ok(strpos($weeks[count($weeks) - 1]['label'], '–') !== false,
+   'a bucket says which days it covers', $weeks[count($weeks) - 1]['label']);
+ok(UsageLog::bucket($year, 1) === $year, 'a bucket of one day is the series unchanged');
+ok(UsageLog::bucket(array(), 7) === array(), 'and nothing folds into nothing');
+
+$short = UsageLog::fillDays(array('2026-08-22' => 3), 3, $nowDay);
+$oneBucket = UsageLog::bucket($short, 7);
+ok(count($oneBucket) === 1 && $oneBucket[0]['n'] === 3,
+   'fewer days than a bucket is one short bucket, not a dropped one');
+
 // ---------------------------------------------------------- public base url
 
 group('Where the app thinks it lives');
@@ -1874,7 +2189,10 @@ if (is_readable($social)) {
        'the social preview is 1280x640',
        $dim ? "{$dim[0]}x{$dim[1]}" : 'unreadable');
 }
-ok(strpos($page, 'og:image') !== false, 'the page advertises a link-preview image');
+ok(strpos($page, 'Seo::head(') !== false,
+   'the front page takes its head tags from lib/Seo.php rather than hand-writing them');
+ok(strpos(Seo::head(array('title' => 'x', 'description' => 'y', 'path' => '/')), 'og:image') !== false,
+   'and that always advertises a link-preview image');
 
 // ------------------------------------------------------------ determinism
 

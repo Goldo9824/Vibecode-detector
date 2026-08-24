@@ -5,10 +5,12 @@ require_once dirname(__DIR__) . '/lib/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/AdminAuth.php';
 require_once dirname(__DIR__) . '/lib/ApiKeys.php';
 require_once dirname(__DIR__) . '/lib/UsageLog.php';
+require_once dirname(__DIR__) . '/lib/AdminUi.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 header('X-Frame-Options: DENY');
+header('X-Robots-Tag: noindex, nofollow, noarchive, nosnippet');
 
 AdminAuth::requireLogin();
 
@@ -44,7 +46,7 @@ if ($pdo === null) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Admin — Vibe Code Detector</title>
-<meta name="robots" content="noindex, nofollow">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../assets/css/site.css?v=<?= h(VCD_VERSION) ?>">
 <link rel="stylesheet" href="../assets/css/admin.css?v=<?= h(VCD_VERSION) ?>">
@@ -67,7 +69,7 @@ if ($pdo === null) {
     <section class="admin-section">
       <h2>Usage, last 30 days</h2>
       <div class="stat-row">
-        <div class="stat"><span class="n"><?= (int) $count ?></span><span class="l">Requests with this key</span></div>
+        <div class="stat"><span class="n"><?= AdminUi::count((int) $count) ?></span><span class="l">Requests with this key</span></div>
       </div>
 
       <?php if (empty($hosts)): ?>
@@ -78,8 +80,8 @@ if ($pdo === null) {
           <tbody>
             <?php foreach ($hosts as $row): ?>
               <tr>
-                <td><?= h((string) $row['target_host']) ?></td>
-                <td class="num"><?= (int) $row['n'] ?></td>
+                <td><a href="website.php?host=<?= h(rawurlencode((string) $row['target_host'])) ?>&amp;days=30"><?= h((string) $row['target_host']) ?></a></td>
+                <td class="num"><?= AdminUi::count((int) $row['n']) ?></td>
               </tr>
             <?php endforeach; ?>
           </tbody>

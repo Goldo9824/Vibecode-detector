@@ -12,6 +12,7 @@ require_once dirname(__DIR__) . '/lib/AdminUi.php';
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 header('X-Frame-Options: DENY');
+header('X-Robots-Tag: noindex, nofollow, noarchive, nosnippet');
 
 AdminAuth::requireLogin();
 
@@ -91,7 +92,7 @@ if ($pdo !== null) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Admin — Vibe Code Detector</title>
-<meta name="robots" content="noindex, nofollow">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../assets/css/site.css?v=<?= h(VCD_VERSION) ?>">
 <link rel="stylesheet" href="../assets/css/admin.css?v=<?= h(VCD_VERSION) ?>">
@@ -172,7 +173,7 @@ if ($pdo !== null) {
                 <td><span class="badge <?= $active ? 'is-active' : 'is-revoked' ?>"><?= $active ? 'Active' : 'Revoked' ?></span></td>
                 <td><?= h((string) $k['created_at']) ?></td>
                 <td><?= h($k['last_used'] !== null ? (string) $k['last_used'] : '—') ?></td>
-                <td class="num"><?= (int) $k['uses'] ?></td>
+                <td class="num"><?= AdminUi::count((int) $k['uses']) ?></td>
                 <td>
                   <a href="key.php?id=<?= (int) $k['id'] ?>">View usage</a>
                   <?php if ($active): ?>
@@ -195,9 +196,9 @@ if ($pdo !== null) {
     <section class="admin-section">
       <h2>Traffic, last 30 days</h2>
       <div class="stat-row">
-        <div class="stat"><span class="n"><?= number_format($visits['views']) ?></span><span class="l">Page views</span></div>
-        <div class="stat"><span class="n"><?= number_format($visits['visitors']) ?></span><span class="l">Daily visitors</span></div>
-        <div class="stat"><span class="n"><?= number_format($visits['bots']) ?></span><span class="l">Bot hits</span></div>
+        <div class="stat"><span class="n"><?= AdminUi::count((int) $visits['views']) ?></span><span class="l">Page views</span></div>
+        <div class="stat"><span class="n"><?= AdminUi::count((int) $visits['visitors']) ?></span><span class="l">Daily visitors</span></div>
+        <div class="stat"><span class="n"><?= AdminUi::count((int) $visits['bots']) ?></span><span class="l">Bot hits</span></div>
       </div>
 
       <?php $visitChart = Chart::daily($visitDaily); ?>
@@ -223,17 +224,17 @@ if ($pdo !== null) {
     <section class="admin-section">
       <h2>Analyses, last 30 days</h2>
       <div class="stat-row">
-        <div class="stat"><span class="n"><?= (int) $totalCount ?></span><span class="l">Total analyses</span></div>
-        <div class="stat"><span class="n"><?= (int) $totalsByMode['url'] ?></span><span class="l">Live page</span></div>
-        <div class="stat"><span class="n"><?= (int) $totalsByMode['site'] ?></span><span class="l">Whole site</span></div>
-        <div class="stat"><span class="n"><?= (int) $totalsByMode['code'] ?></span><span class="l">Pasted code</span></div>
-        <div class="stat"><span class="n"><?= (int) $totalsByMode['git'] ?></span><span class="l">Git history</span></div>
+        <div class="stat"><span class="n"><?= AdminUi::count((int) $totalCount) ?></span><span class="l">Total analyses</span></div>
+        <div class="stat"><span class="n"><?= AdminUi::count((int) $totalsByMode['url']) ?></span><span class="l">Live page</span></div>
+        <div class="stat"><span class="n"><?= AdminUi::count((int) $totalsByMode['site']) ?></span><span class="l">Whole site</span></div>
+        <div class="stat"><span class="n"><?= AdminUi::count((int) $totalsByMode['code']) ?></span><span class="l">Pasted code</span></div>
+        <div class="stat"><span class="n"><?= AdminUi::count((int) $totalsByMode['git']) ?></span><span class="l">Git history</span></div>
       </div>
 
       <?php if (empty($topHosts)): ?>
         <p class="hint">No live-page or whole-site checks in the last 30 days yet.
            <?php if ($hostsEver > 0): ?>
-             <a href="websites.php">All <?= number_format($hostsEver) ?> websites ever searched &rarr;</a>
+             <a href="websites.php">All <?= AdminUi::count($hostsEver) ?> websites ever searched &rarr;</a>
            <?php endif; ?></p>
       <?php else: ?>
         <h3 class="admin-sub">Busiest websites</h3>
@@ -243,14 +244,14 @@ if ($pdo !== null) {
             <?php foreach ($topHosts as $row): ?>
               <tr>
                 <td><a href="website.php?host=<?= h(rawurlencode((string) $row['target_host'])) ?>&amp;days=30"><?= h((string) $row['target_host']) ?></a></td>
-                <td class="num"><?= (int) $row['n'] ?></td>
+                <td class="num"><?= AdminUi::count((int) $row['n']) ?></td>
               </tr>
             <?php endforeach; ?>
           </tbody>
         </table>
 
         <p class="see-more">
-          <a class="btn" href="websites.php">See all <?= number_format($hostsEver) ?> websites</a>
+          <a class="btn" href="websites.php">See all <?= AdminUi::count($hostsEver) ?> websites</a>
           <span class="hint">Everything ever searched, searchable and in any order &mdash; not just the busiest twenty of the last thirty days.</span>
         </p>
       <?php endif; ?>

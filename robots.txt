@@ -1,2 +1,21 @@
+# The admin panel is password-gated and every page in it also sends
+# `X-Robots-Tag: noindex`. This line is the belt to that pair of braces: it
+# keeps crawlers out of a directory that has nothing in it for them, at the
+# known cost that a crawler which never fetches the page also never reads the
+# noindex on it. Nothing anywhere links to /admin/, so there is no URL for one
+# to have found in the first place.
 User-agent: *
 Disallow: /admin/
+
+# Everything else that should stay out of the index is left crawlable on
+# purpose and says so in its own headers instead. A `Disallow` and a `noindex`
+# on the same URL cancel each other out — the crawler obeys the first and
+# therefore never reads the second — so the endpoints under /api/ and the
+# certificate verifier at /verify carry `X-Robots-Tag: noindex` and are
+# reachable enough for it to be honoured.
+
+# Forking this? Change the domain on the next line to yours. It is the one
+# address in the project that cannot be worked out from the request, because
+# robots.txt is a static file served before any PHP runs. Everything else,
+# including the sitemap's own contents, follows the host it is asked on.
+Sitemap: https://vibecodedetector.fanficnow.com/sitemap.xml

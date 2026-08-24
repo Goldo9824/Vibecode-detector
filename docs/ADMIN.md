@@ -72,6 +72,10 @@ Visit `/admin/` and log in. From there:
 - **Remove a key** — sets it revoked immediately (`api/website.php` stops
   accepting it right away) without deleting its usage history, so you can
   still see what it was used for afterward.
+Counters past a thousand are shortened — `17k`, `2.6k`, `1.2M`. They round
+*down*, so a figure never overstates itself, and the exact number is in the
+element's title, one hover away. See `lib/Num.php`.
+
 - **Usage, last 30 days** — total analyses by mode (live page, whole site,
   pasted code, git history) across everyone, and the twenty most-analysed
   websites across all callers. **See all N websites** under that table opens
@@ -81,10 +85,34 @@ Visit `/admin/` and log in. From there:
 
 Any website name in the panel is a link to that website's own page.
 
-The panel is disallowed in `robots.txt` and every admin page sets
-`X-Robots-Tag`-equivalent `noindex, nofollow`, but that is not access
-control — the password is. Nothing else links to `/admin/` from the public
-site.
+### Keeping it out of search
+
+Four layers, none of which is access control — the password is that, and
+nothing else links to `/admin/` from the public site:
+
+1. `Disallow: /admin/` in `robots.txt`.
+2. `<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">`
+   in the head of every admin page.
+3. `X-Robots-Tag: noindex, nofollow, noarchive, nosnippet` as a real HTTP
+   header, sent by every admin page in its first lines. This is the one that
+   covers the cases the meta tag cannot: the redirect to `login.php` that an
+   unauthenticated request gets, which never renders a head at all.
+4. `admin/.htaccess`, which sets the same header for anything served out of
+   this directory — including a file added here later that forgets the other
+   three.
+
+One honest caveat about layer 1: a crawler that obeys `Disallow` never
+fetches the page, so it never reads the `noindex` on it. The two do not
+stack the way they look like they do. It is kept anyway because nothing
+links here, the pages are gated, and a crawler that ignores `robots.txt` is
+exactly the one that will read the header.
+
+Everything else that should stay out of the index is left crawlable on
+purpose and says so in its own headers instead: `api/analyze.php`,
+`api/website.php`, `api/certificate.php` and `verify.php` all send
+`X-Robots-Tag: noindex` and are not disallowed, so the `noindex` is actually
+read and honoured. The certificate endpoint sets it before it can fail, so
+the error response carries it too.
 
 ## Websites
 

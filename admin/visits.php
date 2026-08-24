@@ -5,10 +5,12 @@ require_once dirname(__DIR__) . '/lib/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/AdminAuth.php';
 require_once dirname(__DIR__) . '/lib/VisitLog.php';
 require_once dirname(__DIR__) . '/lib/Chart.php';
+require_once dirname(__DIR__) . '/lib/AdminUi.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 header('X-Frame-Options: DENY');
+header('X-Robots-Tag: noindex, nofollow, noarchive, nosnippet');
 
 AdminAuth::requireLogin();
 
@@ -69,7 +71,7 @@ $deviceTotal = array_sum($devices);
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Traffic — Vibe Code Detector</title>
-<meta name="robots" content="noindex, nofollow">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../assets/css/site.css?v=<?= h(VCD_VERSION) ?>">
 <link rel="stylesheet" href="../assets/css/admin.css?v=<?= h(VCD_VERSION) ?>">
@@ -112,11 +114,11 @@ $deviceTotal = array_sum($devices);
     <section class="admin-section">
       <h2>Last <?= (int) $days ?> days</h2>
       <div class="stat-row">
-        <div class="stat"><span class="n"><?= number_format($summary['views']) ?></span><span class="l">Page views</span></div>
-        <div class="stat"><span class="n"><?= number_format($summary['visitors']) ?></span><span class="l">Daily visitors</span></div>
-        <div class="stat"><span class="n"><?= number_format($summary['bots']) ?></span><span class="l">Bot hits</span></div>
+        <div class="stat"><span class="n"><?= AdminUi::count((int) $summary['views']) ?></span><span class="l">Page views</span></div>
+        <div class="stat"><span class="n"><?= AdminUi::count((int) $summary['visitors']) ?></span><span class="l">Daily visitors</span></div>
+        <div class="stat"><span class="n"><?= AdminUi::count((int) $summary['bots']) ?></span><span class="l">Bot hits</span></div>
         <div class="stat">
-          <span class="n"><?= $summary['busiest'] !== null ? number_format($summary['busiest']['views']) : '—' ?></span>
+          <span class="n"><?= $summary['busiest'] !== null ? AdminUi::count((int) $summary['busiest']['views']) : '—' ?></span>
           <span class="l"><?= $summary['busiest'] !== null ? h(gmdate('j M', (int) strtotime($summary['busiest']['day'] . ' UTC'))) . ', busiest day' : 'Busiest day' ?></span>
         </div>
       </div>
@@ -163,8 +165,8 @@ $deviceTotal = array_sum($devices);
                   <span class="bar" style="width:<?= h(Chart::barWidth((int) $row['views'], $maxPathViews)) ?>"></span>
                   <span class="bar-label"><?= h((string) $row['path']) ?></span>
                 </td>
-                <td class="num"><?= number_format((int) $row['views']) ?></td>
-                <td class="num"><?= number_format((int) $row['visitors']) ?></td>
+                <td class="num"><?= AdminUi::count((int) $row['views']) ?></td>
+                <td class="num"><?= AdminUi::count((int) $row['visitors']) ?></td>
               </tr>
             <?php endforeach; ?>
           </tbody>
@@ -188,7 +190,7 @@ $deviceTotal = array_sum($devices);
                   <span class="bar" style="width:<?= h(Chart::barWidth((int) $row['views'], $maxReferrerViews)) ?>"></span>
                   <span class="bar-label"><?= h((string) $row['referer_host']) ?></span>
                 </td>
-                <td class="num"><?= number_format((int) $row['views']) ?></td>
+                <td class="num"><?= AdminUi::count((int) $row['views']) ?></td>
               </tr>
             <?php endforeach; ?>
           </tbody>
@@ -210,7 +212,7 @@ $deviceTotal = array_sum($devices);
                   <span class="bar" style="width:<?= h(Chart::barWidth((int) $n, $deviceTotal)) ?>"></span>
                   <span class="bar-label"><?= h(ucfirst((string) $device)) ?></span>
                 </td>
-                <td class="num"><?= number_format((int) $n) ?></td>
+                <td class="num"><?= AdminUi::count((int) $n) ?></td>
                 <td class="num"><?= $deviceTotal > 0 ? (int) round($n / $deviceTotal * 100) : 0 ?>%</td>
               </tr>
             <?php endforeach; ?>
@@ -232,7 +234,7 @@ $deviceTotal = array_sum($devices);
         no session, and never the query string, which is where the URL somebody asked
         about would be. Rows older than
         <?= (int) Db::option('visit_retention_days', VisitLog::DEFAULT_RETENTION_DAYS) ?>
-        days are deleted when this page loads<?= $pruned > 0 ? ' — ' . number_format($pruned) . ' just now' : '' ?>.
+        days are deleted when this page loads<?= $pruned > 0 ? ' — ' . Num::exact($pruned) . ' just now' : '' ?>.
       </p>
     </section>
 

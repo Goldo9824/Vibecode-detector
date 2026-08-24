@@ -3,9 +3,11 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/lib/bootstrap.php';
 require_once __DIR__ . '/lib/Brand.php';
+require_once __DIR__ . '/lib/Seo.php';
 require_once __DIR__ . '/lib/VisitLog.php';
 
 header('X-Content-Type-Options: nosniff');
+header('X-Robots-Tag: noindex');
 
 // Counted only when this installation has a database configured, and switched
 // off with 'log_visits' => false in data/db-config.php. Called here rather
@@ -40,9 +42,16 @@ $verdicts = array(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Verify a certificate — Vibe Code Detector</title>
-<meta name="description" content="Check that a Vibe Code Detector certificate says what it was issued saying.">
-<meta name="robots" content="noindex">
+<?= Seo::head(array(
+  'title'       => 'Verify a certificate — Vibe Code Detector',
+  'description' => 'Check that a Vibe Code Detector certificate says what it was issued saying.',
+  'path'        => '/verify',
+  // Every certificate arrives here as a different query string, so this page
+  // has as many URLs as there are certificates and only one of them is worth
+  // anything to a reader who did not bring one. It stays out of the index, and
+  // the canonical points at the empty form.
+  'robots'      => 'noindex, follow',
+)) ?>
 <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/css/site.css?v=<?= h(VCD_VERSION) ?>">
 </head>

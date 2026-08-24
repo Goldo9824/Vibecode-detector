@@ -22,6 +22,8 @@ require_once dirname(__DIR__) . '/lib/VisitLog.php';
 require_once dirname(__DIR__) . '/lib/Chart.php';
 require_once dirname(__DIR__) . '/lib/Pager.php';
 require_once dirname(__DIR__) . '/lib/AdminUi.php';
+require_once dirname(__DIR__) . '/lib/Num.php';
+require_once dirname(__DIR__) . '/lib/Seo.php';
 
 $passed = 0;
 $failed = 0;
@@ -1781,6 +1783,15 @@ $big = array(array('day' => '2026-08-01', 'n' => 40), array('day' => '2026-08-02
 preg_match_all('~class="c-axis" text-anchor="end">(\d+)<~', Chart::series($big), $bigTicks);
 ok($bigTicks[1] === array('0', '20', '40'), 'and a scale with room for three still gets three',
    implode(',', $bigTicks[1]));
+// An axis is read sideways at nine pixels, so it gets the same shortening as
+// every other counter — five digits on a gridline is false precision.
+$tall = array(array('day' => '2026-08-01', 'n' => 17925), array('day' => '2026-08-02', 'n' => 4));
+preg_match_all('~class="c-axis" text-anchor="end">([^<]*)<~', Chart::series($tall), $tallTicks);
+ok(in_array('17k', $tallTicks[1], true), 'a tall axis is labelled in thousands',
+   implode(',', $tallTicks[1]));
+ok(!in_array('17925', $tallTicks[1], true), 'and never spells the whole number out',
+   implode(',', $tallTicks[1]));
+
 $quietDaily = array(array('day' => '2026-08-01', 'views' => 1, 'visitors' => 1));
 preg_match_all('~class="c-axis" text-anchor="end">(\d+)<~', Chart::daily($quietDaily), $dailyTicks);
 ok($dailyTicks[1] === array_unique($dailyTicks[1]), 'the traffic chart gets the same treatment',
@@ -1839,6 +1850,129 @@ ok(strpos($q, 'q=example') !== false && strpos($q, 'page=3') !== false, 'the sta
 ok(strpos($q, 'sort=') === false && strpos($q, 'days=') === false,
    'and the defaults are left out of it, so the plain list has a plain URL', $q);
 ok(Pager::query(array('q' => '', 'page' => null)) === '', 'nothing to say is an empty query string');
+
+// ------------------------------------------------------- counters as read
+
+group('Counters past a thousand');
+
+// Below a thousand nothing changes: a counter that starts abbreviating at
+// three figures is harder to read, not easier.
+ok(Num::compact(0) === '0', 'nothing is nothing');
+ok(Num::compact(42) === '42', 'a small number is left alone');
+ok(Num::compact(999) === '999', 'and so is the last one below the line');
+ok(!Num::isShortened(999) && Num::isShortened(1000), 'the line is at a thousand exactly');
+
+ok(Num::compact(1000) === '1k', 'a thousand is 1k', Num::compact(1000));
+ok(Num::compact(1100) === '1.1k', 'and eleven hundred is 1.1k', Num::compact(1100));
+ok(Num::compact(1000000) === '1M', 'a million is 1M', Num::compact(1000000));
+ok(Num::compact(1250000) === '1.2M', 'and 1.25 million is 1.2M', Num::compact(1250000));
+ok(Num::compact(1000000000) === '1B', 'a billion is 1B', Num::compact(1000000000));
+ok(Num::compact(1500000000000) === '1.5T', 'and a trillion and a half is 1.5T', Num::compact(1500000000000));
+
+// It rounds down. A stats panel that says two thousand when it means one
+// thousand nine hundred and ninety-nine is worse than one that says 1,999.
+ok(Num::compact(1999) === '1.9k', 'it never rounds up', Num::compact(1999));
+ok(Num::compact(1099) === '1k', 'not even to the first decimal', Num::compact(1099));
+ok(Num::compact(9999) === '9.9k', 'right up to the next unit', Num::compact(9999));
+ok(Num::compact(999999) === '999k', 'and across it', Num::compact(999999));
+
+// Four characters is the budget: past ten of a unit the decimal buys nothing.
+ok(Num::compact(12345) === '12k', 'double figures lose the decimal', Num::compact(12345));
+ok(Num::compact(123456) === '123k', 'as do triple', Num::compact(123456));
+foreach (array(1000, 1100, 9999, 12345, 123456, 1250000, 999999999) as $n) {
+    ok(strlen(Num::compact($n)) <= 4, 'a shortened counter is never more than four characters',
+       Num::compact($n));
+}
+
+ok(Num::compact(-1500) === '-1.5k', 'a negative one keeps its sign', Num::compact(-1500));
+ok(Num::exact(1247) === '1,247', 'and the exact figure is still available', Num::exact(1247));
+
+// The panel puts the exact figure in the title, so shortening hides nothing.
+$markup = AdminUi::count(1247);
+ok(strpos($markup, '>1.2k<') !== false, 'the panel shows the short form', $markup);
+ok(strpos($markup, 'title="1,247"') !== false, 'with the exact one a hover away', $markup);
+ok(AdminUi::count(42) === '42', 'and a small number gets no wrapper at all', AdminUi::count(42));
+
+// The browser renders its own counters, so app.js carries the same function.
+// These assert the two halves cannot drift apart unnoticed rather than running
+// the JavaScript, which this runner has no way to do.
+$appJs = (string) file_get_contents(dirname(__DIR__) . '/assets/js/app.js');
+ok(strpos($appJs, 'function compact(n)') !== false, 'app.js has a compact() of its own');
+ok(strpos($appJs, "[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'k']") !== false,
+   'over the same units as Num::compact()');
+ok(strpos($appJs, 'lib/Num.php') !== false, 'and says so, so a change to one sends you to the other');
+
+// ---------------------------------------------------------- search results
+
+group('How this looks in a search result');
+
+// vcd_site_url() caches on first call and something above has already made
+// one, so the base is whatever this run resolved it to rather than a host
+// invented here. That is the address the tags have to agree on either way.
+$base = rtrim(vcd_site_url(), '/');
+$head = Seo::head(array(
+    'title'       => 'A title',
+    'description' => 'A description.',
+    'path'        => '/signs.php',
+    'type'        => 'article',
+));
+
+ok(strpos($head, '<title>A title</title>') !== false, 'the title is the title');
+ok(strpos($head, '<link rel="canonical" href="' . $base . '/signs.php">') !== false,
+   'every page names one canonical address for itself', $base . '/signs.php');
+ok(substr_count($head, 'rel="canonical"') === 1, 'exactly one of them');
+ok(strpos($head, 'og:image" content="' . $base . '/assets/img/social-preview.png"') !== false,
+   'the social image is absolute, because a relative one is not a URL a scraper can fetch');
+ok(strpos($head, 'twitter:title" content="A title"') !== false,
+   'the social title falls back to the page title rather than going missing');
+ok(strpos($head, 'og:type" content="article"') !== false, 'and the type is what the page said it was');
+ok(strpos($head, 'max-image-preview:large') !== false, 'an indexable page asks for a large preview');
+
+// A noindex page says so and stops: there is nothing for Open Graph to do on a
+// page no search engine and no scraper should be showing anyone.
+$noindex = Seo::head(array(
+    'title' => 'Verify', 'description' => 'x', 'path' => '/verify', 'robots' => 'noindex, follow',
+));
+ok(strpos($noindex, 'content="noindex, follow"') !== false, 'a noindex page says noindex');
+ok(strpos($noindex, 'og:image') === false, 'and carries no social card');
+ok(strpos($noindex, 'rel="canonical"') !== false,
+   'but it keeps a canonical, or every certificate payload is a separate page');
+
+// Text from the page is escaped on the way into a tag and into JSON-LD alike.
+$evil = Seo::head(array(
+    'title'       => 'Quote " and <tag>',
+    'description' => 'Ampersand & angle <',
+    'path'        => '/',
+    'jsonLd'      => array(array('@type' => 'Thing', 'name' => '</script><script>alert(1)</script>')),
+));
+ok(strpos($evil, '<tag>') === false, 'a title cannot inject markup');
+ok(strpos($evil, '<script>alert(1)</script>') === false, 'nor can structured data close its own block');
+ok(substr_count($evil, '<script type="application/ld+json">') === 1, 'one block in, one block out');
+
+ok(Seo::url('/') === $base . '/', 'the site root is the site root', Seo::url('/'));
+ok(Seo::url('signs.php') === $base . '/signs.php', 'a bare path is anchored', Seo::url('signs.php'));
+ok(Seo::url('/signs.php') === Seo::url('signs.php'), 'with or without the leading slash');
+ok(strpos(Seo::jsonLd(array('a' => 'b/c')), 'b/c') !== false, 'URLs in structured data stay readable');
+
+// The sitemap has to name the pages worth finding and nothing that is gated,
+// per-request, or an endpoint.
+$sitemapSrc = (string) file_get_contents(dirname(__DIR__) . '/sitemap.php');
+ok(strpos($sitemapSrc, "'/signs.php'") !== false, 'the sitemap lists the field guide');
+ok(strpos($sitemapSrc, '/admin') === false && strpos($sitemapSrc, 'verify') !== false,
+   'and mentions the admin panel nowhere');
+
+$robots = (string) file_get_contents(dirname(__DIR__) . '/robots.txt');
+ok(strpos($robots, 'Disallow: /admin/') !== false, 'robots.txt keeps crawlers out of the panel');
+ok(strpos($robots, 'Sitemap:') !== false, 'and points them at the sitemap');
+
+// Every admin page must send the header as well as the meta tag: the tag only
+// covers HTML that gets as far as being rendered, and a redirect to the login
+// page never does.
+foreach (glob(dirname(__DIR__) . '/admin/*.php') as $adminPage) {
+    $src = (string) file_get_contents($adminPage);
+    ok(strpos($src, "X-Robots-Tag: noindex") !== false,
+       'admin/' . basename($adminPage) . ' sends X-Robots-Tag: noindex');
+}
 
 // ---------------------------------------------- the admin panel's wording
 
@@ -2055,7 +2189,10 @@ if (is_readable($social)) {
        'the social preview is 1280x640',
        $dim ? "{$dim[0]}x{$dim[1]}" : 'unreadable');
 }
-ok(strpos($page, 'og:image') !== false, 'the page advertises a link-preview image');
+ok(strpos($page, 'Seo::head(') !== false,
+   'the front page takes its head tags from lib/Seo.php rather than hand-writing them');
+ok(strpos(Seo::head(array('title' => 'x', 'description' => 'y', 'path' => '/')), 'og:image') !== false,
+   'and that always advertises a link-preview image');
 
 // ------------------------------------------------------------ determinism
 

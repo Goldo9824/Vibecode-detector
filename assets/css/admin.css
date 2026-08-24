@@ -285,3 +285,12 @@ a.page:hover { border-color: var(--rule-2); color: var(--ink); }
 .table-scroll { overflow-x: auto; }
 .table-scroll table.admin-table { min-width: 32rem; }
 .table-scroll td.with-bar .bar-label { word-break: normal; overflow-wrap: anywhere; }
+
+/* A shortened counter — "1.2k" for 1,247. The exact figure is in the title, so
+   the underline is there to say there is something to hover, the same way a
+   glossary term does. Dotted, not solid: it is not a link. */
+.approx {
+  border-bottom: 1px dotted var(--rule-2);
+  cursor: help;
+}
+.stat .n .approx { border-bottom-width: 2px; }

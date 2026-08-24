@@ -11,6 +11,7 @@ require_once dirname(__DIR__) . '/lib/Chart.php';
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 header('X-Frame-Options: DENY');
+header('X-Robots-Tag: noindex, nofollow, noarchive, nosnippet');
 
 AdminAuth::requireLogin();
 
@@ -94,7 +95,7 @@ $lastRow = Pager::offset($page, Pager::PER_PAGE) + count($rows);
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Websites — Vibe Code Detector</title>
-<meta name="robots" content="noindex, nofollow">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../assets/css/site.css?v=<?= h(VCD_VERSION) ?>">
 <link rel="stylesheet" href="../assets/css/admin.css?v=<?= h(VCD_VERSION) ?>">
@@ -145,11 +146,11 @@ $lastRow = Pager::offset($page, Pager::PER_PAGE) + count($rows);
     <section class="admin-section">
       <div class="stat-row">
         <div class="stat">
-          <span class="n"><?= number_format($total) ?></span>
+          <span class="n"><?= AdminUi::count($total) ?></span>
           <span class="l"><?= $search !== '' ? 'Websites matching' : 'Websites analysed' ?></span>
         </div>
         <div class="stat">
-          <span class="n"><?= number_format($analyses) ?></span>
+          <span class="n"><?= AdminUi::count($analyses) ?></span>
           <span class="l">Analyses on this page</span>
         </div>
         <div class="stat">
@@ -190,7 +191,7 @@ $lastRow = Pager::offset($page, Pager::PER_PAGE) + count($rows);
                       <a href="<?= h('website.php?host=' . rawurlencode($row['target_host']) . '&days=' . (int) $days) ?>"><?= h($row['target_host']) ?></a>
                     </span>
                   </td>
-                  <td class="num"><?= number_format($row['n']) ?></td>
+                  <td class="num"><?= AdminUi::count($row['n']) ?></td>
                   <td class="when"><?= h(AdminUi::day($row['first_seen'])) ?></td>
                   <td class="when" title="<?= h(AdminUi::when($row['last_seen'])) ?>"><?= h(AdminUi::ago($row['last_seen'])) ?></td>
                 </tr>

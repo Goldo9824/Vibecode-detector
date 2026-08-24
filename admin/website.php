@@ -11,6 +11,7 @@ require_once dirname(__DIR__) . '/lib/Chart.php';
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 header('X-Frame-Options: DENY');
+header('X-Robots-Tag: noindex, nofollow, noarchive, nosnippet');
 
 AdminAuth::requireLogin();
 
@@ -108,7 +109,7 @@ foreach ($callers as $caller) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= $host !== '' ? h($host) . ' — ' : '' ?>Websites — Vibe Code Detector</title>
-<meta name="robots" content="noindex, nofollow">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../assets/css/site.css?v=<?= h(VCD_VERSION) ?>">
 <link rel="stylesheet" href="../assets/css/admin.css?v=<?= h(VCD_VERSION) ?>">
@@ -136,10 +137,10 @@ foreach ($callers as $caller) {
     <section class="admin-section">
       <h2><?= $days > 0 ? 'Last ' . (int) $days . ' days' : 'Everything recorded' ?></h2>
       <div class="stat-row">
-        <div class="stat"><span class="n"><?= number_format($summary['n']) ?></span><span class="l">Analyses</span></div>
-        <div class="stat"><span class="n"><?= number_format($summary['pages']) ?></span><span class="l">Distinct addresses</span></div>
+        <div class="stat"><span class="n"><?= AdminUi::count($summary['n']) ?></span><span class="l">Analyses</span></div>
+        <div class="stat"><span class="n"><?= AdminUi::count($summary['pages']) ?></span><span class="l">Distinct addresses</span></div>
         <div class="stat">
-          <span class="n"><?= $busiestDay !== null ? number_format($busiestDay['n']) : '—' ?></span>
+          <span class="n"><?= $busiestDay !== null ? AdminUi::count($busiestDay['n']) : '—' ?></span>
           <span class="l"><?= $busiestDay !== null ? h(AdminUi::day($busiestDay['day'] . ' 00:00:00')) . ', busiest day' : 'Busiest day' ?></span>
         </div>
         <div class="stat"><span class="n is-date"><?= h(AdminUi::day($summary['first_seen'])) ?></span><span class="l">First searched</span></div>
@@ -175,7 +176,7 @@ foreach ($callers as $caller) {
                   <span class="bar" style="width:<?= h(Chart::barWidth((int) $n, $modeTotal)) ?>"></span>
                   <span class="bar-label"><?= h(AdminUi::modeLabel((string) $mode)) ?></span>
                 </td>
-                <td class="num"><?= number_format((int) $n) ?></td>
+                <td class="num"><?= AdminUi::count((int) $n) ?></td>
                 <td class="num"><?= $modeTotal > 0 ? (int) round($n / $modeTotal * 100) : 0 ?>%</td>
               </tr>
             <?php endforeach; ?>
@@ -196,7 +197,7 @@ foreach ($callers as $caller) {
                   <span class="bar" style="width:<?= h(Chart::barWidth((int) $n, $sourceTotal)) ?>"></span>
                   <span class="bar-label"><?= h(AdminUi::sourceLabel((string) $source)) ?></span>
                 </td>
-                <td class="num"><?= number_format((int) $n) ?></td>
+                <td class="num"><?= AdminUi::count((int) $n) ?></td>
                 <td class="num"><?= $sourceTotal > 0 ? (int) round($n / $sourceTotal * 100) : 0 ?>%</td>
               </tr>
             <?php endforeach; ?>
@@ -226,7 +227,7 @@ foreach ($callers as $caller) {
                       <?php endif; ?>
                     </span>
                   </td>
-                  <td class="num"><?= number_format($caller['n']) ?></td>
+                  <td class="num"><?= AdminUi::count($caller['n']) ?></td>
                 </tr>
               <?php endforeach; ?>
             </tbody>

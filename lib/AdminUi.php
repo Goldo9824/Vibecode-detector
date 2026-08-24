@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/Pager.php';
+require_once __DIR__ . '/Num.php';
 
 /**
  * The small presentation decisions the admin pages share.
@@ -67,6 +68,24 @@ final class AdminUi
         }
         $n = (int) floor($seconds / (86400 * 365));
         return $n . ($n === 1 ? ' year ago' : ' years ago');
+    }
+
+    /**
+     * A counter, shortened past a thousand, with the exact figure kept in the
+     * title so nothing is actually hidden — "1.2k" to read, "1,247" to hover.
+     *
+     * Returns markup rather than a string, and is therefore the one thing here
+     * that must not be passed through h() at the call site: it escapes what it
+     * puts inside the tag itself.
+     */
+    public static function count(int $n): string
+    {
+        $compact = Num::compact($n);
+        if (!Num::isShortened($n)) {
+            return self::esc($compact);
+        }
+        return sprintf('<span class="approx" title="%s">%s</span>',
+            self::esc(Num::exact($n)), self::esc($compact));
     }
 
     /** url → Live page, and anything unrecognised back out unchanged. */

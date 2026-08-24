@@ -37,7 +37,8 @@ Nothing else required. There is deliberately no dependency to install and nothin
    index.php            the page
    verify.php           certificate verification
    llms.txt             instructions for an AI agent calling api/website.php
-   robots.txt           disallows /admin/
+   robots.txt           disallows /admin/, points at the sitemap
+   sitemap.php          served as /sitemap.xml — see docs/SEARCH.md
    .htaccess            security headers, denies lib/ and data/
    api/                 analyze.php, website.php, certificate.php
    admin/               optional password-gated key management and usage — docs/ADMIN.md

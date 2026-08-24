@@ -19,6 +19,7 @@ require_once dirname(__DIR__) . '/lib/Crawler.php';
 require_once dirname(__DIR__) . '/lib/UsageLog.php';
 
 header('X-Content-Type-Options: nosniff');
+header('X-Robots-Tag: noindex');
 header('Referrer-Policy: no-referrer');
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';

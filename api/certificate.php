@@ -4,6 +4,10 @@ declare(strict_types=1);
 require_once dirname(__DIR__) . '/lib/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/Certificate.php';
 
+// Set before anything can go wrong, so the failure response carries it too:
+// an unverifiable certificate URL is the last thing that should be indexed.
+header('X-Robots-Tag: noindex');
+
 $payload = isset($_REQUEST['p']) ? (string) $_REQUEST['p'] : '';
 $sig     = isset($_REQUEST['s']) ? (string) $_REQUEST['s'] : '';
 

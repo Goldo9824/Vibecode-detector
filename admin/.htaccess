@@ -1,0 +1,10 @@
+# The panel is password-gated, disallowed in robots.txt, and every page here
+# sends `X-Robots-Tag` and a robots meta tag of its own. This is the fourth
+# layer, and the only one that keeps holding for a file added to this
+# directory later that forgets the other three.
+<IfModule mod_headers.c>
+  Header always set X-Robots-Tag "noindex, nofollow, noarchive, nosnippet"
+  Header always set X-Frame-Options "DENY"
+  Header always set Referrer-Policy "no-referrer"
+  Header always set Cache-Control "no-store, no-cache, must-revalidate, private"
+</IfModule>

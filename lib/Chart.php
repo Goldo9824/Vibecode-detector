@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/Num.php';
+
 /**
  * Charts, drawn as SVG on the server.
  *
@@ -236,6 +238,12 @@ final class Chart
      * whose busiest day saw one analysis, the halfway line rounds to the same
      * number as the top one, and an axis reading "1, 1, 0" says the scale is
      * broken rather than that the traffic is small.
+     *
+     * The numbers are shortened past a thousand, like every other counter on
+     * the page. An axis is read sideways at nine pixels: "17k" is the height
+     * of the chart, and "17925" is five digits of false precision on a
+     * gridline that is only accurate to the pixel anyway. The exact figure is
+     * on every column's own tooltip.
      */
     private static function gridlines(int $max, float $padL, float $padT, float $plotH, float $right): string
     {
@@ -249,8 +257,8 @@ final class Chart
             if ($drawn !== null && $value === $drawn) {
                 continue;
             }
-            $out .= sprintf('<text x="%.2f" y="%.2f" class="c-axis" text-anchor="end">%d</text>',
-                $padL - 6, $y + 3.5, $value);
+            $out .= sprintf('<text x="%.2f" y="%.2f" class="c-axis" text-anchor="end">%s</text>',
+                $padL - 6, $y + 3.5, self::esc(Num::compact($value)));
             $drawn = $value;
         }
         return $out;

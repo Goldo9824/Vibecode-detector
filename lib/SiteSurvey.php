@@ -41,6 +41,8 @@ final class SiteSurvey
     private $crawlNotes;
     /** @var array{urls:int,lastmods:string[]} */
     private $sitemap;
+    /** @var array<string,int> internal links that answered with an error */
+    private $missing;
     /** @var Report */
     private $r;
 
@@ -48,12 +50,14 @@ final class SiteSurvey
      * @param array<int,array{url:string,body:string,assets:array<string,string>,status:int}> $pages
      * @param string[] $crawlNotes
      * @param array{urls?:int,lastmods?:string[]} $sitemap
+     * @param array<string,int> $missing url => status, for links the crawl could not fetch
      */
-    public function __construct(string $entryUrl, array $pages, array $crawlNotes = array(), array $sitemap = array())
+    public function __construct(string $entryUrl, array $pages, array $crawlNotes = array(), array $sitemap = array(), array $missing = array())
     {
         $this->entryUrl = $entryUrl;
         $this->pages = $pages;
         $this->crawlNotes = $crawlNotes;
+        $this->missing = $missing;
         $this->sitemap = array(
             'urls'     => isset($sitemap['urls']) ? (int) $sitemap['urls'] : 0,
             'lastmods' => isset($sitemap['lastmods']) ? (array) $sitemap['lastmods'] : array(),
@@ -71,8 +75,9 @@ final class SiteSurvey
 
         // Analyse each page on its own first.
         $perPage = array();
-        $hits = array();      // signal id => [page index, ...]
-        $evidence = array();  // signal id => first evidence seen
+        $hits = array();        // signal id => [page index, ...]
+        $evidence = array();    // signal id => excerpts, best page first
+        $occurrences = array(); // signal id => hits summed across every page
 
         foreach ($this->pages as $i => $page) {
             $report = (new SiteAnalyzer(
@@ -89,19 +94,39 @@ final class SiteSurvey
                 'words'   => str_word_count(Text::visibleText($page['body'])),
             );
 
+            $path = $this->pathOf($page['url']);
             foreach ($report->signals() as $s) {
                 if (!isset($hits[$s->id])) {
                     $hits[$s->id] = array();
-                    $evidence[$s->id] = $s->evidence;
+                    $evidence[$s->id] = array();
+                    $occurrences[$s->id] = 0;
                 }
                 $hits[$s->id][] = $i;
+                // A site-wide count is the site's count: the same habit on six
+                // pages is six times the evidence it is on one, and merging
+                // without summing would throw that away.
+                $occurrences[$s->id] += $s->occurrences;
+
+                // Excerpts are kept from the first pages that carried them, and
+                // labelled with the page they came from — without that, evidence
+                // gathered from four documents reads as though it came from one.
+                foreach ($s->evidence as $ex) {
+                    if (count($evidence[$s->id]) >= 6) {
+                        break;
+                    }
+                    if ($ex->source === '') {
+                        $ex->source = $path;
+                    }
+                    $evidence[$s->id][] = $ex;
+                }
             }
         }
 
         $this->r->stat('perPage', $perPage);
-        $this->mergeSignals($hits, $evidence, $count);
+        $this->mergeSignals($hits, $evidence, $count, $occurrences);
         $this->compare($perPage);
         $this->checkSitemap();
+        $this->checkMissingPages();
 
         foreach ($this->crawlNotes as $note) {
             $this->r->note($note);
@@ -118,6 +143,29 @@ final class SiteSurvey
     }
 
     /**
+     * Links the navigation offers and the server refuses.
+     *
+     * Restricted to shallow paths on purpose. Links rot on every site that has
+     * been up long enough, but they rot at the bottom — an old post pointing at
+     * a moved page. A front page whose nav offers /pricing and gets a 404 back
+     * is a page nobody clicked before publishing it.
+     */
+    private function checkMissingPages(): void
+    {
+        $shallow = array();
+        foreach ($this->missing as $url => $status) {
+            $path = trim((string) parse_url((string) $url, PHP_URL_PATH), '/');
+            if ($path === '' || substr_count($path, '/') > 0) {
+                continue;
+            }
+            $shallow[] = Excerpt::plain(sprintf('/%s answered %d', $path, (int) $status));
+        }
+        if (count($shallow) >= 2) {
+            $this->r->flag('xs.broken_nav_links', $shallow, count($shallow));
+        }
+    }
+
+    /**
      * How many pages a signal must appear on before it counts site-wide.
      *
      * Never fewer than two, so a lone page cannot carry a reading; otherwise a
@@ -131,10 +179,11 @@ final class SiteSurvey
     /**
      * Fold per-page signals into site-wide ones.
      *
-     * @param array<string,array<int,int>> $hits
-     * @param array<string,string[]>       $evidence
+     * @param array<string,array<int,int>>     $hits
+     * @param array<string,Excerpt[]>          $evidence
+     * @param array<string,int>                $occurrences
      */
-    private function mergeSignals(array $hits, array $evidence, int $pageCount): void
+    private function mergeSignals(array $hits, array $evidence, int $pageCount, array $occurrences = array()): void
     {
         // Fold order is fixed so the report is identical between runs and
         // between PHP versions, for the same reason the rest of the tool sorts
@@ -157,17 +206,23 @@ final class SiteSurvey
                 continue;
             }
 
+            $total = isset($occurrences[$id]) ? (int) $occurrences[$id] : 0;
+
             $lines = array();
             if ($pageCount > 1) {
-                $lines[] = $isFingerprint
+                $summary = $isFingerprint
                     ? sprintf('found on %d of %d pages read', $seen, $pageCount)
                     : sprintf('on %d of %d pages read', $seen, $pageCount);
+                if ($total > $seen) {
+                    $summary .= sprintf(', %d occurrences in total', $total);
+                }
+                $lines[] = Excerpt::plain($summary);
             }
             foreach (array_slice($evidence[$id], 0, 3) as $line) {
                 $lines[] = $line;
             }
 
-            $this->r->flag($id, $lines);
+            $this->r->flag($id, $lines, $total);
         }
     }
 

@@ -66,6 +66,8 @@ final class Crawler
     private $fetcher;
     /** @var string[] */
     private $notes = array();
+    /** @var array<string,int> internal links that answered with an error */
+    private $missing = array();
     /** @var string[]|null robots.txt disallow prefixes, null until loaded */
     private $disallow = null;
     /** @var string[] sitemap addresses robots.txt pointed at */
@@ -81,6 +83,16 @@ final class Crawler
     }
 
     /** @return string[] */
+    /**
+     * Links the crawl followed that answered with an error.
+     *
+     * @return array<string,int> url => status
+     */
+    public function missing(): array
+    {
+        return $this->missing;
+    }
+
     public function notes(): array
     {
         return $this->notes;
@@ -217,7 +229,13 @@ final class Crawler
     {
         $doc = $this->fetcher->fetchDocument($url, self::MAX_PAGE_BYTES, self::PAGE_TIMEOUT);
 
-        if ($doc['status'] >= 400 || $doc['body'] === '') {
+        if ($doc['status'] >= 400) {
+            // Kept rather than dropped: a link the site's own navigation offers
+            // and the site's own server refuses is a finding, not a failure.
+            $this->missing[$url] = (int) $doc['status'];
+            return null;
+        }
+        if ($doc['body'] === '') {
             return null;
         }
         if (stripos($doc['contentType'], 'html') === false && !preg_match('~<html|<!doctype~i', $doc['body'])) {

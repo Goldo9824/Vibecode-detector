@@ -131,6 +131,71 @@ Their absence proves nothing.
   Sarah Johnson, Michael Brown, Alex Miller), titles like "Verified User", marketing
   copy that tells rather than shows. → `ct.generic_names`, `ct.marketing_cliche`
 
+### Publishing, rather than authorship
+
+The steps between "it works" and "it is online", which a demo skips and a published
+site accumulates. None of these is about how the code was written, which is the
+point: they read the *state* a project was left in.
+
+- The build step that never ran: `/@vite/client` in production, `/src/main.tsx`
+  served unbundled, a fast-refresh preamble, a `localhost:5173` address still in an
+  attribute. → `st.dev_server_page`
+- A form with fields, a submit button, and no action, no form service, no handler
+  and no request anywhere in the page or its scripts. → `st.form_to_nowhere`
+- None of the furniture a shared page acquires — no description, no social card,
+  no canonical, no favicon — on a *built* page with real copy. Guarded three ways,
+  because absent meta tags are the weakest evidence there is. → `st.no_seo_furniture`
+- Everything in one document: tens of kilobytes of markup carrying inline styles and
+  inline script, with nothing split out. → `st.single_file_page`
+- Still answering on the platform's default subdomain. A nudge, not a finding: a
+  great many real projects never move off one. → `st.preview_host`
+- Navigation offering top-level pages the server answers with an error. Links rot
+  deep in a site, not in the nav of a front page. → `xs.broken_nav_links`
+
+### Stylesheets
+
+Nothing used to read them: a served CSS file was skipped for not being
+JavaScript, and inline `<style>` blocks were never opened at all. A stylesheet
+that no minifier has touched is the file exactly as it was written, and three
+habits in it are worth reading — all three about whether anyone expected to
+open the file again.
+
+- Declarations sorted A to Z. People group them by what they do — position,
+  then box, then type, then colour — because that is the order a rule is read
+  back in. The bar is set where chance runs out: two rules of four properties
+  in order is one time in five hundred. A linter enforcing alphabetical order
+  is the one good innocent explanation. → `cd.css_alphabetical`
+- Every rule body crushed onto one line, in a file that was never minified.
+  Minifiers do this to the whole stylesheet and take the newlines with it.
+  → `cd.css_one_line`
+- A label on every block — Header, Hero, Footer — and not one comment saying
+  why a value is what it is. Stylesheets accumulate the opposite: a magic
+  number with an explanation attached, a hack with a browser named next to it.
+  → `cd.css_labelled_sections`
+
+### People, contact and prose
+
+- Testimonial faces served by pravatar, randomuser.me, DiceBear or a placeholder
+  host: whoever built it needed a face and took the first one available.
+  → `ct.stock_avatars`
+- Contact details nobody can reach: `@example.com`, a 555 number, 123 Main Street,
+  social links pointing at the platform's home page rather than an account.
+  → `ct.placeholder_contact`
+- The model's sentence rhythm rather than its vocabulary: "it's not just X, it's Y",
+  "in today's fast-paced world", "whether you're X or Y", the three-item list where
+  two would do. Copywriters use each of these; they do not use all of them at once.
+  → `ct.llm_prose`
+- Alt text written as even, complete descriptions of every image. Real alt text is
+  uneven, because somebody knew which images mattered. → `ct.model_alt_text`
+- Every function within a couple of lines of every other one. A file written over
+  months is lumpy. → `cd.uniform_function_length`
+
+Two pull the other way, for the same reason: they are evidence of time passing.
+Dated content spread across months or years (`hu.content_dates`), and accessibility
+work nobody was asked for — a skip link, a reduced-motion rule, labelled inputs
+(`hu.a11y_care`), withheld when the page has already identified itself as a
+generator's own output, since component kits ship aria attributes by the hundred.
+
 ### Live-site fingerprints (positive ID)
 
 | Platform | What to look for |
@@ -210,6 +275,16 @@ weighted to outlast the stylistic ones.
 **Signs run in one direction only.** Presence identifies; absence proves nothing.
 Agentic tools (Cursor, Claude Code, Windsurf) leave no platform fingerprint at all
 because they write into a normal repo. → stated in the notes on every report.
+
+**One occurrence is not a habit.** The tells this reads are habits, and a habit is
+visible in how often it fires, not in whether it fired. → every signal carries an
+occurrence count, and that count earns up to 1.5× its weight on a log scale, inside
+the category ceilings and never for a fingerprint.
+
+**Evidence you cannot check is evidence you have to trust.** A quoted line proves
+nothing about the line above it. → every excerpt is published with the code around
+it, the document it came from and how many times that pattern was found, with
+credential-shaped strings masked in the surroundings as well as the match.
 
 **False-positive harm is real**, especially in academic and hiring contexts, and
 falls disproportionately on non-native English writers. → the score is clamped away

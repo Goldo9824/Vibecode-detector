@@ -76,6 +76,17 @@ verdict, a confidence level, the fired signals with excerpts, and a signed
 `cert` token that `POST /api/certificate.php` (or `/verify`) can turn into a
 PDF or check independently. See `lib/Report.php` for the exact fields.
 
+Each signal carries its evidence twice. `evidence` is the flat list of strings
+it has always been. `excerpts` is the same evidence with everything needed to
+check it: the line it was found on, the document it came from, how many times
+that pattern fired, and the lines above and below it — `context`, with
+`match: true` marking the one that fired. Alongside them, `occurrences` is how
+often the signal fired in total (which can be more than the four excerpts
+published), `repetition` is the multiplier that count earned, and
+`scoredWeight` is the weight actually used in the score. `lib/Evidence.php`
+masks credential-shaped strings before any of it is published, in the context
+lines as well as the match.
+
 ### Errors
 
 | Status | Meaning |

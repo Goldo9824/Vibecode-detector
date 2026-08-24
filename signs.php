@@ -112,6 +112,22 @@ $signs = array(
         'but'    => 'Real testimonials name a company you can look up and say something too specific to be generic.',
     ),
     array(
+        'id'     => 'form',
+        'name'   => 'The form that goes nowhere',
+        'signal' => 'st.form_to_nowhere',
+        'tell'   => 'An email field, a gradient button, a hover state, a focus ring &mdash; and nothing behind any of it. The form is the one element on a landing page that has to reach a server to mean anything, which is exactly why it is the one most often left unwired.',
+        'look'   => 'Open the markup and read the form tag. No action, no form service, no submit handler, no request anywhere in the scripts: the button is a picture of a button.',
+        'but'    => 'A single-page app submits through JavaScript, so an empty action proves nothing on its own. The tell is nothing anywhere &mdash; no handler, no endpoint, no mail link.',
+    ),
+    array(
+        'id'     => 'avatars',
+        'name'   => 'Faces from an avatar service',
+        'signal' => 'ct.stock_avatars',
+        'tell'   => 'The people quoted on the page are served by pravatar, randomuser.me or DiceBear. Whoever built it needed a face in that slot and took the first one available, which means there was no person to photograph.',
+        'look'   => 'Right-click the portrait and copy the image address. If it names an avatar API rather than the site\'s own domain, the customer is a placeholder.',
+        'but'    => 'A pre-launch page using placeholders honestly is a pre-launch page. The tell is a placeholder presented as a customer.',
+    ),
+    array(
         'id'     => 'stats',
         'name'   => 'Numbers nobody measured',
         'signal' => 'ct.stat_inflation',
@@ -127,12 +143,12 @@ $signs = array(
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Visual signs — Vibe Code Detector</title>
-<meta name="description" content="A field guide to the visual tells of a generated web page: the hero pill, the scroll indicator, the gradient headline, the bento grid, and the rest. Each one rendered live, with what it looks like and when it is innocent.">
+<meta name="description" content="A field guide to the visual tells of a generated web page: the hero pill, the scroll indicator, the gradient headline, the bento grid, the form that goes nowhere, and the rest. Each one rendered live, with what it looks like and when it is innocent.">
 <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/css/site.css?v=<?= h(VCD_VERSION) ?>">
 <link rel="stylesheet" href="assets/css/specimens.css?v=<?= h(VCD_VERSION) ?>">
 <meta property="og:title" content="The visual signs of a generated page">
-<meta property="og:description" content="Twelve visual tells, each rendered live, with what it looks like and when it is innocent.">
+<meta property="og:description" content="Fourteen visual tells, each rendered live, with what it looks like and when it is innocent.">
 <meta property="og:type" content="article">
 <meta property="og:url" content="<?= h(vcd_site_url()) ?>/signs.php">
 <meta property="og:image" content="<?= h(vcd_site_url()) ?>/assets/img/social-preview.png">
@@ -161,7 +177,7 @@ $signs = array(
     <section class="hero">
       <p class="eyebrow">Field guide</p>
       <h1>The visual signs</h1>
-      <p>Twelve things you can spot on a rendered page without opening View Source. Every specimen below is <strong>rendered live</strong>, not screenshotted, so it stays honest as the conventions drift &mdash; and so you can inspect it.</p>
+      <p>Fourteen things you can spot on a rendered page without opening View Source. Every specimen below is <strong>rendered live</strong>, not screenshotted, so it stays honest as the conventions drift &mdash; and so you can inspect it.</p>
       <p class="disclaimer">None of these proves anything on its own, and the detector weights them accordingly: aesthetic evidence is capped as a group and can never, by itself, push a reading past 55%. They are a reason to look closer. Each entry below says when it is innocent, because usually it is.</p>
     </section>
 
@@ -205,7 +221,7 @@ $signs = array(
       <div class="prose">
         <p class="eyebrow">A warning about this page</p>
         <h2>Recognising these is the easy half</h2>
-        <p>Everything here is cheap to change. A page carrying all twelve can be stripped of all twelve in an afternoon, and a careful person building by hand can hit six of them by accident because these are also just the conventions of the moment.</p>
+        <p>Everything here is cheap to change. A page carrying all fourteen can be stripped of all fourteen in an afternoon, and a careful person building by hand can hit six of them by accident because these are also just the conventions of the moment.</p>
         <p>That is why the detector caps this whole family. Visual signs tell you where to look; they do not tell you what you found. The things that actually carry weight are further down: a builder's fingerprint in the markup, the shape of the repository history, whether the same problem got solved three different ways.</p>
 
         <h3>This page fails its own test</h3>

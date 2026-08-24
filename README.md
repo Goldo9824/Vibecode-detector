@@ -46,15 +46,20 @@ configured a database for the optional admin panel (see [Privacy](#privacy)).
   that means fewer pages, and the report says how many it managed.
 - **Pasted code** — reads a source file in any language for the tells that survive
   in text: comment habits, error handling, naming, dependency incoherence, the
-  security profile.
+  security profile. Stylesheets get their own reading — declaration order, rules
+  crushed onto one line, a label on every block and a reason for nothing — and
+  a page's own CSS files and `<style>` blocks go through it too.
 - **Git history** — paste the output of `git log` and it reads how the code
   *arrived*: one enormous opening commit, hundreds of lines in minutes, a trail
   of one-line fixes behind it. This is the strongest evidence the tool has, and
   the hardest to fake after the fact.
 
 Either way you get a score out of 100, a verdict, a confidence level, and **every
-signal that fired with the excerpt that triggered it**. You can then download a
-signed one-page PDF certificate, which anyone can check at
+signal that fired with the excerpt that triggered it — shown in the code it was
+found in**. Each excerpt carries the lines above and below the match, the file it
+came from, and how many times that pattern was found in the subject; the count is
+not decoration, it feeds the score. You can then download a signed one-page PDF
+certificate, which anyone can check at
 [/verify](https://vibecodedetector.fanficnow.com/verify).
 
 ## What it does not do
@@ -94,7 +99,15 @@ Evidence is ranked, because evidence is not equal:
 | Aesthetic | indigo gradients, Inter, three identical cards | 0.25–0.5, **capped as a group** |
 | Human authorship | ticket references, exasperated comments, commented-out code, mixed indentation | subtracts |
 
-Seven rules the scoring will not break:
+**How often a tell fired is part of the reading.** One what-not-why comment is a
+coincidence; thirteen of them across a file is a habit, and habits are what this is
+reading. Every signal carries an occurrence count, and that count earns it a
+multiplier of up to 1.5× on a log scale — bounded, because the difference between
+one occurrence and ten is real and the difference between forty and eighty is the
+length of the file. Fingerprints are exempt: finding a builder's badge three times
+identifies it exactly as well as finding it once.
+
+Eight rules the scoring will not break:
 
 1. Aesthetic evidence is capped. A subject with nothing but aesthetic tells cannot
    exceed **55%**, however purple it is.
@@ -113,8 +126,11 @@ Seven rules the scoring will not break:
 6. Confidence never exceeds *moderate* without a platform fingerprint — pattern
    reading without repository history has not earned more than that.
 7. Human signals are first-class and weighted on the same scale as the rest.
+8. **Repetition is bounded and never manufactures a category.** The multiplier is
+   capped at 1.5×, applies inside the category ceilings rather than around them,
+   and does not apply to fingerprints at all.
 
-All 104 signals, with their weights and reasoning, are in
+All 120 signals, with their weights and reasoning, are in
 **[docs/SIGNALS.md](docs/SIGNALS.md)** — generated from `lib/Catalog.php`, so the
 documentation cannot drift from the code.
 

@@ -140,6 +140,31 @@ jobs:
           [ "$code" = "403" ] || { echo "::error::expected 403, got $code"; exit 1; }
           echo "unsigned picture request refused"
 
+      - name: The renderer answers only what this site signed
+        run: |
+          VCD_SHOT_SECRET=ci-secret php -S 127.0.0.1:8081 tools/shot-server.php > /tmp/shot.log 2>&1 &
+          sleep 2
+          base=http://127.0.0.1:8081
+          code() { curl -s -o /dev/null -w '%{http_code}' "$1"; }
+          expect() {
+            got=$(code "$2")
+            [ "$got" = "$1" ] || { echo "::error::$3 — expected $1, got $got"; exit 1; }
+            echo "$3"
+          }
+
+          expect 400 "$base/?url=https%3A%2F%2Fexample.com%2F" "unsigned request refused"
+          expect 401 "$base/?url=https%3A%2F%2Fexample.com%2F&w=1200&h=900&e=9999999999&t=deadbeef" "bad signature refused"
+
+          # Signed correctly, but for a moment that has passed.
+          exp=$(( $(date +%s) - 60 ))
+          sig=$(php -r 'echo hash_hmac("sha256", "https://example.com/|1200|900|" . $argv[1], "ci-secret");' "$exp")
+          expect 401 "$base/?url=https%3A%2F%2Fexample.com%2F&w=1200&h=900&e=$exp&t=$sig" "expired request refused"
+
+          # Signed correctly and current, but pointed at the network it runs in.
+          exp=$(( $(date +%s) + 120 ))
+          sig=$(php -r 'echo hash_hmac("sha256", "http://127.0.0.1/|1200|900|" . $argv[1], "ci-secret");' "$exp")
+          expect 403 "$base/?url=http%3A%2F%2F127.0.0.1%2F&w=1200&h=900&e=$exp&t=$sig" "private address refused"
+
       - name: The fetcher refuses local addresses
         run: |
           for target in "http://127.0.0.1:8080/" "http://169.254.169.254/" "http://localhost/"; do

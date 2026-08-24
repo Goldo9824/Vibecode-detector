@@ -268,9 +268,14 @@
 
     img.alt = 'The front page of ' + data.target;
     status.textContent = 'Rendering the front page…';
-    $('r-shot-caption').textContent = 'The front page as ' + shot.provider +
-      ' rendered it, passed through this site so your browser never asks them for it. ' +
-      'It is there to show you what was read. Nothing in the reading below is scored on it.';
+    // Two different disclosures, because they are two different facts: a
+    // service outside this site was told the address, or nobody was.
+    $('r-shot-caption').textContent = shot.hosted
+      ? 'The front page as ' + shot.provider + ' rendered it, passed through this site so your ' +
+        'browser never asks them for it. It is there to show you what was read. Nothing in the ' +
+        'reading below is scored on it.'
+      : 'The front page, rendered by ' + shot.provider + ' — no outside service was told the ' +
+        'address. It is there to show you what was read. Nothing in the reading below is scored on it.';
     fig.hidden = false;
 
     var tries = 0;

@@ -6,29 +6,41 @@ require_once __DIR__ . '/Fetcher.php';
 /**
  * The picture of the front page that sits at the top of a URL report.
  *
- * This server cannot render a page. Shared hosting has no headless browser,
+ * This server cannot render a page. Shared hosting has no headless browser
  * and the project has no dependencies to install one with, so the shot is
- * taken by a rendering service and passed through api/snapshot.php on the way
- * to the browser. Passing it through rather than pointing the <img> straight
- * at the service is the whole privacy design: the visitor's browser never
- * talks to a third party, so their address and their referrer stay here, and
+ * taken elsewhere and passed through api/snapshot.php on the way to the
+ * browser. Passing it through rather than pointing the <img> straight at the
+ * renderer is the whole privacy design: the visitor's browser never talks to
+ * anyone but this site, so their address and their referrer stay here, and
  * the content policy in .htaccess can keep saying img-src 'self'.
  *
- * What the service does learn is the address being analysed — which this
- * server was going to fetch anyway, but from somebody else's machine as well
- * as this one. That is a disclosure, so the report names the renderer under
- * the picture, and an operator who would rather not make it at all sets
- * 'enabled' => false in data/snapshot-config.php and the block disappears.
+ * Where "elsewhere" is, is the operator's choice, and the two answers differ
+ * in who learns which addresses are being checked:
  *
- * Nothing is written to disk. An image is fetched, streamed to the one
- * visitor who asked for it, and forgotten, which keeps "nothing is stored"
- * true of this feature the same as it is of the analysis itself.
+ *   'self'  — a machine you run, using tools/shot-server.php. Nobody outside
+ *             your own hosting is told anything. This is the default, because
+ *             it is the answer that gives nothing away.
+ *   hosted  — mShots, Thum.io, Microlink or any other service by template.
+ *             Nothing to set up, at the price of telling that service which
+ *             address was analysed. Used when no renderer of your own is
+ *             configured, and named under the picture when it is.
+ *
+ * A request to your own renderer is signed with a secret the two machines
+ * share and expires in five minutes, so the renderer answers this site and
+ * not the internet at large.
+ *
+ * Nothing is written to disk at either end. An image is fetched, streamed to
+ * the one visitor who asked for it, and forgotten, which keeps "nothing is
+ * stored" true of this feature the same as it is of the analysis itself.
  */
 final class Snapshot
 {
     const WIDTH   = 1200;
     const HEIGHT  = 900;
     const TIMEOUT = 8;
+
+    /** Your own renderer starts a browser, so it is given longer than a service. */
+    const SELF_TIMEOUT = 20;
 
     /** Ceiling on what will be pulled from the renderer and passed on. */
     const MAX_BYTES = 2097152;
@@ -43,15 +55,24 @@ final class Snapshot
      */
     const PLACEHOLDER_BYTES = 3072;
 
+    /** How long a signed request to your own renderer stays good for. */
+    const SIGNED_TTL = 300;
+
     /**
      * The renderers this knows how to ask, and what to call them in public.
      *
      * {url} is the target, {enc} the same percent-encoded, {w} and {h} the
-     * viewport, {key} whatever the operator put in the config. A service not
-     * listed here is reachable through provider 'custom' and a template of
-     * the same shape, so adding one is a config change rather than a patch.
+     * viewport, {key} whatever the operator put in the config, {endpoint} the
+     * address of your own renderer, and {exp}/{sig} the expiry and signature
+     * that renderer checks. A service not listed here is reachable through
+     * provider 'custom' and a template of the same shape, so adding one is a
+     * config change rather than a patch.
      */
     const PROVIDERS = array(
+        'self' => array(
+            'label'    => 'this site\'s own renderer',
+            'template' => '{endpoint}?url={enc}&w={w}&h={h}&e={exp}&t={sig}',
+        ),
         'mshots' => array(
             'label'    => 'WordPress.com mShots',
             'template' => 'https://s0.wp.com/mshots/v1/{enc}?w={w}&h={h}',
@@ -85,8 +106,27 @@ final class Snapshot
             }
         }
 
-        $provider = isset($config['provider']) ? (string) $config['provider'] : 'mshots';
+        $provider = isset($config['provider']) ? (string) $config['provider'] : 'self';
         $template = isset($config['template']) ? (string) $config['template'] : '';
+        $endpoint = isset($config['endpoint']) ? rtrim((string) $config['endpoint']) : '';
+        $secret   = isset($config['secret']) ? (string) $config['secret'] : '';
+
+        // Your own renderer is the default, and nobody has one until they say
+        // where it is. An installation that has configured nothing at all is
+        // not asking to keep its pictures in-house — it has never been asked —
+        // so it gets the hosted default, named under every picture as always.
+        //
+        // An endpoint with no secret is a different case: something *was*
+        // configured and is wrong. Falling back there would send addresses to a
+        // third party on the strength of a typo, so the picture goes away
+        // instead and the operator finds a broken feature rather than a broken
+        // promise.
+        $fellBack = false;
+        if ($provider === 'self' && $endpoint === '' && $secret === '') {
+            $provider = 'mshots';
+            $fellBack = true;
+        }
+
         if (isset(self::PROVIDERS[$provider])) {
             $label = self::PROVIDERS[$provider]['label'];
             if ($template === '') {
@@ -105,15 +145,26 @@ final class Snapshot
         $width  = isset($config['width'])  ? (int) $config['width']  : self::WIDTH;
         $height = isset($config['height']) ? (int) $config['height'] : self::HEIGHT;
 
+        // A renderer of your own is slower to answer than a service with the
+        // page already cached — it starts a browser — so it gets longer before
+        // the request is called off, unless the operator has said otherwise.
+        $timeout = isset($config['timeout'])
+            ? (int) $config['timeout']
+            : ($provider === 'self' ? self::SELF_TIMEOUT : self::TIMEOUT);
+
         return self::$settings = array(
             'enabled'  => !isset($config['enabled']) || !empty($config['enabled']),
             'provider' => $provider,
             'template' => $template,
             'label'    => $label,
+            'endpoint' => $endpoint,
+            'secret'   => $secret,
+            'hosted'   => $provider !== 'self',
+            'fellBack' => $fellBack,
             'key'      => isset($config['key']) ? (string) $config['key'] : '',
             'width'    => max(320, min(2000, $width)),
             'height'   => max(240, min(2000, $height)),
-            'timeout'  => max(2, min(20, isset($config['timeout']) ? (int) $config['timeout'] : self::TIMEOUT)),
+            'timeout'  => max(2, min(30, $timeout)),
         );
     }
 
@@ -126,7 +177,17 @@ final class Snapshot
     public static function enabled(): bool
     {
         $s = self::settings();
-        return $s['enabled'] && $s['template'] !== '' && $s['label'] !== '';
+        if (!$s['enabled'] || $s['template'] === '' || $s['label'] === '') {
+            return false;
+        }
+
+        // Half-configured is off, not "off to a stranger instead": your own
+        // renderer needs both an address to ask and the secret it answers to.
+        if ($s['provider'] === 'self' && ($s['endpoint'] === '' || $s['secret'] === '')) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -148,6 +209,9 @@ final class Snapshot
             'url' => vcd_site_url() . '/api/snapshot.php?u=' . rawurlencode($target)
                    . '&t=' . self::token($target),
             'provider' => $s['label'],
+            // Whether the picture was taken off this operator's own hosting.
+            // The page says it either way; this is what decides which sentence.
+            'hosted'   => $s['hosted'],
             'width'    => $s['width'],
             'height'   => $s['height'],
         );
@@ -169,17 +233,46 @@ final class Snapshot
         return hash_equals(self::token($target), $token);
     }
 
-    public static function requestUrl(string $target): string
+    public static function requestUrl(string $target, ?int $expiry = null): string
     {
         $s = self::settings();
 
+        if ($expiry === null) {
+            $expiry = time() + self::SIGNED_TTL;
+        }
+
         return strtr($s['template'], array(
-            '{url}' => $target,
-            '{enc}' => rawurlencode($target),
-            '{w}'   => (string) $s['width'],
-            '{h}'   => (string) $s['height'],
-            '{key}' => rawurlencode($s['key']),
+            '{endpoint}' => $s['endpoint'],
+            '{url}'      => $target,
+            '{enc}'      => rawurlencode($target),
+            '{w}'        => (string) $s['width'],
+            '{h}'        => (string) $s['height'],
+            '{key}'      => rawurlencode($s['key']),
+            '{exp}'      => (string) $expiry,
+            '{sig}'      => self::signRequest($target, $expiry),
         ));
+    }
+
+    /**
+     * What proves to your own renderer that this site asked.
+     *
+     * Signed over the size and the expiry as well as the address, so a request
+     * lifted from a log cannot be replayed tomorrow or edited into a request
+     * for a different page. tools/shot-server.php computes the same string;
+     * changing the shape of it means changing both.
+     */
+    public static function signRequest(string $target, int $expiry): string
+    {
+        $s = self::settings();
+        if ($s['secret'] === '') {
+            return '';
+        }
+
+        return hash_hmac(
+            'sha256',
+            $target . '|' . $s['width'] . '|' . $s['height'] . '|' . $expiry,
+            $s['secret']
+        );
     }
 
     /**
@@ -202,6 +295,7 @@ final class Snapshot
             return self::outcome('failed', '', '', 'That address cannot be pictured.');
         }
 
+        $s = self::settings();
         $res = self::request(self::requestUrl($target));
         if ($res === null) {
             return self::outcome('failed', '', '', 'The renderer could not be reached.');
@@ -221,7 +315,11 @@ final class Snapshot
         if ($type === '') {
             return self::outcome('failed', '', '', 'The renderer sent something that is not an image.');
         }
-        if (strlen($res['body']) < self::PLACEHOLDER_BYTES || self::looksLikeFiller($res['url'])) {
+        // Only a hosted service answers with filler while it queues the render.
+        // Your own renderer either has the page or says it does not, and a
+        // genuinely blank page compresses small enough to fail this test.
+        if ($s['hosted']
+            && (strlen($res['body']) < self::PLACEHOLDER_BYTES || self::looksLikeFiller($res['url']))) {
             return self::outcome('pending', '', '', 'The renderer is still working on it.');
         }
 

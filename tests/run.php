@@ -1208,10 +1208,15 @@ between($mixed->score(), 15, 45, 'opposing evidence pulls the score down');
 
 group('The picture of the front page');
 
+// An installation with a renderer of its own configured reads a different
+// config than a fresh checkout does, so the assertions about what an
+// unconfigured one falls back to are skipped there rather than made to fail.
 $shotConfig = VCD_DATA . '/snapshot-config.php';
 $hadShotConfig = is_readable($shotConfig);
 
-ok(Snapshot::enabled(), 'a fresh checkout offers a picture');
+if (!$hadShotConfig) {
+    ok(Snapshot::enabled(), 'a fresh checkout offers a picture');
+}
 
 $desc = Snapshot::descriptor('https://flowsync.example.com/');
 ok($desc !== null && strpos($desc['url'], 'api/snapshot.php?u=') !== false, 'the report carries an address to fetch it from');
@@ -1232,25 +1237,67 @@ ok(!Snapshot::addressable('file:///etc/passwd'), 'a file path cannot');
 ok(Snapshot::descriptor('http://127.0.0.1/') === null, 'and no picture is offered of one');
 
 $request = Snapshot::requestUrl('https://flowsync.example.com/?a=1&b=2');
-ok(strpos($request, 's0.wp.com') !== false, 'the default renderer is the one with no key to sign up for');
 ok(strpos($request, rawurlencode('https://flowsync.example.com/?a=1&b=2')) !== false, 'the target is encoded into the request whole');
 ok(strpos($request, '{enc}') === false && strpos($request, '{w}') === false, 'no placeholder survives into the request');
+if (!$hadShotConfig) {
+    ok(strpos($request, 's0.wp.com') !== false, 'with no renderer of your own, the fallback is the one with no key to sign up for');
+}
 
 ok(Snapshot::imageType("\xFF\xD8\xFF\xE0" . str_repeat('x', 40)) === 'image/jpeg', 'a JPEG is recognised by its bytes');
 ok(Snapshot::imageType("\x89PNG\r\n\x1A\n" . str_repeat('x', 40)) === 'image/png', 'so is a PNG');
 ok(Snapshot::imageType('<!doctype html><html>' . str_repeat('x', 40)) === '', 'an HTML error page is not an image whatever it claims');
 ok(Snapshot::imageType('') === '', 'and nor is nothing');
 
-// The off switch is a privacy promise, so it is tested rather than assumed:
-// with pictures off, no report offers one and the endpoint has nothing to
-// answer for.
 if (!$hadShotConfig) {
+    ok($desc !== null && $desc['hosted'] === true, 'and the report says that picture came from outside');
+}
+
+// Everything below writes data/snapshot-config.php, so it only runs where the
+// operator has not got one of their own to be overwritten.
+if (!$hadShotConfig) {
+    // The off switch is a privacy promise, so it is tested rather than assumed:
+    // with pictures off, no report offers one and nothing is fetched.
     @file_put_contents($shotConfig, "<?php\nreturn array('enabled' => false);\n");
     Snapshot::forget();
     ok(!Snapshot::enabled(), 'an operator can switch pictures off');
     ok(Snapshot::descriptor('https://flowsync.example.com/') === null, 'and then no report offers one');
     $off = Snapshot::capture('https://flowsync.example.com/');
     ok($off['state'] === 'off', 'and nothing is fetched from anyone');
+
+    // A renderer of the operator's own: the default arrangement, and the one
+    // where no third party learns anything at all.
+    @file_put_contents($shotConfig, "<?php\nreturn array("
+        . "'endpoint' => 'https://shots.example.org/shot-server.php', 'secret' => 'shared-secret');\n");
+    Snapshot::forget();
+    ok(Snapshot::enabled(), 'a renderer of your own is offered once it is configured');
+
+    $s = Snapshot::settings();
+    ok($s['provider'] === 'self', 'and is what a configured installation uses');
+    ok($s['hosted'] === false, 'and counts as nobody else being told');
+
+    $mine = Snapshot::descriptor('https://flowsync.example.com/');
+    ok($mine !== null && $mine['hosted'] === false, 'which the report says under the picture');
+
+    $expiry = 1800000000;
+    $signed = Snapshot::requestUrl('https://flowsync.example.com/', $expiry);
+    ok(strpos($signed, 'https://shots.example.org/shot-server.php?') === 0, 'the request goes to that renderer');
+    ok(strpos($signed, 'e=' . $expiry) !== false, 'and carries the moment it stops being valid');
+    ok(strpos($signed, 's0.wp.com') === false, 'and nowhere near a hosted service');
+
+    // The one string that has to mean the same thing in two files. If this
+    // changes, tools/shot-server.php has to change with it, and this is what
+    // says so out loud.
+    $wire = hash_hmac('sha256', 'https://flowsync.example.com/|1200|900|' . $expiry, 'shared-secret');
+    ok(strpos($signed, 't=' . $wire) !== false, 'signed the way tools/shot-server.php checks it');
+    ok(Snapshot::signRequest('https://flowsync.example.com/', $expiry + 1) !== $wire, 'a different expiry signs differently');
+
+    // Half-configured is off rather than "off to a stranger instead": a typo in
+    // the secret must not silently start telling mShots what people analyse.
+    @file_put_contents($shotConfig, "<?php\nreturn array('endpoint' => 'https://shots.example.org/shot-server.php');\n");
+    Snapshot::forget();
+    ok(!Snapshot::enabled(), 'a renderer configured without its secret offers nothing');
+    ok(Snapshot::descriptor('https://flowsync.example.com/') === null, 'rather than falling back to a hosted service');
+
     @unlink($shotConfig);
     Snapshot::forget();
     ok(Snapshot::enabled(), 'removing the file puts it back');

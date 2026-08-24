@@ -66,9 +66,15 @@ A URL report also carries **a picture of the front page**, above the evidence,
 so you can see at a glance whether the thing being read is the thing you meant —
 a parked domain, a redirect, a login wall and a product site are all obvious in
 a picture and all look similar in a list of excerpts. It is context, never
-evidence: nothing in the score is computed from it. See
-[docs/SNAPSHOTS.md](docs/SNAPSHOTS.md) for who renders it and how to switch it
-off.
+evidence: nothing in the score is computed from it.
+
+Shared hosting cannot render a page, so the shot is taken elsewhere and passed
+through this site — your browser never talks to whoever took it. By default
+"elsewhere" is **a renderer you run yourself**: one file
+(`tools/shot-server.php`), one command, a machine with Chromium on it, and no
+third party is told anything at all. With no renderer of your own configured it
+falls back to a hosted service, named under every picture. Both, and the off
+switch, are in [docs/SNAPSHOTS.md](docs/SNAPSHOTS.md).
 
 ## What it does not do
 
@@ -274,7 +280,8 @@ lib/
   Certificate.php  certificate layout
 assets/            css, js, svg
 tests/             fixtures and the runner
-tools/             doc and asset generators
+tools/             doc and asset generators, and shot-server.php: the
+                   page renderer, for a server of your own to run
 ```
 
 ## Privacy
@@ -285,14 +292,20 @@ discarded, never written to disk — that's true with or without anything below.
 Certificates are signed rather than stored, which is why verification is a signature
 check and not a lookup — there is nothing to look up.
 
-One thing does leave this server. The picture of the front page is taken by a
-rendering service, because shared hosting cannot render a page, and that service is
-told the address being analysed — an address this server was already fetching, but
-now known to one more party. Your browser is not part of it: the image is passed
-through `api/snapshot.php`, so nothing you load comes from anywhere but here, and
-nothing about the picture is written down at either end. The report names the
-renderer under the picture, and `'enabled' => false` in `data/snapshot-config.php`
-switches the whole thing off — see [docs/SNAPSHOTS.md](docs/SNAPSHOTS.md).
+The one thing that can leave this server is the picture of the front page, and by
+default it does not. Shared hosting cannot render a page, so the shot is taken by a
+renderer the operator runs themselves (`tools/shot-server.php` — one file, one
+command); nobody outside their hosting is told anything. An installation that has
+configured no renderer of its own falls back to a hosted service, and *that*
+service is told the address being analysed — an address this server was already
+fetching, but now known to one more party. Which of the two took the picture is
+written under it, every time.
+
+Your browser is not part of either arrangement: the image is passed through
+`api/snapshot.php`, so nothing you load comes from anywhere but here, and nothing
+about the picture is written down at either end. `'enabled' => false` in
+`data/snapshot-config.php` switches the whole thing off — see
+[docs/SNAPSHOTS.md](docs/SNAPSHOTS.md).
 
 The one opt-in exception: an operator can configure a database for `admin/`
 (see [docs/ADMIN.md](docs/ADMIN.md)) to manage named API keys and to see how the

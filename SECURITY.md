@@ -49,6 +49,13 @@ magic number says it is an image, under `default-src 'none'; sandbox` and
 have it fetch an address it never signed, to get a non-image served from this
 domain, or to make the signature check pass for an address it should not.
 
+The renderer at the other end (`tools/shot-server.php`), for an operator running
+one, is in scope on the same terms: it answers only requests signed with the
+shared secret and expiring inside five minutes, refuses any address that resolves
+to a private or reserved range, and renders in a throwaway profile it deletes.
+A way past any of those — an unsigned render, a replayed request, a page on the
+network it runs in — is the class of bug that matters most there.
+
 **3. Certificate integrity (`lib/bootstrap.php`, `api/certificate.php`).**
 Certificates are HMAC-SHA256 signed over a compact payload and verified with
 `hash_equals`. The PDF is rendered from the *verified* payload, and the signal list

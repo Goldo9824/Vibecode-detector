@@ -385,6 +385,65 @@ label.field code {
   border-bottom: 1px solid var(--rule);
 }
 
+/* the picture of the page, url and site modes */
+
+.shot { margin: 0; padding: clamp(1.25rem, 4vw, 2rem) clamp(1.25rem, 4vw, 2rem) 0; }
+.shot[hidden] { display: none; }
+.shot-frame {
+  position: relative;
+  border: 1px solid var(--rule);
+  background: var(--paper-3);
+  /* Sized before the image arrives, so the report does not jump when it does.
+     Shallower than the renderer's own viewport and cropped from the top: this
+     is a look at what was read, and letting a whole 4:3 page push the evidence
+     below the fold would make the picture the point, which it is not. */
+  aspect-ratio: 3 / 2;
+  max-height: 26rem;
+  overflow: hidden;
+}
+.shot-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* Top-anchored: this is the fold of the front page, and cropping it from
+     the middle would throw away the part anybody wants to see. */
+  object-fit: cover;
+  object-position: top center;
+  opacity: 0;
+  transition: opacity .3s ease;
+}
+.shot.is-ready .shot-frame img { opacity: 1; }
+.shot-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 1rem;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: .75rem;
+  color: var(--ink-3);
+}
+.shot.is-ready .shot-status { display: none; }
+
+/* Nothing arrived: the frame has no picture to hold open, so it collapses to
+   the one line explaining that rather than reserving a page of empty box. */
+.shot.is-empty .shot-frame { aspect-ratio: auto; }
+.shot.is-empty .shot-frame img { display: none; }
+.shot.is-empty .shot-status { position: static; padding: 1.25rem; }
+.shot figcaption {
+  margin-top: .5rem;
+  font-size: .8125rem;
+  color: var(--ink-3);
+  max-width: 62ch;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shot-frame img { transition: none; }
+}
+
 /* evidence */
 
 .evidence { padding: clamp(1.25rem, 4vw, 2rem); }

@@ -40,7 +40,7 @@ Nothing else required. There is deliberately no dependency to install and nothin
    robots.txt           disallows /admin/, points at the sitemap
    sitemap.php          served as /sitemap.xml — see docs/SEARCH.md
    .htaccess            security headers, denies lib/ and data/
-   api/                 analyze.php, website.php, certificate.php
+   api/                 analyze.php, website.php, certificate.php, snapshot.php
    admin/               optional password-gated key management and usage — docs/ADMIN.md
    lib/                 the engine — never served directly
    assets/              css, js, svg
@@ -111,6 +111,13 @@ Shared hosting is not generous, and the analyser is built around that:
 - The URL fetcher caps downloads at 3 MB for the page and 768 KB per asset, and
   aborts mid-flight rather than buffering an oversized response.
 - It fetches at most four same-origin assets, with a 6-second timeout each.
+- The picture at the top of a URL report is one more outbound request, made on
+  this server's behalf by a renderer elsewhere and never written to disk. If you
+  have a server of your own, `tools/shot-server.php` turns it into that renderer
+  in one command and no third party is involved; otherwise a hosted service is
+  used and named under the picture. It shares the same concurrency cap as
+  analysis, and `'enabled' => false` in `data/snapshot-config.php` switches it off
+  entirely — see [docs/SNAPSHOTS.md](SNAPSHOTS.md).
 - Rate limiting is file-based in `data/rate/` — 20 URL analyses and 60 code
   analyses per IP per 10 minutes — and cleans up after itself. It **fails open**:
   if the directory misbehaves the site keeps working rather than locking everyone out.

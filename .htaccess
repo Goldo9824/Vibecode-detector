@@ -53,6 +53,15 @@ Options -Indexes -MultiViews
   <Files "sitemap.php">
     Header set Cache-Control "public, max-age=86400"
   </Files>
+
+  # And except the page picture, which is an image of a public front page
+  # rather than an analysis. Private, because the address it pictures is in
+  # the query string and no shared cache should keep a record of that; short,
+  # because a retry that has to wait for the renderer twice is a worse page
+  # than one that reuses the shot for ten minutes.
+  <Files "snapshot.php">
+    Header set Cache-Control "private, max-age=600"
+  </Files>
 </IfModule>
 
 <IfModule mod_expires.c>

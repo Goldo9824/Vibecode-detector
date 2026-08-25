@@ -7,6 +7,7 @@
 /data/api-keys.txt
 /data/db-config.php
 /data/admin-password.php
+/data/snapshot-config.php
 /data/rate/
 
 # Local scratch

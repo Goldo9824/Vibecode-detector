@@ -96,6 +96,7 @@ Always JSON, always `Content-Type: application/json`. Two shapes:
   "notes": ["Any caveats about how the read went — redirects, partial crawls, etc."],
   "analyzedAt": "2026-08-22T12:00:00+00:00",
   "version": "1.0.0",
+  "snapshot": { "url": "https://…/api/snapshot.php?u=…&t=…", "provider": "this site's own renderer", "hosted": false, "width": 1200, "height": 900 },
   "cert": { "payload": "…", "sig": "…", "id": "A1B2C3D4E5F6" }
 }
 ```
@@ -138,6 +139,15 @@ Field notes:
   actually used in the score. A signal that fired thirty times is a stronger
   reading than the same signal firing once, and this is where that is visible.
 - `counts.occurrences` — every hit behind every signal, summed.
+- `snapshot` — where to fetch a picture of the front page, when this
+  installation offers one: `snapshot.url` is an address on this site that
+  answers with an image (`provider` names who rendered it, and `hosted` says
+  whether that was a service outside this installation). It may answer
+  **202** the first time, meaning the renderer is still working — wait a few
+  seconds and ask again, at most two or three times. The picture is context for
+  a human reader, not evidence: nothing in the score is computed from it, so do
+  not describe it as a finding. The key is absent where the operator has
+  switched pictures off.
 - `cert` — a signature over this result. `GET {base_url}/api/certificate.php?p={cert.payload}&s={cert.sig}` returns a PDF of it; `{base_url}/verify` checks one. Nothing is stored server-side to look this up later — the token is the only record, so keep it if you want to re-verify or produce the PDF afterward.
 
 **Failure** (HTTP 400, 401, 429, 503, or 405):

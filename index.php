@@ -131,7 +131,7 @@ VisitLog::record('/');
             <button class="btn" type="submit">Analyse page</button>
             <span class="spinner" id="spin-url" hidden>reading&hellip;</span>
           </div>
-          <p class="hint">Fetches the page and up to four of its own stylesheets and scripts, and nothing else of the site&rsquo;s. Neither the page nor the picture of it at the top of the report is ever stored. Whole-site reads honour robots.txt, stop at fifty pages, and stop sooner if the site is slow &mdash; the report says how many it managed.</p>
+          <p class="hint">Fetches the page and up to four of its own stylesheets and scripts. Nothing else is requested, and the page itself is never stored. Whole-site reads honour robots.txt, stop at fifty pages, and stop sooner if the site is slow &mdash; the report says how many it managed.</p>
         </form>
       </div>
 
@@ -182,14 +182,6 @@ VisitLog::record('/');
             </div>
           </div>
         </div>
-
-        <figure class="shot" id="r-shot" hidden>
-          <div class="shot-frame">
-            <img id="r-shot-img" alt="" width="1200" height="900">
-            <p class="shot-status" id="r-shot-status"></p>
-          </div>
-          <figcaption id="r-shot-caption"></figcaption>
-        </figure>
 
         <div class="evidence">
           <h3>What it found</h3>
@@ -302,7 +294,7 @@ VisitLog::record('/');
 <footer class="colophon">
   <div class="shell colophon-grid">
     <div>
-      <p><strong>Vibe Code Detector</strong> is free and open source. No account, no cookies, no third-party analytics, and nothing your browser loads from anyone else&rsquo;s server &mdash; the picture of a front page is taken by whichever renderer this installation is configured with, by default one its own operator runs, and passed through this site. Which one took it is written underneath it. Pasted code and git history are read once and discarded, never stored; live-page and whole-site checks record only the address and mode analysed, for operator visibility, never the page content. Page views are counted &mdash; the path, the referring site, and a token that is salted with today&rsquo;s date so that it counts visitors today and cannot recognise anyone tomorrow. No address, no cookie, no session.</p>
+      <p><strong>Vibe Code Detector</strong> is free and open source. No account, no cookies, no third-party analytics, nothing loaded from anyone else&rsquo;s server. Pasted code and git history are read once and discarded, never stored; live-page and whole-site checks record only the address and mode analysed, for operator visibility, never the page content. Page views are counted &mdash; the path, the referring site, and a token that is salted with today&rsquo;s date so that it counts visitors today and cannot recognise anyone tomorrow. No address, no cookie, no session.</p>
       <p>Built to run on ordinary shared hosting: plain PHP, no dependencies, no build step.</p>
       <p><a href="#provenance">Half of this site was vibecoded</a>, and it scores 73% on its own detector.</p>
     </div>

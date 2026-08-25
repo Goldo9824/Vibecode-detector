@@ -87,17 +87,6 @@ published), `repetition` is the multiplier that count earned, and
 masks credential-shaped strings before any of it is published, in the context
 lines as well as the match.
 
-`snapshot` is present for any installation that offers page pictures: `url` is
-an address on this site that answers with an image of the front page,
-`provider` names who rendered it, `hosted` says whether that was a service
-outside this installation (`false` means the operator's own renderer, and that
-nobody else was told the address), and `width`/`height` are the viewport it was
-rendered at. The address carries a signature, so it works as given and cannot
-be edited to point at another page. Expect **202** while the renderer is still
-working — wait a few seconds and ask again — and no `snapshot` key at all where
-the operator has switched pictures off. See
-[SNAPSHOTS.md](SNAPSHOTS.md).
-
 ### Errors
 
 | Status | Meaning |

@@ -17,7 +17,6 @@ require_once dirname(__DIR__) . '/lib/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/Fetcher.php';
 require_once dirname(__DIR__) . '/lib/Crawler.php';
 require_once dirname(__DIR__) . '/lib/UsageLog.php';
-require_once dirname(__DIR__) . '/lib/Snapshot.php';
 
 header('X-Content-Type-Options: nosniff');
 header('X-Robots-Tag: noindex');
@@ -91,14 +90,6 @@ if ($crawl) {
 // the target address and which key was used — never the fetched page
 // content, which is discarded the same as it always was. See lib/UsageLog.php.
 UsageLog::record('api', $matchedKey['id'], $result['mode'], $result['target']);
-
-// The same picture the browser UI shows, as an address the caller can fetch:
-// the token in it is what this installation will answer for. Absent when
-// pictures are switched off here. See lib/Snapshot.php.
-$shot = Snapshot::descriptor((string) $result['target']);
-if ($shot !== null) {
-    $result['snapshot'] = $shot;
-}
 
 // The certificate token is a signature over the result, computed here and
 // thrown away — it is not stored, and is not how usage above gets recorded.

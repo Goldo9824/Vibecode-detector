@@ -5,7 +5,6 @@ require_once dirname(__DIR__) . '/lib/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/Fetcher.php';
 require_once dirname(__DIR__) . '/lib/Crawler.php';
 require_once dirname(__DIR__) . '/lib/UsageLog.php';
-require_once dirname(__DIR__) . '/lib/Snapshot.php';
 
 header('X-Content-Type-Options: nosniff');
 header('X-Robots-Tag: noindex');
@@ -130,17 +129,6 @@ if ($mode === 'url') {
 // ever written down. See lib/UsageLog.php.
 $target = in_array($result['mode'], array('url', 'site'), true) ? $result['target'] : null;
 UsageLog::record('ui', null, $result['mode'], $target);
-
-// A URL report carries a picture of the page it read: an address the browser
-// can ask this site for the shot at, and the name of whoever renders it. Absent
-// for pasted code, which has no front page, and on an installation that has
-// switched pictures off. See lib/Snapshot.php.
-if ($target !== null) {
-    $shot = Snapshot::descriptor((string) $target);
-    if ($shot !== null) {
-        $result['snapshot'] = $shot;
-    }
-}
 
 // The certificate token is a signature over the result, computed here and
 // thrown away — a certificate can be checked but never looked up.

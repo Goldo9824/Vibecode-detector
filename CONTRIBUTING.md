@@ -49,11 +49,12 @@ very good argument and a conversation first.
 
 The one deliberate, opt-in exception is `admin/` (see `docs/ADMIN.md`): an operator
 who configures a database gets a password-gated panel for managing named API keys
-and seeing usage. That records two things — the mode and, for URL checks, the
-target address of each analysis; and one row per page view, holding a path, a
-timestamp, a referring host and a visitor token salted with the day so it can count
-people today and recognise nobody tomorrow. Never the pasted content, never an
-address, never a cookie. With no database configured, that code path is inert and
+and seeing usage. That records two things — the mode and, for URL and repository
+checks, the address or repository name of each analysis; and one row per page view,
+holding a path, a timestamp, a referring host and a visitor token salted with the
+day so it can count people today and recognise nobody tomorrow. Never the pasted
+content, never the fetched page, never a repository's source, never an address,
+never a cookie. With no database configured, that code path is inert and
 the claim above is exactly true.
 
 If you add a page that should be counted, call `VisitLog::record('/its-path')` in
@@ -83,7 +84,8 @@ documentation all read from it.
   . 'write it for the person being judged by it, not for yourself.'),
 ```
 
-Id prefixes: `fp.` fingerprint, `st.` structural, `cd.` code style, `ct.` content,
+Id prefixes: `fp.` fingerprint, `gh.` repository history, `rp.` repository
+contents, `xs.` site-wide, `st.` structural, `cd.` code style, `ct.` content,
 `se.` security, `ae.` aesthetic, `hu.` human authorship.
 
 ### 2. Choose a weight honestly
@@ -140,6 +142,10 @@ php tools/gen-signals-doc.php
 ```
 
 `docs/SIGNALS.md` must be in your diff. CI checks it.
+
+The page at `/catalogue` renders `lib/Catalog.php` directly, so it needs nothing
+regenerating — but CI does check that every id in the catalogue appears on it, so a
+signal that renders as nothing will be caught there rather than by a reader.
 
 ---
 

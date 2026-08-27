@@ -77,8 +77,11 @@ Counters past a thousand are shortened — `17k`, `2.6k`, `1.2M`. They round
 element's title, one hover away. See `lib/Num.php`.
 
 - **Usage, last 30 days** — total analyses by mode (live page, whole site,
-  pasted code, git history) across everyone, and the twenty most-analysed
-  websites across all callers. **See all N websites** under that table opens
+  GitHub repo, pasted code, git history) across everyone, and the twenty
+  most-analysed websites across all callers. Repository reads are counted by
+  mode but never appear in the website tables: a repository name is stored
+  without a scheme, so it resolves to no host, and counting every scan against
+  github.com would claim a website was visited that nobody visited. **See all N websites** under that table opens
   the full list.
 - **View usage** on a key's row — the same breakdown restricted to that one
   key: how many requests, and which websites it pointed at.
@@ -172,9 +175,10 @@ been updated to say so rather than leave a false claim standing. Precisely
 what changes:
 
 - **Analyses, once a database is configured:** the mode of each analysis
-  (live page / whole site / pasted code / git history), and for the two URL
-  modes, the address analysed; which API key was used, if any; and a
-  timestamp. That's it.
+  (live page / whole site / GitHub repo / pasted code / git history), and for
+  the two URL modes the address analysed, for repository mode the repository's
+  name; which API key was used, if any; and a timestamp. That's it — never the
+  page fetched, never the repository's source, never the pasted content.
 - **Visits, once a database is configured:** one row per public page view —
   the path, a timestamp, the referring site's host, a coarse client class
   (desktop / mobile / tablet / bot / other), and a visitor token. The query

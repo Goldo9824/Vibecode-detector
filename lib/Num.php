@@ -35,6 +35,27 @@ final class Num
         array(1000, 'k'),
     );
 
+    /**
+     * Small numbers spelled out, the way they are written in a sentence.
+     *
+     * Prose that counts something the code also counts goes stale silently:
+     * a page that says "fourteen signs" above a list of sixteen is wrong in
+     * the one way a reader will notice and never report. Anything above
+     * twenty comes back as digits, because that is how it would be written
+     * anyway.
+     */
+    public static function word(int $n): string
+    {
+        $words = array(
+            0 => 'no', 1 => 'one', 2 => 'two', 3 => 'three', 4 => 'four', 5 => 'five',
+            6 => 'six', 7 => 'seven', 8 => 'eight', 9 => 'nine', 10 => 'ten',
+            11 => 'eleven', 12 => 'twelve', 13 => 'thirteen', 14 => 'fourteen',
+            15 => 'fifteen', 16 => 'sixteen', 17 => 'seventeen', 18 => 'eighteen',
+            19 => 'nineteen', 20 => 'twenty',
+        );
+        return isset($words[$n]) ? $words[$n] : self::exact($n);
+    }
+
     /** 999 → "999", 1000 → "1k", 1100 → "1.1k", 12345 → "12k", 1250000 → "1.2M" */
     public static function compact(int $n): string
     {

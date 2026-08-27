@@ -23,7 +23,7 @@
 
 ## What it does
 
-Four modes, no account, and nothing stored unless the operator has deliberately
+Five modes, no account, and nothing stored unless the operator has deliberately
 configured a database for the optional admin panel (see [Privacy](#privacy)).
 
 - **Live page** — fetches a URL and up to four of its own stylesheets and scripts,
@@ -49,10 +49,19 @@ configured a database for the optional admin panel (see [Privacy](#privacy)).
   security profile. Stylesheets get their own reading — declaration order, rules
   crushed onto one line, a label on every block and a reason for nothing — and
   a page's own CSS files and `<style>` blocks go through it too.
+- **GitHub repository** — give it `owner/name` and it reads three things at once:
+  the commit history through the same checks the git tab uses, the file tree, and
+  a few of the largest source files in full. The tree is the part nothing else can
+  see — an assistant's own configuration file committed with the code, a pile of
+  `IMPLEMENTATION_SUMMARY.md`-shaped session reports, a `.env` in version control,
+  thirty source files and no tests. Public repositories only, and it reads a
+  *sample*: the newest and oldest hundred commits and three files, which the report
+  says out loud rather than implying it read the codebase.
 - **Git history** — paste the output of `git log` and it reads how the code
   *arrived*: one enormous opening commit, hundreds of lines in minutes, a trail
   of one-line fixes behind it. This is the strongest evidence the tool has, and
-  the hardest to fake after the fact.
+  the hardest to fake after the fact. Use this when the repository is not public;
+  when it is, the repository mode does the same reading without the pasting.
 
 Either way you get a score out of 100, a verdict, a confidence level, and **every
 signal that fired with the excerpt that triggered it — shown in the code it was
@@ -92,11 +101,12 @@ Evidence is ranked, because evidence is not equal:
 |---|---|---|
 | Platform fingerprint | `cdn.gpteng.co`, a `lovable-tagger` marker, a builder's generator meta tag | 4.5 — decisive |
 | Repository history | a big-bang first commit, 600 lines in four minutes, a run of "fix typo" | 0.6–1.4 |
+| Repository contents | a committed `CLAUDE.md`, a pile of session summaries, a `.env` in git, nothing tested | 0.5–1.5 |
 | Site-wide | every page one template with the words swapped; or pages from visibly different eras | 0.7–1.2 |
 | Structural | a scaffold nobody renamed, uniform comment density, the same problem solved several ways | 0.35–1.1 |
 | Code style | what-not-why comments, swallowed exceptions, tests that assert nothing | 0.4–1.4 |
 | Content & security | generic testimonials, a key shipped to the browser, auth decided in localStorage | 0.35–0.9 |
-| Aesthetic | indigo gradients, Inter, three identical cards | 0.25–0.5, **capped as a group** |
+| Aesthetic | indigo gradients, neon cyan and magenta, a gradient for a background, Inter, three identical cards | 0.25–0.5, **capped as a group** |
 | Human authorship | ticket references, exasperated comments, commented-out code, mixed indentation | subtracts |
 
 **How often a tell fired is part of the reading.** One what-not-why comment is a
@@ -130,16 +140,18 @@ Eight rules the scoring will not break:
    capped at 1.5×, applies inside the category ceilings rather than around them,
    and does not apply to fingerprints at all.
 
-All 120 signals, with their weights and reasoning, are in
-**[docs/SIGNALS.md](docs/SIGNALS.md)** — generated from `lib/Catalog.php`, so the
-documentation cannot drift from the code.
+All 130 signals, with their weights and reasoning, are on the site itself at
+**[/catalogue](https://vibecodedetector.fanficnow.com/catalogue.php)** and in
+**[docs/SIGNALS.md](docs/SIGNALS.md)** — both rendered from `lib/Catalog.php`, so
+neither can drift from the code.
 
 ### The strongest signal needs you to show it
 
 Repository history. One enormous opening commit followed by a trail of "fix typo"
 commits is far harder to fake retroactively than anything in a served page or a
-pasted file — which is why the third tab exists. It cannot be reached from a URL,
-so you need the repository in hand. When you have it, start there.
+pasted file — which is why two of the tabs exist. It cannot be reached from a URL.
+If the project is public on GitHub, the repository tab fetches it for you; if it is
+not, you need the repository in hand and a pasted `git log`. Either way, start there.
 
 Even then it reads the shape of the work, not who did it: a developer who commits
 carefully while an agent writes the code produces a history that looks entirely
@@ -190,7 +202,7 @@ php -S localhost:8000
 Then open <http://localhost:8000>. There is nothing to install first.
 
 ```bash
-php tests/run.php                       # the whole suite, ~360 assertions
+php tests/run.php                       # the whole suite, ~780 assertions
 php tools/gen-signals-doc.php           # regenerate docs/SIGNALS.md
 php tools/build-assets.php              # regenerate the SVG files from lib/Brand.php
 php tools/build-social.php              # regenerate the 1280x640 social preview card
@@ -236,6 +248,8 @@ canonicals, Open Graph, structured data and the sitemap — is in
 
 ```
 index.php          the page
+signs.php          the visual field guide, every specimen rendered live
+catalogue.php      every signal, its weight and its reasoning, on the site
 verify.php         certificate verification
 llms.txt           instructions for an AI agent calling api/website.php
 robots.txt         disallows /admin/, points at the sitemap
@@ -248,6 +262,8 @@ lib/
   SiteAnalyzer.php live-page analysis
   CodeAnalyzer.php source analysis
   GitAnalyzer.php  repository-history analysis
+  RepoAnalyzer.php public GitHub repositories: history, tree and source together
+  GitHub.php       the few read-only GitHub endpoints, and the request budget
   Crawler.php      polite same-origin crawl, robots.txt and a time budget
   SiteSurvey.php   multi-page aggregation and cross-page comparison
   Fetcher.php      HTTP with SSRF protection
@@ -256,7 +272,7 @@ lib/
   UsageLog.php     usage recording and stats, backed by Db.php
   AdminAuth.php    admin session, login and CSRF
   AdminUi.php      how the panel words dates, modes and page numbers
-  Num.php          counters past a thousand: 1.2k, 17k, 1.5M
+  Num.php          counters past a thousand: 1.2k, 17k, 1.5M, and small ones in words
   Seo.php          title, canonical, Open Graph and structured data
   Pager.php        page-number arithmetic for a long list
   Chart.php        charts, drawn as SVG on the server
@@ -264,6 +280,7 @@ lib/
   Brand.php        the mark, as geometry
   Certificate.php  certificate layout
 assets/            css, js, svg
+specimens/         one file per visual sign, rendered inside signs.php
 tests/             fixtures and the runner
 tools/             doc and asset generators
 ```
@@ -282,8 +299,9 @@ site is used. **With no database configured, that code path is inert and the sit
 keeps nothing at all** — which is the default for anyone who forks this and does not
 set one up. With one configured, two things are recorded:
 
-- **Analyses** — the mode, and for URL checks the address analysed. Never the pasted
-  content, never the fetched page, never anything about who is asking.
+- **Analyses** — the mode, and for URL and repository checks the address or
+  repository name analysed. Never the pasted content, never the fetched page, never
+  the repository's source, never anything about who is asking.
 - **Visits** — one row per page view: the path, a timestamp, the referring site's
   host, and a coarse client class. No address, no cookie, no session, and never the
   query string, which is where the URL somebody asked about would be.

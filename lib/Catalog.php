@@ -17,6 +17,7 @@ final class Catalog
 {
     const CAT_FINGERPRINT = 'fingerprint';
     const CAT_HISTORY     = 'history';
+    const CAT_REPOSITORY  = 'repository';
     const CAT_SITEWIDE    = 'sitewide';
     const CAT_STRUCTURE   = 'structure';
     const CAT_CODE        = 'code';
@@ -34,6 +35,7 @@ final class Catalog
         return array(
             self::CAT_FINGERPRINT => 'Platform fingerprint',
             self::CAT_HISTORY     => 'Repository history',
+            self::CAT_REPOSITORY  => 'Repository contents',
             self::CAT_SITEWIDE    => 'Site-wide',
             self::CAT_STRUCTURE   => 'Structural',
             self::CAT_CODE        => 'Code style',
@@ -41,6 +43,45 @@ final class Catalog
             self::CAT_SECURITY    => 'Security profile',
             self::CAT_AESTHETIC   => 'Aesthetic',
             self::CAT_PROVENANCE  => 'Human authorship',
+        );
+    }
+
+    /**
+     * The order evidence is ranked in, strongest family first.
+     *
+     * Kept here rather than in each page that lists the catalogue, because
+     * this order *is* the argument the whole tool makes: a fingerprint settles
+     * the question, a history nearly does, and a colour scheme never does.
+     *
+     * @return string[]
+     */
+    public static function order(): array
+    {
+        return array_keys(self::categories());
+    }
+
+    /**
+     * What each family of evidence is, and why it is worth what it is worth.
+     *
+     * One copy, read by both the page at /catalogue and the generated
+     * docs/SIGNALS.md. Two copies of this text drifted apart within a week the
+     * first time it was tried.
+     *
+     * @return array<string,string>
+     */
+    public static function blurbs(): array
+    {
+        return array(
+            self::CAT_FINGERPRINT => 'A builder naming itself. These are positive identifications rather than inferences, so one is enough to settle the question. Their absence means nothing whatsoever: agentic editors write into an ordinary repository and leave none of this behind.',
+            self::CAT_HISTORY     => 'How the code arrived, rather than what it looks like. The strongest evidence available short of a fingerprint, and the hardest to fake after the fact: a convincing forged history means inventing plausible timestamps, authors, mistakes and reverts for every commit. Read from a pasted git log, or from a public repository.',
+            self::CAT_REPOSITORY  => 'What is in the repository, as opposed to what the commits did to it: which files exist, what the README is made of, whether anything is tested, whether an assistant\'s own configuration was committed along with the code. A served page cannot tell you any of this. Available in repository mode.',
+            self::CAT_SITEWIDE    => 'What only becomes visible once several pages have been read together. A single page cannot tell you whether a site was built in one pass or accreted over years; ten pages usually can. Available in whole-site mode.',
+            self::CAT_STRUCTURE   => 'The shape of the whole rather than the style of the line. These are the hardest signals to produce by accident and the hardest to remove by editing, which is why they carry the most weight after fingerprints.',
+            self::CAT_CODE        => 'Line-level habits. Individually weak and easy to mask by renaming or reformatting; convincing only when four or more of them converge across a file.',
+            self::CAT_CONTENT     => 'What the page says, as opposed to how it is built. Placeholder people, house-voice marketing copy and navigation that goes nowhere.',
+            self::CAT_SECURITY    => 'The most durable family. Syntax correctness in generated code has climbed past 95% while security pass rates have stayed near 55%, so these signals decay far more slowly than the stylistic ones and will outlive most of this document.',
+            self::CAT_AESTHETIC   => 'How it looks. Weak by construction and capped as a group, because a purple gradient and a default icon set are a reason to look closer and never a conclusion.',
+            self::CAT_PROVENANCE  => 'Evidence of a human having been present: outside context a generator has no access to, inconsistency, accretion, mess. These subtract from the score and are weighted as heavily as the signals pointing the other way.',
         );
     }
 
@@ -82,6 +123,7 @@ final class Catalog
 
         $f = self::CAT_FINGERPRINT;
         $g = self::CAT_HISTORY;
+        $q = self::CAT_REPOSITORY;
         $w = self::CAT_SITEWIDE;
         $s = self::CAT_STRUCTURE;
         $c = self::CAT_CODE;
@@ -142,6 +184,26 @@ final class Catalog
                 'Issue numbers and ticket keys in the subjects, linking the code to a conversation happening somewhere else.'),
             'gh.human_mess' => self::mk($g, $hu, 0.7, 'Visible frustration in the log',
                 '"oops", "actually fix it this time", "why". The residue of a person losing an argument with their own code.'),
+
+            // ---- Repository contents ----------------------------------------
+            // What is in the tree rather than what the commits did to it.
+            // Only reachable in repository mode: these are facts about which
+            // files exist, and a served page cannot tell you any of them.
+            'rp.agent_config' => self::mk($q, $ai, 1.5, 'An assistant\'s own configuration is committed',
+                'CLAUDE.md, AGENTS.md, .cursorrules, .windsurfrules, a copilot-instructions file. Somebody set an AI agent up to work in this repository and committed the setup. It does not follow that the agent wrote everything — this is the one signal here that names the tool honestly rather than inferring it — but it establishes that one was working in the tree.'),
+            'rp.session_docs' => self::mk($q, $ai, 0.9, 'Summaries of the work, written by whoever did it',
+                'IMPLEMENTATION_SUMMARY.md, FIXES_APPLIED.md, PHASE_2_COMPLETE.md, PROJECT_STRUCTURE.md sitting at the top of the repository. Developers write documentation for readers; agents write a report at the end of each session, and nobody deletes them.'),
+            'rp.readme_generated' => self::mk($q, $ai, 0.7, 'A README assembled from the standard sections',
+                'Emoji section headings, a Features list of adjectives, Getting Started, Contributing and License, in that order, for a project with no contributors and nothing to license. The shape is right and nothing in it was learned by using the thing.'),
+            'rp.no_tests' => self::mk($q, $ai, 0.6, 'A substantial codebase with no tests at all',
+                'Dozens of source files and not one test file anywhere in the tree. Generated projects arrive working rather than verified, and the tests are the part nobody asks for.'),
+            'rp.dependency_soup' => self::mk($q, $ai, 0.5, 'Dependencies declared but never locked',
+                'A manifest listing dependencies with no lockfile committed beside it, in an application rather than a library. Anyone who has deployed this twice commits the lockfile the first time the two deployments disagree.'),
+
+            'rp.project_furniture' => self::mk($q, $hu, 0.7, 'The furniture a project acquires from being used',
+                'A changelog with dated entries, contribution guidelines, issue templates, a code of conduct. These accrete because other people turned up, and they are tedious to fabricate for a project nobody has used.'),
+            'rp.tests_present' => self::mk($q, $hu, 0.6, 'A test suite in proportion to the code',
+                'Tests amounting to a real share of the tree. Someone cared whether this kept working, which is a different activity from making it work once.'),
 
             // ---- Site-wide ---------------------------------------------------
             // Only available when more than one page has been read. A single
@@ -304,12 +366,18 @@ final class Catalog
                 'Wide-open CORS, disabled TLS verification, raw string-concatenated queries, unescaped output.'),
             'se.exposed_client_key' => self::mk($x, $ai, 0.85, 'A credential shipped to the browser',
                 'A project key, a service token or a model-provider key sitting in the page\'s own JavaScript, where anyone can read it. Some of these are meant to be public and safe only behind row-level rules nobody set; others — a provider key, or an SDK started with its own escape hatch for running in a browser — are never meant to leave a server.'),
+            'se.committed_secrets' => self::mk($x, $ai, 0.9, 'A secrets file is committed to the repository',
+                'A .env, a service-account key or a credentials file sitting in version control, sometimes alongside the .env.example that says not to. The generated project needed the file to run, so the file was created and committed with everything else.'),
             'se.client_side_auth' => self::mk($x, $ai, 0.65, 'Authentication decided in the browser',
                 'A login flag, a role or an admin bit kept in localStorage and trusted. It looks like auth and demonstrates like auth, and it is bypassed by editing one value in dev tools, which is the difference between generating the shape of a feature and building one.'),
 
             // ---- Aesthetic (capped as a group) -------------------------------
             'ae.indigo' => self::mk($a, $ai, 0.45, 'The indigo-to-violet default palette',
                 'Indigo 500 into violet, on slate. Not a design decision so much as a statistical average of every Tailwind tutorial written between 2019 and 2024.'),
+            'ae.neon_palette' => self::mk($a, $ai, 0.45, 'Neon colours outside any normal palette',
+                'Electric cyan, hot magenta, acid lime — #00ffff, #ff00ff, #39ff14 and the rest of the saturated corners of the colour space, usually with a matching glow behind them. These are the colours a model reaches for when asked for something futuristic, and almost nobody picks them for a real product, because they are unreadable at body-text sizes and unprintable at any size.'),
+            'ae.gradient_background' => self::mk($a, $ai, 0.40, 'The whole background is a gradient',
+                'Not the headline and not one panel: the page itself, or every section of it, laid over a multi-stop colour ramp. A background is the largest surface on a page and the one a designer usually leaves alone; filling it with a gradient is the cheapest way to make an empty layout look considered.'),
             'ae.shadcn_defaults' => self::mk($a, $ai, 0.40, 'Untouched component-kit defaults',
                 'rounded-2xl, shadow-lg, p-6, pill buttons, cards nested inside cards, every radius identical.'),
             'ae.left_border_card' => self::mk($a, $ai, 0.40, 'The coloured left-border card',

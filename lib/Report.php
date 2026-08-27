@@ -155,6 +155,10 @@ final class Report
         // History is capped highest of the inferential categories: it is the
         // strongest evidence short of a fingerprint and the hardest to fake.
         Catalog::CAT_HISTORY    => 3.2,
+        // What is in the tree, as opposed to how it got there. Capped below
+        // history because a file's presence is one fact each, where a commit
+        // pattern is a shape drawn from hundreds of them.
+        Catalog::CAT_REPOSITORY => 2.4,
         // Site-wide evidence needs several pages to exist at all, so when it
         // does fire it is already corroborated across them.
         Catalog::CAT_SITEWIDE   => 2.2,

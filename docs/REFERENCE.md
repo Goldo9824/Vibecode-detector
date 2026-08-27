@@ -91,6 +91,15 @@ Their absence proves nothing.
   responsive layout never overlaps. → `ae.uniform_whitespace`
 - Inter as the default face, and its designated replacements (Geist, Manrope,
   Poppins, Space Grotesk) as the newer default. → `ae.inter_font`
+- **Neon**, when the brief said futuristic: `#00ffff`, `#ff00ff`, `#39ff14` and the
+  rest of the saturated corners, with a zero-offset shadow of the same colour
+  behind them. The tell is not the taste, it is that these colours fail contrast
+  at body sizes and shift badly in print, which anyone who has shipped a design
+  system has been told and a model has not. → `ae.neon_palette`
+- **The background is the gradient.** Not the headline (`ae.gradient_text`) and not
+  a panel: the page ground itself, or every section of it, over a multi-stop ramp,
+  so no part of the page is ever a flat colour. The cheapest available way to make
+  an empty layout look considered. → `ae.gradient_background`
 
 ### JavaScript / TypeScript
 
@@ -196,6 +205,38 @@ work nobody was asked for — a skip link, a reduced-motion rule, labelled input
 (`hu.a11y_care`), withheld when the page has already identified itself as a
 generator's own output, since component kits ship aria attributes by the hundred.
 
+### Repository contents
+
+Only visible with the repository in hand, which is what the GitHub repo mode is for.
+None of these is about the code; all of them are about what somebody committed
+beside it.
+
+- **An assistant's own configuration, committed**: `CLAUDE.md`, `AGENTS.md`,
+  `.cursorrules`, `.windsurfrules`, `.github/copilot-instructions.md`,
+  `.clinerules`. This is the one signal in the catalogue that names the tool
+  honestly rather than inferring it — it establishes that an agent was configured
+  to work in this tree, and it does *not* establish that the agent wrote
+  everything. Weighted for what it proves. → `rp.agent_config`
+- **Session reports**: `IMPLEMENTATION_SUMMARY.md`, `PHASE_2_COMPLETE.md`,
+  `FIXES_APPLIED.md`, `PROJECT_STRUCTURE.md` at the top of the tree. Developers
+  write documentation for readers; agents write a report at the end of a session,
+  and nobody deletes them. → `rp.session_docs`
+- **A README assembled from the standard sections**: emoji headings, a Features
+  list of adjectives in bold, Getting Started / Contributing / License in that
+  order for a project with no contributors. The shape is right and nothing in it
+  was learned by using the thing. → `rp.readme_generated`
+- **Dozens of source files and no tests at all.** Generated projects arrive
+  working rather than verified. → `rp.no_tests`, and its opposite `rp.tests_present`
+- **A committed `.env`**, sometimes beside the `.env.example` that says not to.
+  → `se.committed_secrets`
+- Pointing the other way: a changelog with dated entries, contribution guidelines,
+  issue templates, a code of conduct. These accrete because other people turned up.
+  → `rp.project_furniture`
+
+**What proves nothing here:** the absence of any of it. A repository with no
+`CLAUDE.md` is a repository whose author did not commit one, which is most of them,
+including most of the ones written by agents.
+
 ### Live-site fingerprints (positive ID)
 
 | Platform | What to look for |
@@ -206,6 +247,11 @@ generator's own output, since component kits ship aria attributes by the hundred
 | Replit | Replit badge, `.repl.co`, `.replit.app` |
 | Base44 | `@base44/sdk`, `.base44.app` |
 | Any | `<meta name="generator">` naming the builder |
+
+In a repository the same identifications are available from the manifest and the
+tree rather than the served page: `lovable-tagger` in `devDependencies`, a
+`.bolt/` directory, an `@base44/` dependency. Same weight, because it is the same
+fact arriving by a shorter route.
 
 **What proves nothing:** the tech stack itself. React, Vite and Supabase power
 enormous amounts of hand-built software — a Supabase key in the page source is

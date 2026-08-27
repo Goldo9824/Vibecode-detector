@@ -10,18 +10,19 @@ weight of each signal found, positive for AI, negative for human. The total goes
 a logistic curve to become the percentage. As a rough guide, a weight of 0.7 doubles the
 odds; 4.5 ends the argument.
 
-There are **120 signals** across 9 categories.
+There are **130 signals** across 10 categories.
 
 | Category | Signals | Direction |
 |---|---|---|
 | [Platform fingerprint](#platform-fingerprint) | 7 | raises the score |
 | [Repository history](#repository-history) | 11 | raises the score |
+| [Repository contents](#repository-contents) | 7 | raises the score |
 | [Site-wide](#site-wide) | 9 | raises the score |
 | [Structural](#structural) | 17 | raises the score |
 | [Code style](#code-style) | 27 | raises the score |
 | [Content](#content) | 11 | raises the score |
-| [Security profile](#security-profile) | 5 | raises the score |
-| [Aesthetic](#aesthetic) | 16 | raises the score |
+| [Security profile](#security-profile) | 6 | raises the score |
+| [Aesthetic](#aesthetic) | 18 | raises the score |
 | [Human authorship](#human-authorship) | 17 | lowers the score |
 
 ---
@@ -75,7 +76,7 @@ The document's own <meta name="generator"> names an AI site builder.
 
 ## Repository history
 
-How the code arrived, rather than what it looks like. The strongest evidence available short of a fingerprint, and the hardest to fake after the fact: a convincing forged history means inventing plausible timestamps, authors, mistakes and reverts for every commit. Read from a pasted `git log`.
+How the code arrived, rather than what it looks like. The strongest evidence available short of a fingerprint, and the hardest to fake after the fact: a convincing forged history means inventing plausible timestamps, authors, mistakes and reverts for every commit. Read from a pasted `git log`, or from a public repository.
 
 ### The repository arrives fully formed
 
@@ -142,6 +143,53 @@ Work that went in, came out again, or arrived from a branch. Evidence of a proce
 `gh.generic_messages` · weight **0.6** (moderate)
 
 "update", "changes", "fix", "wip" over and over, carrying no information about what happened.
+
+
+## Repository contents
+
+What is in the repository, as opposed to what the commits did to it: which files exist, what the README is made of, whether anything is tested, whether an assistant's own configuration was committed along with the code. A served page cannot tell you any of this. Available in repository mode.
+
+### An assistant's own configuration is committed
+
+`rp.agent_config` · weight **1.5** (strong)
+
+CLAUDE.md, AGENTS.md, .cursorrules, .windsurfrules, a copilot-instructions file. Somebody set an AI agent up to work in this repository and committed the setup. It does not follow that the agent wrote everything — this is the one signal here that names the tool honestly rather than inferring it — but it establishes that one was working in the tree.
+
+### Summaries of the work, written by whoever did it
+
+`rp.session_docs` · weight **0.9** (moderate)
+
+IMPLEMENTATION_SUMMARY.md, FIXES_APPLIED.md, PHASE_2_COMPLETE.md, PROJECT_STRUCTURE.md sitting at the top of the repository. Developers write documentation for readers; agents write a report at the end of each session, and nobody deletes them.
+
+### The furniture a project acquires from being used
+
+`rp.project_furniture` · weight **0.7** (moderate)
+
+A changelog with dated entries, contribution guidelines, issue templates, a code of conduct. These accrete because other people turned up, and they are tedious to fabricate for a project nobody has used.
+
+### A README assembled from the standard sections
+
+`rp.readme_generated` · weight **0.7** (moderate)
+
+Emoji section headings, a Features list of adjectives, Getting Started, Contributing and License, in that order, for a project with no contributors and nothing to license. The shape is right and nothing in it was learned by using the thing.
+
+### A substantial codebase with no tests at all
+
+`rp.no_tests` · weight **0.6** (moderate)
+
+Dozens of source files and not one test file anywhere in the tree. Generated projects arrive working rather than verified, and the tests are the part nobody asks for.
+
+### A test suite in proportion to the code
+
+`rp.tests_present` · weight **0.6** (moderate)
+
+Tests amounting to a real share of the tree. Someone cared whether this kept working, which is a different activity from making it work once.
+
+### Dependencies declared but never locked
+
+`rp.dependency_soup` · weight **0.5** (weak)
+
+A manifest listing dependencies with no lockfile committed beside it, in an application rather than a library. Anyone who has deployed this twice commits the lockfile the first time the two deployments disagree.
 
 
 ## Site-wide
@@ -552,6 +600,12 @@ Exactly three pricing columns with a "Most popular" badge on the centre one. A r
 
 The most durable family. Syntax correctness in generated code has climbed past 95% while security pass rates have stayed near 55%, so these signals decay far more slowly than the stylistic ones and will outlive most of this document.
 
+### A secrets file is committed to the repository
+
+`se.committed_secrets` · weight **0.9** (moderate)
+
+A .env, a service-account key or a credentials file sitting in version control, sometimes alongside the .env.example that says not to. The generated project needed the file to run, so the file was created and committed with everything else.
+
 ### Placeholder or hardcoded secret
 
 `se.placeholder_secret` · weight **0.9** (moderate)
@@ -599,6 +653,12 @@ A small rounded pill sitting over the h1 — "Introducing v2", "Now with AI", us
 
 Indigo 500 into violet, on slate. Not a design decision so much as a statistical average of every Tailwind tutorial written between 2019 and 2024.
 
+### Neon colours outside any normal palette
+
+`ae.neon_palette` · weight **0.45** (weak)
+
+Electric cyan, hot magenta, acid lime — #00ffff, #ff00ff, #39ff14 and the rest of the saturated corners of the colour space, usually with a matching glow behind them. These are the colours a model reaches for when asked for something futuristic, and almost nobody picks them for a real product, because they are unreadable at body-text sizes and unprintable at any size.
+
 ### A cue telling you to scroll
 
 `ae.scroll_indicator` · weight **0.45** (weak)
@@ -616,6 +676,12 @@ Feature tiles of deliberately unequal spans arranged into a mosaic. A real 2023 
 `ae.glow_orbs` · weight **0.4** (weak)
 
 Large soft gradient blobs, heavily blurred, floating behind the opening section. One of a handful of effects a model reaches for when asked to make something feel premium.
+
+### The whole background is a gradient
+
+`ae.gradient_background` · weight **0.4** (weak)
+
+Not the headline and not one panel: the page itself, or every section of it, laid over a multi-stop colour ramp. A background is the largest surface on a page and the one a designer usually leaves alone; filling it with a gradient is the cheapest way to make an empty layout look considered.
 
 ### The gradient-filled headline
 

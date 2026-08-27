@@ -105,6 +105,26 @@ jobs:
           if echo "$body" | grep -qi '<?php'; then echo "::error::PHP leaked into the output"; exit 1; fi
           echo "homepage OK ($(echo "$body" | wc -c) bytes)"
 
+      - name: The signal catalogue renders every signal
+        run: |
+          body=$(curl -sf http://127.0.0.1:8080/catalogue.php)
+          echo "$body" | grep -q 'The signal catalogue' || { echo "::error::no heading"; exit 1; }
+          # Every id in lib/Catalog.php has to appear on the page that claims
+          # to list all of them, or the page is quietly lying about its subject.
+          missing=0
+          for id in $(php -r 'require "lib/bootstrap.php"; echo implode(" ", array_keys(Catalog::all()));'); do
+            echo "$body" | grep -q ">$id<" || { echo "::error::$id is missing from /catalogue"; missing=1; }
+          done
+          [ "$missing" = "0" ] || exit 1
+          echo "catalogue OK ($(echo "$body" | wc -c) bytes)"
+
+      - name: A repository that is not one is refused by name
+        run: |
+          body=$(curl -s -X POST http://127.0.0.1:8080/api/analyze.php -F mode=repo -F "repo=https://gitlab.com/group/project")
+          echo "$body" | grep -q '"ok":false' || { echo "::error::not refused: $body"; exit 1; }
+          echo "$body" | grep -q 'not GitHub' || { echo "::error::refused without saying why: $body"; exit 1; }
+          echo "refused a repository on another forge"
+
       - name: Code analysis returns a scored result
         run: |
           json=$(curl -sf -X POST http://127.0.0.1:8080/api/analyze.php \

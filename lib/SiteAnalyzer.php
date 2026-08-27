@@ -132,6 +132,8 @@ final class SiteAnalyzer
         $this->checkShell();
         $this->checkComments();
         $this->checkPalette();
+        $this->checkNeonPalette();
+        $this->checkBackgroundGradient();
         $this->checkTypeAndIcons();
         $this->checkComponentDefaults();
         $this->checkSymmetry();
@@ -774,6 +776,146 @@ final class SiteAnalyzer
         // Two independent hits before flagging: a single purple button is nothing.
         if (count($evidence) >= 2 || count($found) >= 3 || count($classes) >= 3) {
             $this->r->flag('ae.indigo', $evidence);
+        }
+    }
+
+    /**
+     * Colours from the saturated corners nobody designs in.
+     *
+     * The indigo ramp above is the default answer to "make it look modern";
+     * this is the default answer to "make it look futuristic", and it is a
+     * different palette entirely: electric cyan, hot magenta, acid lime, at
+     * full saturation, usually with a glow behind them so the page looks lit
+     * from inside. What makes it a tell rather than a taste is that these
+     * colours are unusable — cyan text on dark fails contrast at body sizes,
+     * magenta shifts badly in print, and anybody who has shipped a design
+     * system has been told so. A model has not.
+     *
+     * The glow matters as much as the hue. A single #00ffff is a highlight
+     * somebody picked; #00ffff with a 20px shadow of itself behind it is the
+     * effect being reached for.
+     */
+    private function checkNeonPalette(): void
+    {
+        $css = $this->scanBlob();
+
+        // Full-saturation hues at the corners of the wheel, plus the ones the
+        // "neon" name is attached to often enough to be searched for by it.
+        $hexes = array('#00ffff', '#0ff', '#ff00ff', '#f0f', '#39ff14', '#ccff00', '#ff073a',
+                       '#fe019a', '#04d9ff', '#bc13fe', '#ff2d95', '#00ff9f', '#00e5ff',
+                       '#7df9ff', '#ff6ec7', '#01ff70', '#08f7fe', '#f5d300', '#fe53bb');
+        $found = array();
+        foreach ($hexes as $hex) {
+            // Bounded so that #0ff does not match inside #0fff or a longer hex.
+            if (preg_match('~' . preg_quote($hex, '~') . '\b(?![0-9a-f])~i', $css)) {
+                $found[] = $hex;
+            }
+        }
+
+        // Saturated utilities, which is how the same palette arrives when the
+        // page is built out of classes rather than declarations.
+        $classes = array();
+        if (preg_match_all('~\b(?:bg|text|from|via|to|border|shadow|ring)-(?:cyan|fuchsia|lime|magenta)-(?:3|4|5)\d{2}\b~i', $this->markup(), $m)) {
+            $classes = array_values(array_unique($m[0]));
+        }
+
+        // Something glowing: a shadow with no offset and no blur radius to
+        // speak of is not a shadow, it is a light source.
+        $glow = preg_match('~(?:box|text)-shadow:\s*(?:0\s+){2,3}(?:[1-9]\d|\d{3,})px[^;}]*(?:#0ff|#00ffff|#ff00ff|#f0f|rgba?\(\s*(?:0|255)\s*,\s*(?:255|0|20)\s*,\s*255)~i', $css)
+              + preg_match('~\bshadow-\[0_0_\d{2,}px~i', $this->markup())
+              + preg_match('~\bdrop-shadow-\[0_0_\d{2,}px~i', $this->markup())
+              + preg_match('~\bshadow-(?:cyan|fuchsia|lime)-\d{3}/\d{1,3}\b~i', $this->markup())
+              + preg_match('~--(?:neon|glow)[\w-]*\s*:~i', $css);
+
+        $evidence = array();
+        if ($found) {
+            $evidence[] = $this->locate($found[0], count($found))
+                ->withText('neon values in use: ' . implode(', ', array_slice($found, 0, 5)));
+        }
+        if ($classes) {
+            $evidence[] = $this->locate($classes[0], count($classes))
+                ->withText('utility classes: ' . implode(', ', array_slice($classes, 0, 4)));
+        }
+        if ($glow > 0) {
+            $evidence[] = $this->locatePattern('~(?:box|text)-shadow:\s*0\s+0\s+\d{2,}px|shadow-\[0_0_\d{2,}px|drop-shadow-\[0_0_\d{2,}px|--(?:neon|glow)[\w-]*\s*:~i',
+                'a glow behind the colour: a shadow with no offset, only radius');
+        }
+
+        // Two independent hits, or three of one kind. One cyan accent on an
+        // otherwise ordinary page is a colour, not a decision about a colour.
+        if (count($evidence) >= 2 || count($found) >= 3 || count($classes) >= 4) {
+            $this->r->flag('ae.neon_palette', $evidence, max(count($found) + count($classes), 1));
+        }
+    }
+
+    /**
+     * A gradient covering the page rather than an element on it.
+     *
+     * Distinct from the gradient headline, which is one element wearing a ramp,
+     * and from the blurred orbs, which are shapes. This is the ground itself:
+     * body, or every section, laid over a two- or three-stop ramp so that no
+     * part of the page is ever a flat colour. It is the cheapest available way
+     * to make an empty layout look considered, and it is the reason so many
+     * generated pages have no white on them anywhere.
+     *
+     * The selector is what makes it findable. A gradient on a button is a
+     * button; a gradient on <body> is a decision about the whole page.
+     */
+    private function checkBackgroundGradient(): void
+    {
+        $css = $this->scanBlob();
+        $evidence = array();
+
+        // Declarations, read with their selector so that the surface being
+        // painted is known rather than guessed at.
+        $wide = 0;
+        if (preg_match_all('~(?:^|[};])\s*([^{}@;]{1,160})\{([^{}]{0,600})\}~', $css, $m, PREG_SET_ORDER)) {
+            foreach ($m as $rule) {
+                $selector = trim($rule[1]);
+                $body = $rule[2];
+                if (!preg_match('~background(?:-image)?\s*:[^;}]*(?:linear|radial|conic)-gradient~i', $body)) {
+                    continue;
+                }
+                // A gradient clipped to text is the headline tell, not this one.
+                if (preg_match('~background-clip\s*:\s*text~i', $body)) {
+                    continue;
+                }
+                if (preg_match('~(?:^|[\s,>])(?:html|body|main|#root|#app|\.(?:hero|page|app|wrapper|container|bg|background|gradient-bg))\b~i', $selector)) {
+                    $wide++;
+                    if (count($evidence) < 2) {
+                        $evidence[] = $this->locate(trim(explode('{', $rule[0])[0]))
+                            ->withText('the page ground itself: ' . Report::excerpt($selector . ' { ' . trim($body), 110));
+                    }
+                }
+            }
+        }
+
+        // The same thing built out of utilities: a full-height surface with a
+        // gradient on it, which is what a generated hero section always is.
+        $utility = 0;
+        if (preg_match_all('~class=["\']([^"\']*\bbg-gradient-to-[a-z]{1,2}\b[^"\']*)["\']~i', $this->markup(), $m)) {
+            foreach ($m[1] as $classes) {
+                if (preg_match('~\bbg-clip-text\b~i', $classes)) {
+                    continue; // the headline again
+                }
+                if (preg_match('~\b(?:min-h-screen|h-screen|min-h-\[100vh\]|absolute\s+inset-0|fixed\s+inset-0)\b~i', $classes)) {
+                    $utility++;
+                    if (count($evidence) < 3) {
+                        $evidence[] = $this->locate($m[0][0])
+                            ->withText('a full-height surface carrying a gradient: ' . Report::excerpt($classes, 90));
+                    }
+                }
+            }
+        }
+
+        // Or on the body element directly, which is the honest version of it.
+        if (preg_match('~<body[^>]+class=["\'][^"\']*\bbg-gradient-to-[a-z]{1,2}\b~i', $this->html, $m)) {
+            $utility++;
+            $evidence[] = $this->locate($m[0])->withText('the gradient is on <body>');
+        }
+
+        if ($wide > 0 || $utility > 0) {
+            $this->r->flag('ae.gradient_background', $evidence, max(1, $wide + $utility));
         }
     }
 

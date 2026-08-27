@@ -4,9 +4,9 @@ This file is for an AI agent that has been given an API key to this
 installation and needs to call it correctly. If you are that agent, read this
 whole file before making a request.
 
-The tool reads a web page (or a whole site, or pasted code, or a `git log`)
-and returns a 0–100 score for how likely it is to be AI-generated, plus every
-piece of evidence it used. It does not verify anything and is not proof of
+The tool reads a web page (or a whole site, or a public GitHub repository, or
+pasted code, or a `git log`) and returns a 0–100 score for how likely it is to
+be AI-generated, plus every piece of evidence it used. It does not verify anything and is not proof of
 anything — say so if you relay its output to a person, and never present the
 score alone as a conclusion.
 
@@ -37,8 +37,9 @@ without it.
 
 | Parameter | Where | Required | Meaning |
 |---|---|---|---|
-| `url` | query string or POST body | yes | The page to fetch and analyse. Must be a normal `http://` or `https://` address. |
-| `crawl` | query string or POST body | no | Any truthy value (`1`, `true`) follows same-origin links from that page and analyses the whole site (up to ~50 pages, ~20 seconds) instead of just the one page. Slower, and it costs the site being read more too — do not set this unless you actually need a site-wide read. |
+| `url` | query string or POST body | one of `url` or `repo` | The page to fetch and analyse. Must be a normal `http://` or `https://` address. |
+| `repo` | query string or POST body | one of `url` or `repo` | A **public GitHub** repository, as `owner/name` or any github.com URL for it. Reads the commit history, the file tree and a few source files together. Sending both `url` and `repo` is an error, not a pair of readings. |
+| `crawl` | query string or POST body | no | Only with `url`. Any truthy value (`1`, `true`) follows same-origin links from that page and analyses the whole site (up to ~50 pages, ~20 seconds) instead of just the one page. Slower, and it costs the site being read more too — do not set this unless you actually need a site-wide read. |
 
 Example:
 
@@ -110,13 +111,21 @@ Field notes:
 - `confidence.level` — one of `high`, `moderate`, `low`, `insufficient`. A
   high score with `insufficient` or `low` confidence is not a strong finding
   — say so if you relay it.
-- `mode` — `"page"` for a single-page read, `"site"` when `crawl` was set.
+- `mode` — `"url"` for a single-page read, `"site"` when `crawl` was set,
+  `"repo"` when `repo` was sent. In repo mode `target` is `github.com/owner/name`
+  rather than a URL.
 - `stats` — whatever the read happened to establish, and never a finding on its
   own. Useful keys include `framework`, `hosting`, `title`, `lang`, `photos`,
   `securityHeaders`, `readableBytes`, `sourceMaps` and, in site mode, `pages`,
   `sitemapUrls` and `sitemapSpreadDays`. Keys are absent when the read could not
   establish them, so check before reading. `hosting` names a deployment platform
   and says nothing about who wrote the page — do not relay it as evidence.
+  In repo mode the useful keys are `repo` (the repository's own metadata),
+  `commits` and `commitsRead`, `files`, `sourceFiles` and `testFiles`,
+  `filesRead` (the files that were downloaded and read in full), and
+  `openingCommit`. `commitsRead` and `filesRead` are the honest scope of the
+  reading: it samples a repository rather than reading all of one, and a
+  conclusion you draw from it should say so.
 - `signals[].direction` — `"ai"` or `"human"`; which way that piece of
   evidence points.
 - `signals[].evidence` — verbatim excerpts from the analysed page, as a flat
@@ -148,7 +157,7 @@ Field notes:
 
 | Status | Meaning | What to do |
 |---|---|---|
-| 400 | The URL couldn't be fetched or analysed (bad host, timeout, too large, blocked by robots.txt, private/internal address, etc). | Don't retry the same URL unmodified. Read `error` — it explains which. |
+| 400 | The URL couldn't be fetched or analysed (bad host, timeout, too large, blocked by robots.txt, private/internal address, etc), or the repository does not exist, is private, is empty, or is not on GitHub. | Don't retry the same subject unmodified. Read `error` — it explains which. A 400 saying GitHub is rate-limiting the *server* is the one exception: that one is time-based and not about your request, and it clears within the hour. |
 | 401 | Missing or invalid `X-Api-Key`. | Confirm the header name and value; do not retry without fixing this. |
 | 405 | Wrong HTTP method. | Use GET or POST only. |
 | 429 | This key has hit its rate limit. | Back off. The limit is per key, shared across everything using that key — a burst of parallel requests from you will hit it faster than you might expect. Do not loop retrying; wait and reduce concurrency instead. |
@@ -162,6 +171,12 @@ Field notes:
 - Do not set `crawl=1` speculatively "just in case" — it is materially
   heavier on both this service and the site being read. Use it only when a
   single-page read is not enough for what you were asked to do.
+- `repo` is the heaviest mode and the one whose budget you cannot buy more of.
+  Each call spends up to eight requests from **GitHub's** hourly allowance for
+  this whole installation, which without an operator-configured token is 60 an
+  hour for every caller and every browser visitor put together. One read per
+  repository you were actually asked about; never enumerate an organisation's
+  repositories through this.
 - Never put the API key anywhere it could leak into logs, URLs shown to a
   user, or content you generate. It goes in the `X-Api-Key` header only.
 - This tool's own scores must never be presented as a verdict on their own.

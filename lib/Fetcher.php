@@ -137,6 +137,56 @@ class Fetcher
     }
 
     /**
+     * One resource fetched with request headers of the caller's choosing.
+     *
+     * Everything else here reads pages, which want the browser-shaped Accept
+     * this class sends by default. An API wants a different Accept and, where
+     * the operator has configured one, an Authorization header — so this is
+     * the one entry point that lets a caller say so. It goes through the same
+     * get() as everything else, which means the same redirect vetting, the
+     * same address guard and the same size ceiling: a header parameter is not
+     * a way around any of that.
+     *
+     * The status comes back rather than throwing, because an API's 404 and its
+     * 403 mean different things to the caller and both are worth saying out
+     * loud.
+     *
+     * @param array<string,string> $headers
+     * @return array{url:string,body:string,status:int,contentType:string,headers:array<string,string>,assets:array<string,string>}
+     * @throws FetchError
+     */
+    public function fetchApi(string $url, array $headers = array(), int $maxBytes = self::MAX_ASSET_BYTES, int $timeout = self::ASSET_TIMEOUT): array
+    {
+        return $this->get($this->normalize($url), $maxBytes, $timeout, $headers);
+    }
+
+    /**
+     * The request headers to send, the caller's own merged over the default.
+     *
+     * Names are compared case-insensitively so that passing "accept" replaces
+     * the default Accept rather than sending a second one, which is the kind
+     * of thing an API answers with a 406 and no explanation.
+     *
+     * @param array<string,string> $extra
+     * @return string[]
+     */
+    private static function requestHeaders(array $extra): array
+    {
+        $headers = array('accept' => 'Accept: text/html,application/xhtml+xml,text/css,application/javascript,*/*;q=0.8');
+        foreach ($extra as $name => $value) {
+            $name  = trim((string) $name);
+            $value = trim((string) $value);
+            // A newline in either half would let a caller append headers of
+            // its own invention. There is no legitimate one, so they are cut.
+            if ($name === '' || $value === '' || preg_match('~[\r\n]~', $name . $value)) {
+                continue;
+            }
+            $headers[strtolower($name)] = $name . ': ' . $value;
+        }
+        return array_values($headers);
+    }
+
+    /**
      * The page's own stylesheets and scripts, best ones first.
      *
      * Order matters because the budget is four files. A page commonly links a
@@ -382,9 +432,17 @@ class Fetcher
      * @return array{url:string,body:string,status:int,contentType:string,assets:array<string,string>,headers:array<string,string>}
      * @throws FetchError
      */
-    private function get(string $url, int $maxBytes, int $timeout): array
+    private function get(string $url, int $maxBytes, int $timeout, array $headers = array()): array
     {
         $seen = array();
+        // A credential is for the host it was issued to. Redirects here are
+        // vetted but not restricted to one origin, so a target that answers
+        // with a Location pointing at itself and then somewhere else would
+        // otherwise be handed the Authorization header on the second hop.
+        // The host is remembered from the first request and the credential is
+        // dropped the moment it stops matching.
+        $origin = self::hostOf($url);
+
         for ($hop = 0; $hop <= self::MAX_REDIRECTS; $hop++) {
             $pinned = $this->assertSafe($url);
 
@@ -393,9 +451,18 @@ class Fetcher
             }
             $seen[] = $url;
 
+            $send = $headers;
+            if (self::hostOf($url) !== $origin) {
+                foreach (array_keys($send) as $name) {
+                    if (strtolower((string) $name) === 'authorization') {
+                        unset($send[$name]);
+                    }
+                }
+            }
+
             $res = function_exists('curl_init')
-                ? $this->curlGet($url, $maxBytes, $timeout, $pinned)
-                : $this->streamGet($url, $maxBytes, $timeout);
+                ? $this->curlGet($url, $maxBytes, $timeout, $pinned, $send)
+                : $this->streamGet($url, $maxBytes, $timeout, $send);
 
             if ($res['status'] >= 300 && $res['status'] < 400 && $res['location'] !== '') {
                 $next = $this->resolveUrl($url, $res['location']);
@@ -418,11 +485,19 @@ class Fetcher
         throw new FetchError('Too many redirects.');
     }
 
+    /** The host of a URL, lowercased, or '' when it has none to speak of. */
+    private static function hostOf(string $url): string
+    {
+        $host = parse_url($url, PHP_URL_HOST);
+        return is_string($host) ? strtolower($host) : '';
+    }
+
     /**
      * @param string[] $pinned addresses assertSafe() already vetted for this host
+     * @param array<string,string> $headers extra request headers, from fetchApi()
      * @return array{status:int,body:string,contentType:string,location:string,headers:array<string,string>}
      */
-    private function curlGet(string $url, int $maxBytes, int $timeout, array $pinned = array()): array
+    private function curlGet(string $url, int $maxBytes, int $timeout, array $pinned = array(), array $headers = array()): array
     {
         $ch = curl_init($url);
 
@@ -450,7 +525,7 @@ class Fetcher
             CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_ENCODING       => '',
             CURLOPT_PROTOCOLS      => CURLPROTO_HTTP | CURLPROTO_HTTPS,
-            CURLOPT_HTTPHEADER     => array('Accept: text/html,application/xhtml+xml,text/css,application/javascript,*/*;q=0.8'),
+            CURLOPT_HTTPHEADER     => self::requestHeaders($headers),
             CURLOPT_BUFFERSIZE     => 16384,
             CURLOPT_NOPROGRESS     => false,
             CURLOPT_PROGRESSFUNCTION => function ($ch, $dlTotal, $dlNow) use ($maxBytes) {
@@ -491,8 +566,11 @@ class Fetcher
         );
     }
 
-    /** @return array{status:int,body:string,contentType:string,location:string,headers:array<string,string>} */
-    private function streamGet(string $url, int $maxBytes, int $timeout): array
+    /**
+     * @param array<string,string> $headers extra request headers, from fetchApi()
+     * @return array{status:int,body:string,contentType:string,location:string,headers:array<string,string>}
+     */
+    private function streamGet(string $url, int $maxBytes, int $timeout, array $headers = array()): array
     {
         if (!ini_get('allow_url_fopen')) {
             throw new FetchError('This server has neither cURL nor allow_url_fopen, so it cannot fetch pages. Use the code tab instead.');
@@ -500,7 +578,8 @@ class Fetcher
         $ctx = stream_context_create(array(
             'http' => array(
                 'method'          => 'GET',
-                'header'          => "User-Agent: " . self::UA . "\r\nAccept: text/html,*/*;q=0.8\r\n",
+                'header'          => "User-Agent: " . self::UA . "\r\n"
+                                     . implode("\r\n", self::requestHeaders($headers)) . "\r\n",
                 'timeout'         => $timeout,
                 'follow_location' => 0,
                 'ignore_errors'   => true,

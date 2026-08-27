@@ -255,27 +255,33 @@ h1, h2, h3 {
 }
 .hero .disclaimer strong { color: var(--ink); font-weight: 600; }
 
-/* A row of onward links under the tool, so the front page can be the tool
-   without the rest of the site becoming unreachable from it. */
-.signposts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-  gap: 0;
-  margin-top: 3rem;
-  border-top: 1px solid var(--rule);
-  border-left: 1px solid var(--rule);
+/*
+ * The analyser page: a headline, the tool, and one line under it.
+ *
+ * Everything else that used to live here — what it reads, how the weighting
+ * works, where it is wrong — is on /method. A person who arrived to check
+ * something should not have to scroll past an essay to reach the box, and a
+ * person who wants the essay is one link away in the nav.
+ */
+.hero-tool { text-align: center; padding-bottom: clamp(1.25rem, 3vw, 1.75rem); }
+.hero-tool h1 { max-width: 22ch; margin-left: auto; margin-right: auto; margin-bottom: 0; }
+
+/*
+ * The one sentence that could not go.
+ *
+ * The rest of the argument moved to its own page; this stayed, because it is
+ * the thing that has to be read before the number is, and a detector that
+ * buries it one click away is a detector selling certainty. One line, under
+ * the tool, in the muted colour — present, not shouted.
+ */
+.caveat {
+  margin: 1.25rem 0 0;
+  text-align: center;
+  font-family: var(--sans);
+  font-size: .875rem;
+  color: var(--ink-3);
 }
-.signposts a {
-  color: var(--ink-2);
-  text-decoration: none;
-  font-size: .8125rem;
-  padding: .9rem 1rem;
-  border-right: 1px solid var(--rule);
-  border-bottom: 1px solid var(--rule);
-  transition: background .1s linear, color .1s linear;
-}
-.signposts a:hover { color: var(--ink); background: var(--paper-2); }
-.signposts a::after { content: " \2192"; color: var(--ink-3); }
+.caveat a { color: var(--ink-2); }
 
 /* ------------------------------------------------------------------- panels */
 
@@ -290,6 +296,7 @@ h1, h2, h3 {
   overflow-x: auto;
   scrollbar-width: none;
 }
+.tabs .tab:last-child { border-right: 0; }
 .tabs::-webkit-scrollbar { display: none; }
 
 .tab {
@@ -306,6 +313,10 @@ h1, h2, h3 {
   cursor: pointer;
   white-space: nowrap;
   position: relative;
+  /* Grow to share the strip so it reads as one control rather than four
+     buttons with a gap of nothing after them; never shrink below the label,
+     so a narrow screen scrolls instead of squashing. */
+  flex: 1 0 auto;
   transition: color .1s linear, background .1s linear;
 }
 .tab:hover { color: var(--ink); background: var(--paper-3); }
@@ -856,7 +867,7 @@ section.band { padding: clamp(2.5rem, 6vw, 4rem) 0; border-top: 1px solid var(--
 
 @media (max-width: 40rem) {
   .hero { padding-top: 1.75rem; }
-  .hero h1 { font-size: 1.875rem; letter-spacing: -.045em; }
+  .hero h1 { font-size: 1.625rem; letter-spacing: -.04em; }
   .hero p { font-size: 1rem; }
   .hero .disclaimer { font-size: .875rem; padding: .8rem .9rem; }
   .brand-tag { display: none; }
@@ -864,13 +875,15 @@ section.band { padding: clamp(2.5rem, 6vw, 4rem) 0; border-top: 1px solid var(--
   .masthead nav {
     margin-left: 0;
     width: 100%;
+    /* One scrolling row, not two wrapped ones: the wrap costs a whole line of
+       vertical space above the tool, which is the thing the page is for. */
+    flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
     border-top: 1px solid var(--rule);
   }
   .masthead nav::-webkit-scrollbar { display: none; }
   .masthead nav a { padding: .55rem .6rem; white-space: nowrap; }
-  .signposts { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 34rem) {

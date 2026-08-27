@@ -2560,6 +2560,31 @@ ok(strpos($page, 'A Landfall studio product') !== false, 'the studio credit is i
 ok(strpos($page, 'class="band"') === false,
    'the front page carries no long-form sections under the analyser');
 ok(substr_count($page, 'id="analyzer"') === 1, 'the front page still carries the analyser');
+
+// Prose creeps back one helpful sentence at a time, so the shape is asserted
+// rather than trusted: nothing between the headline and the tool, and the
+// per-field hints stay hints.
+preg_match('~<section class="hero[^"]*">(.*?)</section>~s', $page, $heroHtml);
+ok(isset($heroHtml[1]) && strpos($heroHtml[1], '<p') === false,
+   'nothing sits between the headline and the tool');
+
+preg_match_all('~<p class="hint[^"]*">(.*?)</p>~s', $page, $hints);
+$longest = 0;
+foreach ($hints[1] as $hint) {
+    $longest = max($longest, strlen(trim(strip_tags($hint))));
+}
+ok($longest > 0 && $longest <= 120,
+   'every hint under a field is a hint rather than a paragraph',
+   $longest . ' characters at the longest');
+
+// The one caveat that could not move. A detector whose front page does not say
+// this is a detector selling certainty, so its absence is a test failure and
+// not a design choice somebody gets to make later.
+ok(substr_count($page, 'class="caveat"') === 1,
+   'the front page still says the reading proves nothing');
+preg_match('~<p class="caveat">(.*?)</p>~s', $page, $caveat);
+ok(isset($caveat[1]) && strpos($caveat[1], 'method.php') !== false,
+   'and points at the page that explains why');
 foreach (array('id="method"', 'id="limits"', 'id="provenance"') as $anchor) {
     ok(strpos($method, $anchor) !== false, 'method.php carries ' . $anchor);
     ok(strpos($page, '<section class="band" ' . $anchor) === false,

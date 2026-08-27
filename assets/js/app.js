@@ -14,6 +14,7 @@
 
   var tabs = [
     { tab: $('tab-url'), panel: $('panel-url') },
+    { tab: $('tab-repo'), panel: $('panel-repo') },
     { tab: $('tab-code'), panel: $('panel-code') },
     { tab: $('tab-git'), panel: $('panel-git') }
   ];
@@ -119,6 +120,16 @@
     send(this, $('spin-url'), body);
   });
 
+  $('form-repo').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var value = $('repo').value.trim();
+    if (!value) { showError('Name a repository first — owner/name, or a github.com link.'); return; }
+    var body = new FormData();
+    body.append('mode', 'repo');
+    body.append('repo', value);
+    send(this, $('spin-repo'), body);
+  });
+
   $('form-code').addEventListener('submit', function (e) {
     e.preventDefault();
     var value = $('code').value;
@@ -222,6 +233,12 @@
 
     var counts = compact(data.counts.converging) + ' converging signal' + (data.counts.converging === 1 ? '' : 's');
     if (data.stats && data.stats.pages > 1) counts = compact(data.stats.pages) + ' pages · ' + counts;
+    if (data.mode === 'repo' && data.stats) {
+      var scope = [];
+      if (data.stats.commits) scope.push(compact(data.stats.commits) + ' commits');
+      if (data.stats.files) scope.push(compact(data.stats.files) + ' files');
+      if (scope.length) counts = scope.join(' · ') + ' · ' + counts;
+    }
     if (data.counts.human) counts += ' · ' + compact(data.counts.human) + ' pointing the other way';
     $('r-counts').textContent = counts;
 
@@ -321,17 +338,38 @@
     return li;
   }
 
+  // Whole-site mode lists the pages it read; repository mode lists the files.
+  // Same block, because they answer the same question — what was actually
+  // looked at — and a reader who does not ask it is the reader this whole
+  // page is built to argue with.
   function renderPages(data) {
     var host = $('r-pages');
+    var title = $('r-pages-title');
     var list = $('r-pages-list');
     var pages = (data.stats && data.stats.perPage) || [];
+    var files = (data.stats && data.stats.filesRead) || [];
 
     list.textContent = '';
+
+    if (data.mode === 'repo' && files.length) {
+      title.textContent = 'Files read in full';
+      files.forEach(function (f) {
+        var li = el('li');
+        li.appendChild(el('span', 'page-path', f.path));
+        li.appendChild(el('span', 'page-words', compact(f.lines) + ' lines'));
+        li.appendChild(el('span', 'page-score is-unknown', f.language || ''));
+        list.appendChild(li);
+      });
+      host.hidden = false;
+      return;
+    }
+
     if (pages.length < 2) {
       host.hidden = true;
       return;
     }
 
+    title.textContent = 'Pages read';
     pages.forEach(function (p) {
       var li = el('li');
       var path = p.url;

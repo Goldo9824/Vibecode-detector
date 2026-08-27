@@ -372,8 +372,17 @@ final class GitAnalyzer
         }
 
         // Tracked work.
+        //
+        // A merge commit's own number is written by the forge, not by a person:
+        // "Merge pull request #12 from dana/x" is GitHub's sentence, and a
+        // repository with a branch workflow would otherwise collect this signal
+        // on every merge without anybody having referenced anything. The merges
+        // themselves are read as merges, one check below.
         $refs = array();
         foreach ($subjects as $s) {
+            if (preg_match('~^merge (?:pull request|branch|remote-tracking)\b~i', $s)) {
+                continue;
+            }
             if (preg_match('~(#\d{1,6}\b|\b[A-Z]{2,8}-\d{1,6}\b)~', $s, $m)) {
                 $refs[] = $this->commitLine($s);
             }

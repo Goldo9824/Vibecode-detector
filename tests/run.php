@@ -16,6 +16,7 @@ require_once dirname(__DIR__) . '/lib/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/Fetcher.php';
 require_once dirname(__DIR__) . '/lib/Certificate.php';
 require_once dirname(__DIR__) . '/lib/Crawler.php';
+require_once dirname(__DIR__) . '/lib/RepoAnalyzer.php';
 require_once dirname(__DIR__) . '/lib/AdminAuth.php';
 require_once dirname(__DIR__) . '/lib/UsageLog.php';
 require_once dirname(__DIR__) . '/lib/VisitLog.php';
@@ -1076,6 +1077,339 @@ ok(!$rg->has('cd.generic_domain_names'), 'domain names are not flagged as vague'
 ok(!$rg->has('cd.assistant_chatter'), 'a why-comment is not chatter');
 between($rg->toArray()['score'], 3, 55, 'the guide\'s counter-example does not read as generated');
 
+// ------------------------------------------------------- github repository
+
+group('Reading a GitHub repository');
+
+/**
+ * A repository in memory.
+ *
+ * Every request this class would otherwise make is one of sixty an hour that
+ * the whole installation shares, so a test suite that made them would be a
+ * test suite that could only be run a handful of times a day. The endpoint
+ * methods are substituted and nothing else is: the parsing, the budgets, the
+ * analysis and every guard in RepoAnalyzer run exactly as they do in
+ * production.
+ */
+class StubGitHub extends GitHub
+{
+    /** @var array<string,mixed> */
+    public $meta = array();
+    /** @var array<int,array<string,mixed>> newest first */
+    public $log = array();
+    /** @var array<int,array{path:string,size:int}> */
+    public $treePaths = array();
+    /** @var array<string,string> */
+    public $blobs = array();
+    /** @var array<string,mixed>|null */
+    public $opening = null;
+    /** @var int */
+    public $fileReads = 0;
+
+    public function repository(): array
+    {
+        return $this->meta + array('full_name' => $this->fullName(), 'default_branch' => 'main');
+    }
+
+    public function recentCommits(): array
+    {
+        return array('commits' => array_slice($this->log, 0, self::COMMITS_PER_PAGE), 'pages' => 1);
+    }
+
+    public function commitPage(int $page): array
+    {
+        return array();
+    }
+
+    public function commit(string $sha): ?array
+    {
+        return $this->opening;
+    }
+
+    public function tree(string $ref): array
+    {
+        return array('paths' => $this->treePaths, 'truncated' => false);
+    }
+
+    public function file(string $ref, string $path): ?string
+    {
+        $this->fileReads++;
+        return isset($this->blobs[$path]) ? $this->blobs[$path] : null;
+    }
+}
+
+/** @return array<string,mixed> one commit in the shape the API returns it */
+function commitJson(string $sha, int $ts, string $author, string $subject): array
+{
+    return array(
+        'sha'    => $sha,
+        'commit' => array(
+            'author'  => array('name' => $author, 'date' => gmdate('c', $ts)),
+            'message' => $subject,
+        ),
+    );
+}
+
+/** @param array<int,string> $paths @return array<int,array{path:string,size:int}> */
+function treeOf(array $paths, int $size = 3000): array
+{
+    $out = array();
+    foreach ($paths as $path) {
+        $out[] = array('path' => $path, 'size' => $size);
+    }
+    return $out;
+}
+
+// --- the owner/name parser -------------------------------------------------
+
+foreach (array(
+    'https://github.com/vercel/next.js'                 => 'vercel/next.js',
+    'github.com/vercel/next.js/'                        => 'vercel/next.js',
+    'https://www.github.com/vercel/next.js.git'         => 'vercel/next.js',
+    'https://github.com/vercel/next.js/tree/canary/src' => 'vercel/next.js',
+    'https://github.com/vercel/next.js/blob/main/a.js'  => 'vercel/next.js',
+    'git@github.com:vercel/next.js.git'                 => 'vercel/next.js',
+    'vercel/next.js'                                    => 'vercel/next.js',
+    '  vercel/next.js?tab=readme  '                     => 'vercel/next.js',
+) as $input => $expected) {
+    list($o, $n) = GitHub::parse($input);
+    ok($o . '/' . $n === $expected, 'parses ' . trim($input), $o . '/' . $n);
+}
+
+foreach (array('', 'vercel', 'https://gitlab.com/a/b/c/d/e', 'https://github.com/../../etc/passwd', str_repeat('a', 500)) as $bad) {
+    $refused = false;
+    try {
+        GitHub::parse($bad);
+    } catch (RepoError $e) {
+        $refused = true;
+    }
+    ok($refused, 'refuses ' . ($bad === '' ? 'an empty repository name' : substr($bad, 0, 40)));
+}
+
+// Another forge, pasted in good faith, gets told which one this reads rather
+// than being silently looked up on GitHub under a name that means nothing there.
+$elsewhere = '';
+try {
+    GitHub::parse('https://gitlab.com/group/project');
+} catch (RepoError $e) {
+    $elsewhere = $e->getMessage();
+}
+ok(strpos($elsewhere, 'gitlab.com is not GitHub') === 0,
+   'a repository on another forge is refused by name', $elsewhere);
+
+ok(GitHub::lastPage('<https://api.github.com/x?page=2>; rel="next", <https://api.github.com/x?page=47>; rel="last"') === 47,
+   'reads the commit count from the Link header');
+ok(GitHub::lastPage('') === 1, 'no Link header means one page');
+
+// --- a generated repository ------------------------------------------------
+
+$stub = new StubGitHub('someone', 'ai-saas-starter');
+$stub->meta = array(
+    'description'      => 'A modern SaaS starter',
+    'default_branch'   => 'main',
+    'created_at'       => '2026-02-01T10:00:00Z',
+    'pushed_at'        => '2026-02-01T16:20:00Z',
+    'language'         => 'TypeScript',
+    'stargazers_count' => 0,
+);
+
+$g0 = strtotime('2026-02-01 10:00:00 UTC');
+$stub->log = array(
+    commitJson('a70000000000', $g0 + 21600, 'Alex Doe', 'fix build error'),
+    commitJson('a60000000000', $g0 + 21000, 'Alex Doe', 'fix missing import'),
+    commitJson('a50000000000', $g0 + 20400, 'Alex Doe', 'fix typo'),
+    commitJson('a40000000000', $g0 + 9000,  'Alex Doe', 'implement authentication flow with JWT and refresh tokens'),
+    commitJson('a30000000000', $g0 + 5400,  'Alex Doe', 'add dashboard page with charts and responsive layout'),
+    commitJson('a20000000000', $g0 + 1800,  'Alex Doe', 'add landing page with hero and pricing section'),
+    commitJson('a10000000000', $g0,         'Alex Doe', 'initial commit'),
+);
+$stub->opening = array(
+    'sha'    => 'a10000000000',
+    'stats'  => array('additions' => 4820, 'deletions' => 0),
+    'files'  => array_fill(0, 24, array('filename' => 'x')),
+    'commit' => array('message' => "initial commit"),
+);
+$stub->treePaths = treeOf(array_merge(
+    array('CLAUDE.md', '.cursorrules', 'README.md', 'package.json', '.env',
+          'IMPLEMENTATION_SUMMARY.md', 'PHASE_2_COMPLETE.md', 'FIXES_APPLIED.md'),
+    array_map(function ($i) { return 'src/components/Component' . $i . '.tsx'; }, range(1, 30))
+));
+$stub->blobs = array(
+    'package.json' => json_encode(array(
+        'name' => 'vite-project',
+        'dependencies' => array(
+            'react' => '^18', 'react-dom' => '^18', 'lucide-react' => '^0.4', 'clsx' => '^2',
+            'tailwind-merge' => '^2', 'class-variance-authority' => '^0.7', 'sonner' => '^1',
+            '@radix-ui/react-dialog' => '^1', '@radix-ui/react-slot' => '^1', '@radix-ui/react-toast' => '^1',
+            '@radix-ui/react-tabs' => '^1', '@radix-ui/react-label' => '^2', '@radix-ui/react-select' => '^2',
+        ),
+        'devDependencies' => array('vite' => '^5', 'lovable-tagger' => '^1.1'),
+    ), JSON_PRETTY_PRINT),
+    'README.md' => "# ✨ AI SaaS Starter\n\n"
+        . str_repeat("A modern, production-ready starter. ", 12) . "\n\n"
+        . "## 🚀 Features\n\n"
+        . "- **⚡ Blazing Fast** - built on Vite\n"
+        . "- **🔒 Secure by Default** - auth included\n"
+        . "- **📱 Fully Responsive** - works everywhere\n"
+        . "- **🎨 Beautiful UI** - shadcn components\n\n"
+        . "## 🛠 Getting Started\n\nnpm install\n\n## 📦 Tech Stack\n\nReact, Vite\n\n"
+        . "## 🤝 Contributing\n\nPRs welcome!\n\n## 📄 License\n\nMIT\n\nMade with ❤️ by the team\n",
+);
+
+$rr = (new RepoAnalyzer($stub))->analyze();
+$ra = $rr->toArray();
+
+ok($ra['mode'] === 'repo', 'reports the repository mode');
+ok($ra['target'] === 'github.com/someone/ai-saas-starter', 'names the repository as the subject', $ra['target']);
+ok($rr->has('fp.lovable'), 'reads a builder fingerprint out of the manifest');
+ok($rr->has('rp.agent_config'), 'catches an assistant configuration committed with the code');
+ok($rr->has('rp.session_docs'), 'catches the pile of session summaries');
+ok($rr->has('rp.readme_generated'), 'catches a README made of the standard sections');
+ok($rr->has('rp.no_tests'), 'catches a substantial tree with nothing tested');
+ok($rr->has('se.committed_secrets'), 'catches a committed .env');
+ok($rr->has('st.untouched_scaffold'), 'catches the package nobody renamed');
+ok($rr->has('st.generated_stack'), 'catches the whole component kit arriving at once');
+ok($rr->has('rp.dependency_soup'), 'catches dependencies declared and never locked');
+ok($rr->has('gh.big_bang'), 'catches a repository that arrived fully formed');
+ok($rr->has('gh.micro_fix_trail'), 'catches the trail of one-line fixes');
+ok($rr->has('gh.prompt_messages'), 'catches commit messages that read like the prompt');
+between($ra['score'], 90, 97, 'a repository with a fingerprint in it scores at the top');
+ok($ra['stats']['commits'] === 7, 'counts the commits it read', (string) $ra['stats']['commits']);
+ok($ra['stats']['files'] === 38, 'counts the files in the tree', (string) $ra['stats']['files']);
+
+// --- a hand-written repository ---------------------------------------------
+
+$human = new StubGitHub('dana', 'ledger');
+$human->meta = array(
+    'description'      => 'Double-entry bookkeeping for small co-ops',
+    'default_branch'   => 'main',
+    'created_at'       => '2021-06-14T08:00:00Z',
+    'pushed_at'        => '2026-01-20T09:00:00Z',
+    'language'         => 'Python',
+    'stargazers_count' => 240,
+);
+$day = 86400;
+$h0 = strtotime('2025-09-02 09:14:00 UTC');
+$human->log = array();
+$subjects = array(
+    'fix rounding on partial refunds (#412)', 'Merge pull request #410 from dana/vat-rates',
+    'ugh, timezone again', 'revert "cache the rate table"', 'cache the rate table',
+    'bump minimum python to 3.9', 'add regression test for the 2019 import bug',
+    'tidy the settings loader', 'ACC-88 correct the closing balance', 'oops, wrong sign',
+);
+foreach ($subjects as $i => $subject) {
+    $author = ($i % 3 === 0) ? 'Dana Cole' : (($i % 3 === 1) ? 'Ravi Patel' : 'Jo Mensah');
+    $human->log[] = commitJson(sprintf('%012x', 0xb0000 + $i), $h0 + ($i * 4 * $day), $author, $subject);
+}
+$human->log = array_reverse($human->log);
+$human->opening = array(
+    'sha'    => sprintf('%012x', 0xb0000),
+    'stats'  => array('additions' => 62, 'deletions' => 0),
+    'files'  => array(array('filename' => 'ledger.py')),
+    'commit' => array('message' => 'start on the ledger'),
+);
+$human->treePaths = array_merge(
+    treeOf(array('README.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'CODE_OF_CONDUCT.md',
+                 '.github/ISSUE_TEMPLATE/bug.yml', '.github/workflows/ci.yml')),
+    treeOf(array_map(function ($i) { return 'ledger/module' . $i . '.py'; }, range(1, 30))),
+    treeOf(array_map(function ($i) { return 'tests/test_module' . $i . '.py'; }, range(1, 12)))
+);
+$human->blobs = array('README.md' => "# ledger\n\n" . str_repeat("Bookkeeping for co-operatives that file their own returns. ", 20));
+
+$hr = (new RepoAnalyzer($human))->analyze();
+$ha = $hr->toArray();
+
+ok($hr->has('rp.project_furniture'), 'reads the furniture a used project acquires');
+ok($hr->has('rp.tests_present'), 'reads a test suite in proportion to the code');
+ok($hr->has('gh.multiple_authors'), 'reads collaboration out of the commit authors');
+ok($hr->has('gh.steady_cadence'), 'reads work spread across real time');
+ok($hr->has('gh.human_mess'), 'reads audible frustration in the messages');
+ok(!$hr->has('rp.agent_config'), 'invents no assistant configuration');
+ok(!$hr->has('rp.no_tests'), 'does not claim an absence it can see is not there');
+ok(!$hr->has('se.committed_secrets'), 'invents no committed secrets');
+ok(!$hr->has('gh.big_bang'), 'a small opening commit is not a big bang');
+ok($ha['score'] < 40, 'a repository that was worked on reads as human', (string) $ha['score']);
+
+// A merge commit's own number is generated by GitHub, not typed by a person,
+// so it must not be read as somebody referencing a ticket.
+$merges = new GitAnalyzer(implode("\n", array(
+    'aa1111111111|' . $h0 . '|Dana|Merge pull request #12 from dana/x',
+    'bb2222222222|' . ($h0 + 3600) . '|Dana|Merge pull request #13 from dana/y',
+    'cc3333333333|' . ($h0 + 7200) . '|Dana|Merge pull request #14 from dana/z',
+    'dd4444444444|' . ($h0 + 9000) . '|Dana|tidy the settings loader',
+)));
+$mr = $merges->analyze();
+ok(count($merges->commits()) === 4, 'the merge fixture parses', (string) count($merges->commits()));
+ok(!$mr->has('gh.issue_refs'),
+   'a run of merge commits is not a run of ticket references');
+ok($mr->has('gh.merges_and_reverts'), 'merges are still read as merges');
+
+// A number somebody typed still counts, even in a log that also has merges.
+$typed = new GitAnalyzer(implode("\n", array(
+    'aa1111111111|' . $h0 . '|Dana|Merge pull request #12 from dana/x',
+    'bb2222222222|' . ($h0 + 3600) . '|Dana|fix the closing balance (#31)',
+    'cc3333333333|' . ($h0 + 7200) . '|Dana|ACC-88 correct the VAT rate',
+)));
+ok($typed->analyze()->has('gh.issue_refs'), 'a number a person typed is still a ticket reference');
+
+// --- what it does when there is nothing to read ----------------------------
+
+$thin = new StubGitHub('nobody', 'sketch');
+$thin->meta = array('default_branch' => 'main', 'created_at' => '2026-01-01T00:00:00Z');
+$thin->log = array(commitJson('c10000000000', strtotime('2026-01-01 12:00:00 UTC'), 'Nobody', 'first'));
+$thin->treePaths = treeOf(array('index.html'), 600);
+
+$tr = (new RepoAnalyzer($thin))->analyze();
+$ta = $tr->toArray();
+ok(count($ta['signals']) === 0 || $ta['confidence']['level'] === 'insufficient',
+   'one commit and one file is not a reading');
+ok($ta['score'] >= Report::FLOOR && $ta['score'] <= Report::CEIL, 'the score stays inside the scale');
+
+// The file budget is a budget: a large tree must not become a large number of
+// downloads, however many candidates it has.
+$big = new StubGitHub('someone', 'monorepo');
+$big->meta = array('default_branch' => 'main', 'created_at' => '2026-01-01T00:00:00Z');
+$big->log = array(commitJson('d10000000000', strtotime('2026-01-02 12:00:00 UTC'), 'Someone', 'work'));
+$big->treePaths = treeOf(array_map(function ($i) { return 'src/file' . $i . '.ts'; }, range(1, 400)), 9000);
+foreach ($big->treePaths as $entry) {
+    $big->blobs[$entry['path']] = str_repeat("export const value = 1;\n", 200);
+}
+(new RepoAnalyzer($big))->analyze();
+ok($big->fileReads <= RepoAnalyzer::MAX_CODE_FILES + 2,
+   'a four-hundred-file repository is still read in a handful of requests', (string) $big->fileReads);
+
+// A credential must not survive a redirect to another host. Exercised through
+// the header assembly and the host comparison the redirect loop uses, because
+// the loop itself cannot run here without a server to redirect from.
+$hdr = new ReflectionMethod('Fetcher', 'requestHeaders');
+$hdr->setAccessible(true);
+$assembled = $hdr->invoke(null, array('Authorization' => 'Bearer secret', 'Accept' => 'application/vnd.github+json'));
+ok(in_array('Authorization: Bearer secret', $assembled, true), 'a caller header is sent');
+ok(in_array('Accept: application/vnd.github+json', $assembled, true), 'a caller Accept replaces the default');
+ok(count($assembled) === 2, 'and does not arrive alongside the default it replaced', (string) count($assembled));
+
+$injected = $hdr->invoke(null, array("X-Bad
+X-Injected" => 'yes', 'X-Fine' => "a
+b"));
+ok(count($injected) === 1 && strpos($injected[0], 'Accept:') === 0,
+   'a header with a newline in either half is dropped rather than sent');
+
+$hostOf = new ReflectionMethod('Fetcher', 'hostOf');
+$hostOf->setAccessible(true);
+ok($hostOf->invoke(null, 'https://API.github.com/repos/a/b') === 'api.github.com',
+   'the host comparison that guards the credential is case-insensitive');
+ok($hostOf->invoke(null, 'https://api.github.com.evil.example/x') !== $hostOf->invoke(null, 'https://api.github.com/x'),
+   'and is not fooled by a lookalike suffix');
+
+ok(GitHub::MAX_REQUESTS <= 10,
+   'one scan cannot spend a sixth of the hourly GitHub allowance', (string) GitHub::MAX_REQUESTS);
+ok(RepoAnalyzer::TIME_BUDGET <= 25,
+   'a repository read leaves room to render inside a 30s request', (string) RepoAnalyzer::TIME_BUDGET);
+ok(VCD_LIMIT_REPO[0] * GitHub::MAX_REQUESTS <= 100,
+   'one visitor cannot spend more than the hourly allowance in a single window',
+   sprintf('%d requests', VCD_LIMIT_REPO[0] * GitHub::MAX_REQUESTS));
+
+
 // ---------------------------------------------------- site: visual signs
 
 group('Visual signs on a page');
@@ -1105,16 +1439,51 @@ ok($r->has('ae.bento_grid'), 'catches the bento grid');
 ok($r->has('ae.logo_marquee'), 'catches the endless logo strip');
 ok($r->has('ae.floating_nav'), 'catches the floating blurred navbar');
 
+// Neon, and a gradient covering the page rather than an element on it. Both
+// live on their own fixture: neither is present on the one above, and a check
+// that fires on a page which does not have the thing is worth nothing.
+$neon = '<!DOCTYPE html><html lang="en"><head><title>Cyberflux</title>'
+    . '<style>body{background:linear-gradient(135deg,#0b0f2b,#1a0b2e 50%,#2b0b3a)}'
+    . '.title{color:#00ffff;text-shadow:0 0 20px #00ffff}'
+    . '.cta{background:#ff00ff;box-shadow:0 0 30px #ff00ff}'
+    . '.tag{color:#39ff14}</style></head><body>'
+    . '<h1 class="title">Enter the grid</h1><a class="cta">Jack in</a>'
+    . str_repeat('<p>Ordinary body copy for length here.</p>', 20)
+    . '</body></html>';
+$rn2 = (new SiteAnalyzer('https://cyberflux.example.com/', $neon))->analyze();
+ok($rn2->has('ae.neon_palette'), 'catches neon colours and the glow behind them');
+ok($rn2->has('ae.gradient_background'), 'catches a gradient on the page ground itself');
+
+// The same two, built out of utilities instead of declarations.
+$neonTw = '<!DOCTYPE html><html lang="en"><head><title>Grid</title></head>'
+    . '<body class="min-h-screen bg-gradient-to-b from-slate-900 to-indigo-950">'
+    . '<section class="min-h-screen bg-gradient-to-br from-fuchsia-500 to-cyan-400">'
+    . '<p class="text-cyan-400 shadow-[0_0_40px_rgba(0,255,255,0.6)]">glow</p>'
+    . '<span class="text-fuchsia-400"></span><span class="border-lime-400"></span><span class="bg-cyan-300"></span>'
+    . '</section>' . str_repeat('<p>Ordinary body copy for length here.</p>', 20) . '</body></html>';
+$rn3 = (new SiteAnalyzer('https://grid.example.com/', $neonTw))->analyze();
+ok($rn3->has('ae.neon_palette'), 'catches the same palette as utility classes');
+ok($rn3->has('ae.gradient_background'), 'catches a full-height surface carrying a gradient');
+
+// A gradient clipped to a headline is the headline tell, not the background one.
+$clipped = '<!DOCTYPE html><html lang="en"><head><title>x</title></head><body>'
+    . '<h1 class="bg-gradient-to-r from-indigo-500 to-violet-500 bg-clip-text text-transparent">Ship faster</h1>'
+    . str_repeat('<p>Ordinary body copy for length here.</p>', 20) . '</body></html>';
+$rc = (new SiteAnalyzer('https://clip.example.com/', $clipped))->analyze();
+ok($rc->has('ae.gradient_text'), 'the gradient headline still fires on its own');
+ok(!$rc->has('ae.gradient_background'), 'a headline gradient is not a background gradient');
+
 // Six aesthetic signals, and the group cap still holds the score down.
 ok($r->countAi(true) === 0 || $r->score() <= 55 || $r->countAi(true) > 0,
    'aesthetic signals are counted');
 $aestheticOnly = new Report('url', 'x');
 foreach (array('ae.hero_pill', 'ae.scroll_indicator', 'ae.glow_orbs', 'ae.bento_grid',
-               'ae.logo_marquee', 'ae.floating_nav', 'ae.indigo', 'ae.gradient_text') as $id) {
+               'ae.logo_marquee', 'ae.floating_nav', 'ae.indigo', 'ae.gradient_text',
+               'ae.neon_palette', 'ae.gradient_background') as $id) {
     $aestheticOnly->flag($id, array('x'));
 }
 ok($aestheticOnly->score() <= 55,
-   'eight visual signals together still cannot pass 55%', (string) $aestheticOnly->score());
+   'ten visual signals together still cannot pass 55%', (string) $aestheticOnly->score());
 
 // A restrained page must not collect them by accident.
 $plain = '<!DOCTYPE html><html lang="en"><head><title>Shop</title></head><body>'
@@ -1123,9 +1492,17 @@ $plain = '<!DOCTYPE html><html lang="en"><head><title>Shop</title></head><body>'
     . '</body></html>';
 $rp = (new SiteAnalyzer('https://shop.example.fr/', $plain))->analyze();
 foreach (array('ae.hero_pill', 'ae.scroll_indicator', 'ae.glow_orbs', 'ae.bento_grid',
-               'ae.logo_marquee', 'ae.floating_nav') as $id) {
+               'ae.logo_marquee', 'ae.floating_nav', 'ae.neon_palette', 'ae.gradient_background') as $id) {
     ok(!$rp->has($id), 'a plain page does not trip ' . $id);
 }
+
+// One saturated accent is a colour, not a palette decision.
+$oneAccent = '<!DOCTYPE html><html lang="en"><head><title>Shop</title>'
+    . '<style>body{background:#fff}.badge{color:#00ffff}</style></head><body>'
+    . '<h1>Pain au levain</h1>'
+    . str_repeat('<p>Ordinary body copy that goes on for a while.</p>', 20) . '</body></html>';
+ok(!(new SiteAnalyzer('https://one.example.fr/', $oneAccent))->analyze()->has('ae.neon_palette'),
+   'a single cyan accent is not a neon palette');
 
 // --------------------------------------------------------------- guardrails
 

@@ -9,11 +9,14 @@ require_once __DIR__ . '/Db.php';
  * lib/Db.php.
  *
  * What is recorded, on purpose, and what is not:
- *   - the mode (url, site, code, git), the source (ui or api), the API key
- *     id if one was used, and a timestamp — always.
- *   - the target address, for url and site mode only — never for code or
- *     git, because those carry no "website" to attribute usage to and the
- *     pasted content itself must never be written down anywhere.
+ *   - the mode (url, site, repo, code, git), the source (ui or api), the API
+ *     key id if one was used, and a timestamp — always.
+ *   - the target address, for url, site and repo mode only — never for code
+ *     or git, because those carry no "website" to attribute usage to and the
+ *     pasted content itself must never be written down anywhere. A repo
+ *     target is stored as "github.com/owner/name" without a scheme, so it
+ *     does not resolve to a host: a repository is not a website that was
+ *     visited, and counting every scan against github.com would say it was.
  *   - nothing about who is asking: no IP address, no cookie, no session.
  *     This answers "how much is this tool used, and against what", not
  *     "who is using it".

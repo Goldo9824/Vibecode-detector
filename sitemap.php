@@ -14,9 +14,9 @@ require_once __DIR__ . '/lib/Seo.php';
  * of to their own. vcd_site_url() reads the host the request actually arrived
  * on, so a fork gets its own map with nothing to edit.
  *
- * Only the two pages worth finding are in it. The verify page is a form with
- * one useful state and a different URL per certificate; the admin panel is
- * gated and disallowed; the API is for callers who were given a key, not for
+ * Only the pages worth finding are in it. The verify page is a form with one
+ * useful state and a different URL per certificate; the admin panel is gated
+ * and disallowed; the API is for callers who were given a key, not for
  * readers.
  */
 
@@ -26,6 +26,7 @@ header('X-Content-Type-Options: nosniff');
 $pages = array(
     array('path' => '/',          'changefreq' => 'monthly', 'priority' => '1.0'),
     array('path' => '/signs.php', 'changefreq' => 'monthly', 'priority' => '0.8'),
+    array('path' => '/catalogue.php', 'changefreq' => 'monthly', 'priority' => '0.8'),
 );
 
 // The last time the deployed files themselves changed, which is the only
@@ -33,6 +34,8 @@ $pages = array(
 $lastmod = gmdate('Y-m-d', max(
     (int) @filemtime(__DIR__ . '/index.php'),
     (int) @filemtime(__DIR__ . '/signs.php'),
+    (int) @filemtime(__DIR__ . '/catalogue.php'),
+    (int) @filemtime(__DIR__ . '/lib/Catalog.php'),
     time() - 86400 * 365
 ));
 

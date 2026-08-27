@@ -365,3 +365,54 @@
   color: var(--s-muted);
   overflow-wrap: anywhere;
 }
+
+/* neon colours, and the glow that always comes with them */
+.s-neon {
+  position: relative;
+  text-align: center;
+  padding: 1.5rem .75rem 1.75rem;
+  border-radius: .75rem;
+  background: #05010f;
+  border: 1px solid rgba(0, 255, 255, .25);
+}
+.s-neon-tag {
+  display: inline-block;
+  margin-bottom: .7rem;
+  font-family: var(--mono);
+  font-size: .625rem;
+  letter-spacing: .12em;
+  color: #39ff14;
+  text-shadow: 0 0 12px #39ff14;
+}
+.s-neon-title {
+  color: #00ffff;
+  text-shadow: 0 0 8px #00ffff, 0 0 26px rgba(0, 255, 255, .55);
+}
+.s-neon-sub { color: #ff6ec7 !important; margin-top: .45rem !important; }
+.s-neon-cta {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: .45rem 1.1rem;
+  border-radius: 9999px;
+  font-size: .75rem;
+  color: #05010f;
+  background: #ff00ff;
+  box-shadow: 0 0 24px #ff00ff;
+}
+
+/* the background is the gradient */
+.s-gradbg {
+  text-align: center;
+  padding: 1.75rem 1rem;
+  border-radius: .75rem;
+  background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 38%, #2563eb 70%, #06b6d4 100%);
+}
+.s-gradbg .s-h1 { color: #fff; }
+.s-gradbg .s-sub { color: rgba(255, 255, 255, .78) !important; }
+.s-gradbg-strip { display: flex; gap: .5rem; margin-top: 1.1rem; }
+.s-gradbg-strip span {
+  flex: 1;
+  height: 2.25rem;
+  border-radius: .5rem;
+  background: linear-gradient(160deg, rgba(255, 255, 255, .28), rgba(255, 255, 255, .06));
+}

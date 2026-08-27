@@ -2,7 +2,8 @@
 declare(strict_types=1);
 
 /**
- * Key-authenticated API for analysing a live page or whole site.
+ * Key-authenticated API for analysing a live page, a whole site, or a public
+ * GitHub repository.
  *
  * Separate from api/analyze.php (which is what the browser UI calls) because
  * it answers to a different caller with a different trust level: a request
@@ -16,6 +17,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__) . '/lib/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/Fetcher.php';
 require_once dirname(__DIR__) . '/lib/Crawler.php';
+require_once dirname(__DIR__) . '/lib/RepoAnalyzer.php';
 require_once dirname(__DIR__) . '/lib/UsageLog.php';
 
 header('X-Content-Type-Options: nosniff');
@@ -53,11 +55,30 @@ if ($slot !== '') {
 }
 
 $url   = isset($_REQUEST['url']) ? (string) $_REQUEST['url'] : '';
+$repo  = isset($_REQUEST['repo']) ? (string) $_REQUEST['repo'] : '';
 $crawl = !empty($_REQUEST['crawl']);
+
+if ($url !== '' && $repo !== '') {
+    vcd_fail('Send either url or repo, not both — they are different subjects and would need two readings.');
+}
 
 $fetcher = new Fetcher();
 
-if ($crawl) {
+if ($repo !== '') {
+    // Repository reads spend from GitHub's own hourly allowance, which is
+    // shared by this whole installation and is not something a key can buy
+    // more of. A key holder gets the same eight-request ceiling per read as
+    // anyone else; the generous per-key budget above governs how often they
+    // may ask, not how much of somebody else's allowance one ask can spend.
+    try {
+        list($owner, $name) = GitHub::parse($repo);
+        $result = (new RepoAnalyzer(new GitHub($owner, $name, $fetcher)))->analyze()->toArray();
+    } catch (RepoError $e) {
+        vcd_fail($e->getMessage(), 400);
+    } catch (FetchError $e) {
+        vcd_fail($e->getMessage(), 400);
+    }
+} elseif ($crawl) {
     try {
         $crawler = new Crawler($fetcher);
         $pages = $crawler->crawl($url);

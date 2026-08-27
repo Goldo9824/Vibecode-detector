@@ -1,8 +1,8 @@
 # Key-authenticated API
 
-`api/website.php` is a plain HTTP endpoint for analysing a live page or whole
-site programmatically, gated behind an API key that only the operator of the
-installation sets. It exists alongside `api/analyze.php` (which is what the
+`api/website.php` is a plain HTTP endpoint for analysing a live page, a whole
+site, or a public GitHub repository programmatically, gated behind an API key
+that only the operator of the installation sets. It exists alongside `api/analyze.php` (which is what the
 browser UI calls, anonymous and IP-rate-limited) for callers you have handed
 a key to directly — scripts, another service, someone you trust with
 higher-volume access.
@@ -63,18 +63,31 @@ field, so it doesn't end up in access logs or browser history.
 
 | Parameter | Required | Meaning |
 |---|---|---|
-| `url` | yes | The page to fetch and analyse. |
-| `crawl` | no | Any truthy value follows links from that page and analyses the whole site, same as the "Read the whole site" checkbox in the UI. Slower, and costs the site being read more too. |
+| `url` | one of `url` or `repo` | The page to fetch and analyse. |
+| `repo` | one of `url` or `repo` | A public GitHub repository, as `owner/name` or any github.com URL for it — same as the "GitHub repo" tab in the UI. Sending both `url` and `repo` is refused rather than guessed at. |
+| `crawl` | no | Only meaningful with `url`. Any truthy value follows links from that page and analyses the whole site, same as the "Read the whole site" checkbox in the UI. Slower, and costs the site being read more too. |
 
-`GET` and `POST` are both accepted; `url`/`crawl` can be sent as query
-parameters either way.
+`GET` and `POST` are both accepted; every parameter can be sent as a query
+parameter either way.
+
+```
+curl -H "X-Api-Key: vcd-key-9f3a7c2e4b1d6a80c5e2f1b3a9d7c6e4" \
+  "https://your-install.example/api/website.php?repo=owner/name"
+```
 
 ### Response
 
-The same JSON shape `api/analyze.php` returns for url mode: a score, a
-verdict, a confidence level, the fired signals with excerpts, and a signed
-`cert` token that `POST /api/certificate.php` (or `/verify`) can turn into a
-PDF or check independently. See `lib/Report.php` for the exact fields.
+The same JSON shape `api/analyze.php` returns: a score, a verdict, a
+confidence level, the fired signals with excerpts, and a signed `cert` token
+that `POST /api/certificate.php` (or `/verify`) can turn into a PDF or check
+independently. See `lib/Report.php` for the exact fields.
+
+`mode` says which reading it was — `url`, `site` or `repo` — and `target` is
+the address or, in repo mode, `github.com/owner/name`. A repo response carries
+its scope in `stats`: `commits` against `commitsRead`, and `files` against
+`filesRead`. Those pairs are the difference between what exists and what was
+looked at, and they are published rather than smoothed over because a
+repository is sampled, not read.
 
 Each signal carries its evidence twice. `evidence` is the flat list of strings
 it has always been. `excerpts` is the same evidence with everything needed to
@@ -94,7 +107,7 @@ lines as well as the match.
 | 401 | Missing or invalid `X-Api-Key`. |
 | 429 | This key has exceeded its rate limit. |
 | 503 | The shared fetch-concurrency slot pool is full; retry shortly. |
-| 400 | The URL couldn't be fetched (bad host, timeout, too large, blocked by robots.txt, etc.) — same failure modes as the UI's Live page tab. |
+| 400 | The URL couldn't be fetched (bad host, timeout, too large, blocked by robots.txt, etc.) — same failure modes as the UI's Live page tab. In repo mode: no such public repository, an empty one, one on another forge, or GitHub rate-limiting this server. |
 
 ## Rate limit
 
@@ -108,3 +121,15 @@ real backstop against overload is the same global fetch-concurrency cap
 (`VCD_MAX_CONCURRENT_FETCHES`) that protects the rest of the site, not this
 number. Raise or lower it by editing the constant; there is no per-key
 override.
+
+### Repository reads have a second limit that is not yours
+
+A `repo` request also spends up to eight requests from **GitHub's** hourly
+allowance, which belongs to the installation's server address rather than to
+the key. Unauthenticated that is 60 an hour for every API caller and every
+browser visitor put together, which is roughly seven repository reads. An
+operator who expects the mode to be used should configure a token — see
+[Repository reads in docs/DEPLOY-LWS.md](DEPLOY-LWS.md#github-repository-reads-optional)
+— which raises it to 5,000. No API key can buy more of this budget, and no
+per-key limit protects it, so a caller that loops over repositories will take
+the mode down for everybody until the hour rolls over.

@@ -94,6 +94,7 @@ final class AdminUi
         $labels = array(
             'url'  => 'Live page',
             'site' => 'Whole site',
+            'repo' => 'GitHub repo',
             'code' => 'Pasted code',
             'git'  => 'Git history',
         );

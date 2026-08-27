@@ -28,8 +28,8 @@ can fetch.
 
 ## Structured data
 
-Three blocks on the front page, four on the field guide, all of them
-`application/ld+json`:
+Three blocks on the front page, four on the field guide, three on the
+catalogue, all of them `application/ld+json`:
 
 - **WebSite**, on every page, so a result carries the site's name rather than
   one guessed out of the domain.
@@ -43,6 +43,9 @@ Three blocks on the front page, four on the field guide, all of them
 - **Article**, **ItemList** and **BreadcrumbList** on `signs.php`. The list is
   built from the `$signs` array that renders the page, so a sign added to the
   guide cannot go missing from the markup.
+- **Article** and **BreadcrumbList** on `catalogue.php`, with the signal count
+  in the description read from `Catalog::all()` rather than typed, so it cannot
+  advertise a number the catalogue does not hold.
 
 `Seo::jsonLd()` encodes with `JSON_HEX_TAG`, which is what stops a
 description containing `</script>` from ending the block early. That is the
@@ -56,9 +59,13 @@ rather than a static file for the same reason as above: a committed
 no `mod_rewrite` there is simply no sitemap, which costs nothing a crawler
 cannot work out by following links.
 
-It lists two pages. The verify form has one useful state and a different URL
-per certificate; the admin panel is gated; the API is for callers who were
-given a key.
+It lists three pages: the front page, the field guide and the catalogue. The
+verify form has one useful state and a different URL per certificate; the admin
+panel is gated; the API is for callers who were given a key.
+
+Its `lastmod` is the newest mtime among the files that decide what those pages
+say — which now includes `lib/Catalog.php`, because a signal added there
+changes `/catalogue` without anybody touching `catalogue.php`.
 
 ## What is deliberately not indexed
 

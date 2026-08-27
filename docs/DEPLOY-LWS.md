@@ -104,6 +104,36 @@ revocable keys through the [admin panel](ADMIN.md) instead. See
 [`docs/API.md`](API.md) for the request format and [`Keeping the key`](#keeping-the-key)
 below for why this file lives outside the repo the same way `secret.key` does.
 
+## GitHub repository reads (optional)
+
+The **GitHub repo** tab works with no configuration at all, at the cost of
+GitHub's unauthenticated allowance: **60 requests an hour, per server address**
+— not per visitor. One repository read spends up to 8 of them, so a fresh
+install manages roughly seven reads an hour across everybody using it, and then
+says so plainly until the hour rolls over.
+
+If that is too few, give the installation a token. Create
+`data/github-config.php`:
+
+```php
+<?php
+return array(
+    // A fine-grained personal access token with **no** scopes and **no**
+    // repository access. It is only ever used to raise the rate limit on
+    // public, read-only endpoints — it never needs permission to anything.
+    'token' => 'github_pat_...',
+);
+```
+
+That raises the allowance to 5,000 requests an hour. `VCD_GITHUB_TOKEN` in the
+environment works too, and is read if the file is absent.
+
+This file is **never committed** (`.gitignore` excludes it alongside
+`secret.key`) and is unreachable over HTTP the same way everything else under
+`data/` is. A token with no scopes cannot do anything if it does leak, which is
+the whole reason to issue it that way — do not use a classic token with `repo`
+on it here, because nothing in this project ever needs one.
+
 ## Resource notes
 
 Shared hosting is not generous, and the analyser is built around that:
@@ -111,9 +141,13 @@ Shared hosting is not generous, and the analyser is built around that:
 - The URL fetcher caps downloads at 3 MB for the page and 768 KB per asset, and
   aborts mid-flight rather than buffering an oversized response.
 - It fetches at most four same-origin assets, with a 6-second timeout each.
-- Rate limiting is file-based in `data/rate/` — 20 URL analyses and 60 code
-  analyses per IP per 10 minutes — and cleans up after itself. It **fails open**:
-  if the directory misbehaves the site keeps working rather than locking everyone out.
+- Rate limiting is file-based in `data/rate/` — 40 URL analyses, 60 code
+  analyses and 8 repository reads per IP per 10 minutes — and cleans up after
+  itself. It **fails open**: if the directory misbehaves the site keeps working
+  rather than locking everyone out.
+- A repository read is capped at 8 GitHub API requests and about 18 seconds,
+  whatever the size of the repository. The source files it downloads come from
+  `raw.githubusercontent.com`, which does not spend from the API allowance.
 - Nothing is logged, stored or cached between requests, and there is no database
   requirement for any of the above. The one opt-in exception is the admin panel
   (see [docs/ADMIN.md](ADMIN.md)) — inert, and nothing is recorded, unless you

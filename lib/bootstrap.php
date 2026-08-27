@@ -30,6 +30,16 @@ define('VCD_LIMIT_CODE',  array(60, 600));
 define('VCD_LIMIT_GIT',   array(60, 600));
 
 /**
+ * Repository reads, which are the most expensive thing here.
+ *
+ * Not because of this server: a scan spends up to eight requests from
+ * GitHub's hourly allowance, and without a token that allowance is sixty an
+ * hour for the whole installation rather than for one visitor. So this budget
+ * is really a way of stopping one person from spending everybody's.
+ */
+define('VCD_LIMIT_REPO',  array(8, 600));
+
+/**
  * Budget for authenticated API callers (api/website.php), keyed by the API
  * key itself rather than by IP — one key is meant to be shared across
  * whatever machines its holder runs, so the budget should not be split (or

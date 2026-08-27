@@ -65,6 +65,8 @@ $verdicts = array(
     </a>
     <nav>
       <a href="./">Analyse something</a>
+      <a href="signs.php">Visual signs</a>
+      <a href="catalogue.php">Signals</a>
       <a href="<?= h(VCD_REPO_URL) ?>" rel="noopener">Source</a>
     </nav>
   </div>

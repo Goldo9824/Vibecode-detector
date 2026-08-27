@@ -5,6 +5,7 @@ require_once __DIR__ . '/lib/bootstrap.php';
 require_once __DIR__ . '/lib/Brand.php';
 require_once __DIR__ . '/lib/VisitLog.php';
 require_once __DIR__ . '/lib/Seo.php';
+require_once __DIR__ . '/lib/Num.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
@@ -47,6 +48,22 @@ $signs = array(
         'tell'   => 'A heading painted with a clipped background gradient instead of a colour. Nearly unheard of in hand-built pages before 2023, near-universal in generated ones since.',
         'look'   => 'Two or three words of the headline in a different, usually purple-to-blue, colour ramp.',
         'but'    => 'A brand with a real gradient in its identity will use it here. The tell is a gradient that appears once, on the headline, and nowhere else.',
+    ),
+    array(
+        'id'     => 'neon',
+        'name'   => 'Neon colours nobody chose',
+        'signal' => 'ae.neon_palette',
+        'tell'   => 'Electric cyan, hot magenta, acid lime &mdash; full-saturation colours from the corners of the wheel, with a glow behind them so the page looks lit from inside. This is what a model reaches for when the brief says futuristic, and almost nobody picks it for a real product.',
+        'look'   => 'Read the hex values. #00ffff, #ff00ff, #39ff14 and their neighbours are not palette colours, they are the primaries with the volume at maximum. Then look for the shadow: no offset, only radius, in the same colour as the thing casting it.',
+        'but'    => 'Games, music, nightlife, anything cyberpunk on purpose: these are the correct colours and they are used well. The tell is neon on a project-management tool.',
+    ),
+    array(
+        'id'     => 'gradient-bg',
+        'name'   => 'The background is a gradient',
+        'signal' => 'ae.gradient_background',
+        'tell'   => 'Not the headline and not one panel &mdash; the ground itself, or every section of it, laid over a three-stop ramp so that no part of the page is ever a flat colour.',
+        'look'   => 'Scroll and watch the background. If the colour under the text keeps moving, and nothing on the page is plain white or plain anything, that is this.',
+        'but'    => 'A designed gradient has a reason: it goes somewhere, it frames something, it appears once. The tell is a gradient with nothing above it that needed one.',
     ),
     array(
         'id'     => 'orbs',
@@ -209,6 +226,7 @@ $signs = array(
     </a>
     <nav>
       <a href="./">Analyse something</a>
+      <a href="catalogue.php">Signals</a>
       <a href="./#method">Method</a>
       <a href="./#limits">Limits</a>
       <a href="<?= h(VCD_REPO_URL) ?>" rel="noopener">Source</a>
@@ -222,7 +240,7 @@ $signs = array(
     <section class="hero">
       <p class="eyebrow">Field guide</p>
       <h1>The visual signs</h1>
-      <p>Fourteen things you can spot on a rendered page without opening View Source. Every specimen below is <strong>rendered live</strong>, not screenshotted, so it stays honest as the conventions drift &mdash; and so you can inspect it.</p>
+      <p><?= h(ucfirst(Num::word(count($signs)))) ?> things you can spot on a rendered page without opening View Source. Every specimen below is <strong>rendered live</strong>, not screenshotted, so it stays honest as the conventions drift &mdash; and so you can inspect it.</p>
       <p class="disclaimer">None of these proves anything on its own, and the detector weights them accordingly: aesthetic evidence is capped as a group and can never, by itself, push a reading past 55%. They are a reason to look closer. Each entry below says when it is innocent, because usually it is.</p>
     </section>
 
@@ -266,13 +284,13 @@ $signs = array(
       <div class="prose">
         <p class="eyebrow">A warning about this page</p>
         <h2>Recognising these is the easy half</h2>
-        <p>Everything here is cheap to change. A page carrying all fourteen can be stripped of all fourteen in an afternoon, and a careful person building by hand can hit six of them by accident because these are also just the conventions of the moment.</p>
+        <p>Everything here is cheap to change. A page carrying all <?= h(Num::word(count($signs))) ?> can be stripped of all <?= h(Num::word(count($signs))) ?> in an afternoon, and a careful person building by hand can hit six of them by accident because these are also just the conventions of the moment.</p>
         <p>That is why the detector caps this whole family. Visual signs tell you where to look; they do not tell you what you found. The things that actually carry weight are further down: a builder's fingerprint in the markup, the shape of the repository history, whether the same problem got solved three different ways.</p>
 
         <h3>This page fails its own test</h3>
         <p>Run this page through the detector and it comes back <strong id="signs-score">83%, likely AI-generated</strong> &mdash; because it is full of hero pills, gradient headlines, blurred orbs and invented testimonials. It has no way to tell exhibiting from doing. Neither would a person glancing at a screenshot, which is rather the point of the warning above.</p>
         <p>It is left standing. Special-casing the page would mean a detector that lies about one address, and the false positive teaches more than the fix would.</p>
-        <p><a href="./">Run something through the detector &rarr;</a> or read <a href="<?= h(VCD_REPO_URL) ?>/blob/main/docs/SIGNALS.md" rel="noopener">the full catalogue of <?= count(Catalog::all()) ?> signals &rarr;</a></p>
+        <p><a href="./">Run something through the detector &rarr;</a> or read <a href="catalogue.php">the full catalogue of <?= h(Num::exact(count(Catalog::all()))) ?> signals &rarr;</a></p>
       </div>
     </section>
 
@@ -296,6 +314,7 @@ $signs = array(
     </div>
     <div class="links">
       <a href="./">Analyse something &rarr;</a>
+      <a href="catalogue.php">The signal catalogue &rarr;</a>
       <a href="<?= h(VCD_REPO_URL) ?>" rel="noopener">Source and issue tracker &rarr;</a>
       <a href="verify.php">Verify a certificate &rarr;</a>
       <span class="studio">A Landfall studio product</span>

@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__) . '/lib/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/Fetcher.php';
 require_once dirname(__DIR__) . '/lib/Crawler.php';
+require_once dirname(__DIR__) . '/lib/RepoAnalyzer.php';
 require_once dirname(__DIR__) . '/lib/UsageLog.php';
 
 header('X-Content-Type-Options: nosniff');
@@ -101,6 +102,35 @@ if ($mode === 'url') {
     $analyzer = new CodeAnalyzer($code);
     $result = $analyzer->analyze()->toArray();
 
+} elseif ($mode === 'repo') {
+    // A repository read is several requests to GitHub, spent from an hourly
+    // allowance this whole installation shares. Both budgets apply: the
+    // per-visitor one below, and the concurrency slot, because these are
+    // outbound fetches like any other and hold a worker while they run.
+    if (!vcd_rate_limit('repo', VCD_LIMIT_REPO[0], VCD_LIMIT_REPO[1])) {
+        vcd_fail(sprintf(
+            'Repository reads are limited to %d every %d minutes: each one spends from an hourly GitHub allowance the whole site shares.',
+            VCD_LIMIT_REPO[0], (int) round(VCD_LIMIT_REPO[1] / 60)
+        ), 429);
+    }
+
+    $slot = vcd_acquire_fetch_slot();
+    if ($slot === null) {
+        vcd_fail('This tool is busy reading other things right now. Try again in a few seconds.', 503);
+    }
+    if ($slot !== '') {
+        register_shutdown_function('vcd_release_fetch_slot', $slot);
+    }
+
+    try {
+        list($owner, $name) = GitHub::parse(isset($_POST['repo']) ? (string) $_POST['repo'] : '');
+        $result = (new RepoAnalyzer(new GitHub($owner, $name)))->analyze()->toArray();
+    } catch (RepoError $e) {
+        vcd_fail($e->getMessage(), 400);
+    } catch (FetchError $e) {
+        vcd_fail($e->getMessage(), 400);
+    }
+
 } elseif ($mode === 'git') {
     if (!vcd_rate_limit('git', VCD_LIMIT_GIT[0], VCD_LIMIT_GIT[1])) {
         vcd_fail('Slow down a little.', 429);
@@ -120,14 +150,14 @@ if ($mode === 'url') {
     $result = $analyzer->analyze()->toArray();
 
 } else {
-    vcd_fail('Unknown mode. Use "url", "code" or "git".');
+    vcd_fail('Unknown mode. Use "url", "repo", "code" or "git".');
 }
 
 // If the operator has configured a database (see docs/ADMIN.md), this
-// records the mode, and for url/site modes the target address — never
-// pasted code, a git log, or the fetched page content, none of which are
-// ever written down. See lib/UsageLog.php.
-$target = in_array($result['mode'], array('url', 'site'), true) ? $result['target'] : null;
+// records the mode, and for the url, site and repo modes the address that was
+// read — never pasted code, a git log, or the fetched page content, none of
+// which are ever written down. See lib/UsageLog.php.
+$target = in_array($result['mode'], array('url', 'site', 'repo'), true) ? $result['target'] : null;
 UsageLog::record('ui', null, $result['mode'], $target);
 
 // The certificate token is a signature over the result, computed here and

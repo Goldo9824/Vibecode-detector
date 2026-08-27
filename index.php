@@ -39,7 +39,7 @@ VisitLog::record('/');
       'applicationCategory' => 'DeveloperApplication',
       'operatingSystem'     => 'Any',
       'browserRequirements' => 'Requires JavaScript',
-      'description' => 'Reads a live page, pasted source, or a git log for the tells of AI generation and returns a percentage with the evidence behind it.',
+      'description' => 'Reads a live page, a public GitHub repository, pasted source, or a git log for the tells of AI generation and returns a percentage with the evidence behind it.',
       'isAccessibleForFree' => true,
       'offers'      => array('@type' => 'Offer', 'price' => '0', 'priceCurrency' => 'EUR'),
       'license'     => VCD_REPO_URL . '/blob/main/LICENSE',
@@ -66,7 +66,7 @@ VisitLog::record('/');
           'name'  => 'What can it look at?',
           'acceptedAnswer' => array(
             '@type' => 'Answer',
-            'text'  => 'A live page by URL, a whole site by crawling it, source code you paste in, or a git log. Each one is read for a different set of tells.',
+            'text'  => 'A live page by URL, a whole site by crawling it, a public GitHub repository by name, source code you paste in, or a git log. Each one is read for a different set of tells.',
           ),
         ),
         array(
@@ -74,7 +74,7 @@ VisitLog::record('/');
           'name'  => 'Is anything stored about what I check?',
           'acceptedAnswer' => array(
             '@type' => 'Answer',
-            'text'  => 'Pasted code and pasted git logs are never written down anywhere. With no database configured, nothing at all is stored. An operator who configures one records the mode of each analysis and, for the URL modes, the address checked — never who asked.',
+            'text'  => 'Pasted code and pasted git logs are never written down anywhere. With no database configured, nothing at all is stored. An operator who configures one records the mode of each analysis and, for the URL and repository modes, the address or repository name checked — never who asked.',
           ),
         ),
       ),
@@ -94,6 +94,7 @@ VisitLog::record('/');
     </a>
     <nav>
       <a href="signs.php">Visual signs</a>
+      <a href="catalogue.php">Signals</a>
       <a href="#method">Method</a>
       <a href="#limits">Limits</a>
       <a href="#provenance">Provenance</a>
@@ -108,13 +109,14 @@ VisitLog::record('/');
 
     <section class="hero">
       <h1>Was this written by a person, or generated?</h1>
-      <p>Give it a URL, paste some code, or paste a <code>git log</code>. It reads the same tells a reviewer would (builder fingerprints, commit patterns, comment habits, error handling, the shape of the copy) and returns a percentage with every piece of evidence it used.</p>
+      <p>Give it a URL, a public GitHub repository, some code, or a <code>git log</code>. It reads the same tells a reviewer would (builder fingerprints, commit patterns, comment habits, error handling, the shape of the copy) and returns a percentage with every piece of evidence it used.</p>
       <p class="disclaimer">It will not prove anything. Automated detection of AI-generated source performs near chance in peer-reviewed benchmarks, so this shows its working and expects you to read it. Do not accuse anyone of anything on the strength of a number. <a href="#provenance">This site is half vibecoded too</a>, and its own detector cannot tell which half.</p>
     </section>
 
     <div class="panel" id="analyzer">
       <div class="tabs" role="tablist" aria-label="What to analyse">
         <button class="tab" role="tab" id="tab-url" aria-controls="panel-url" aria-selected="true" type="button">Live page</button>
+        <button class="tab" role="tab" id="tab-repo" aria-controls="panel-repo" aria-selected="false" type="button">GitHub repo</button>
         <button class="tab" role="tab" id="tab-code" aria-controls="panel-code" aria-selected="false" type="button">Paste code</button>
         <button class="tab" role="tab" id="tab-git" aria-controls="panel-git" aria-selected="false" type="button">Git history</button>
       </div>
@@ -132,6 +134,18 @@ VisitLog::record('/');
             <span class="spinner" id="spin-url" hidden>reading&hellip;</span>
           </div>
           <p class="hint">Fetches the page and up to four of its own stylesheets and scripts. Nothing else is requested, and the page itself is never stored. Whole-site reads honour robots.txt, stop at fifty pages, and stop sooner if the site is slow &mdash; the report says how many it managed.</p>
+        </form>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-repo" aria-labelledby="tab-repo" hidden>
+        <form id="form-repo" novalidate>
+          <label class="field" for="repo">A public GitHub repository</label>
+          <input type="text" id="repo" name="repo" placeholder="owner/name, or a github.com link" autocomplete="off" spellcheck="false">
+          <div class="actions">
+            <button class="btn" type="submit">Read the repository</button>
+            <span class="spinner" id="spin-repo" hidden>reading&hellip;</span>
+          </div>
+          <p class="hint">Reads three things at once: the commit history, the file tree, and a few source files in full. This is the strongest reading available here &mdash; the history tab needs you to have the repository checked out, and this does not. Public repositories only; nothing private is reachable and nothing is stored but the name.</p>
         </form>
       </div>
 
@@ -189,7 +203,7 @@ VisitLog::record('/');
         </div>
 
         <div class="pages" id="r-pages" hidden>
-          <p class="eyebrow">Pages read</p>
+          <p class="eyebrow" id="r-pages-title">Pages read</p>
           <ol id="r-pages-list"></ol>
         </div>
 
@@ -221,7 +235,8 @@ VisitLog::record('/');
         <h3>Evidence is not equal, so it is not weighted equally</h3>
         <ol class="ladder">
           <li><strong>Platform fingerprints</strong><span>A builder's own runtime, badge, upload path or generator tag. This is a positive identification and it settles the question by itself.</span></li>
-          <li><strong>Repository history</strong><span>One enormous opening commit, hundreds of lines in minutes, a trail of one-line fixes behind it. The hardest thing to fake after the fact, and the reason the third tab exists.</span></li>
+          <li><strong>Repository history</strong><span>One enormous opening commit, hundreds of lines in minutes, a trail of one-line fixes behind it. The hardest thing to fake after the fact, and the reason two of these tabs exist.</span></li>
+          <li><strong>Repository contents</strong><span>What is in the tree rather than what the commits did to it: an assistant's own configuration file committed with the code, a pile of session summaries, a <code>.env</code> in version control, nothing tested.</span></li>
           <li><strong>Structural signals</strong><span>Uniform comment density, the same problem solved four ways, fully-built code wired to nothing. Hard to produce by accident, hard to fake.</span></li>
           <li><strong>Code-style tells</strong><span>What-not-why comments, blanket try/catch, swallowed exceptions, tests that assert nothing, emoji in comments.</span></li>
           <li><strong>Content and security</strong><span>Statistically generic testimonials, a database key shipped to the browser, a login the browser grants itself. The security profile decays slowest of all the tells.</span></li>
@@ -239,7 +254,7 @@ VisitLog::record('/');
           <li>Repetition is bounded. A count can lift a signal by at most half again, it works inside the category ceilings rather than around them, and it never applies to a fingerprint.</li>
         </ul>
 
-        <p>The full catalogue, with every signal, its weight, and why it earns that weight, is in <a href="<?= h(VCD_REPO_URL) ?>/blob/main/docs/SIGNALS.md" rel="noopener">docs/SIGNALS.md</a>.</p>
+        <p>The full catalogue &mdash; every signal, its weight, and why it earns that weight &mdash; is <a href="catalogue.php">on this site, at /catalogue</a>. It is generated from the same file the scorer reads, so it cannot describe a weight the code does not use.</p>
       </div>
     </section>
 
@@ -258,7 +273,8 @@ VisitLog::record('/');
         <p>Renaming variables, stripping comments or running the file through a formatter erases most of what this reads. Minified bundles are excluded from code-level analysis for exactly this reason: the signal has already been normalised away.</p>
 
         <h3>What it can only see if you show it</h3>
-        <p>The strongest signal available is repository history: one enormous opening commit followed by a trail of micro-fixes. That lives in git, not in a served page, so the URL tab cannot reach it &mdash; you have to paste a <code>git log</code> into the third tab, which means having the repository in the first place. When you do have it, start there and treat the other two tabs as corroboration.</p>
+        <p>The strongest signal available is repository history: one enormous opening commit followed by a trail of micro-fixes. That lives in git, not in a served page, so the URL tab cannot reach it. If the project is public on GitHub, the repository tab reaches it for you; if it is not, you have to paste a <code>git log</code>, which means having the repository in the first place. Either way, start there and treat the page tabs as corroboration.</p>
+        <p>The repository tab reads a sample and says so. It takes the newest and oldest hundred commits, the file tree, and a few source files in full &mdash; enough to see the shape of the thing, not enough to claim it has read the codebase. A habit missing from three files is not a habit missing from a project.</p>
         <p>Even then it reads the shape of the work rather than who did it. A developer who commits carefully while an agent writes the code produces a history that looks entirely human, because in every respect that git records, it is.</p>
 
         <h3>The better question</h3>
@@ -302,7 +318,7 @@ VisitLog::record('/');
       <a href="<?= h(VCD_REPO_URL) ?>" rel="noopener">Source and issue tracker &rarr;</a>
       <a href="<?= h(VCD_REPO_URL) ?>/issues/new?template=false_positive.yml" rel="noopener">Report a wrong reading &rarr;</a>
       <a href="signs.php">The visual field guide &rarr;</a>
-      <a href="<?= h(VCD_REPO_URL) ?>/blob/main/docs/SIGNALS.md" rel="noopener">The signal catalogue &rarr;</a>
+      <a href="catalogue.php">The signal catalogue &rarr;</a>
       <a href="verify.php">Verify a certificate &rarr;</a>
       <span class="studio">A Landfall studio product</span>
     </div>

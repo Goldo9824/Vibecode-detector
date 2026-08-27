@@ -17,28 +17,16 @@ require_once dirname(__DIR__) . '/lib/Catalog.php';
 $check = in_array('--check', array_slice($argv, 1), true);
 $path  = dirname(__DIR__) . '/docs/SIGNALS.md';
 
-$order = array(
-    Catalog::CAT_FINGERPRINT,
-    Catalog::CAT_HISTORY,
-    Catalog::CAT_SITEWIDE,
-    Catalog::CAT_STRUCTURE,
-    Catalog::CAT_CODE,
-    Catalog::CAT_CONTENT,
-    Catalog::CAT_SECURITY,
-    Catalog::CAT_AESTHETIC,
-    Catalog::CAT_PROVENANCE,
+// Both the order and the per-category prose live in the catalogue itself, so
+// that this file and the page at /catalogue cannot describe the same evidence
+// differently. Markdown gets its emphasis added back on the way out.
+$order  = Catalog::order();
+$blurbs = Catalog::blurbs();
+$blurbs[Catalog::CAT_AESTHETIC] = str_replace(
+    'capped as a group', '**capped as a group**', $blurbs[Catalog::CAT_AESTHETIC]
 );
-
-$blurbs = array(
-    Catalog::CAT_FINGERPRINT => 'A builder naming itself. These are positive identifications rather than inferences, so one is enough to settle the question. Their absence means nothing whatsoever: agentic editors write into an ordinary repository and leave none of this behind.',
-    Catalog::CAT_HISTORY     => 'How the code arrived, rather than what it looks like. The strongest evidence available short of a fingerprint, and the hardest to fake after the fact: a convincing forged history means inventing plausible timestamps, authors, mistakes and reverts for every commit. Read from a pasted `git log`.',
-    Catalog::CAT_SITEWIDE    => 'What only becomes visible once several pages have been read together. A single page cannot tell you whether a site was built in one pass or accreted over years; ten pages usually can. Available in whole-site mode.',
-    Catalog::CAT_STRUCTURE   => 'The shape of the whole rather than the style of the line. These are the hardest signals to produce by accident and the hardest to remove by editing, which is why they carry the most weight after fingerprints.',
-    Catalog::CAT_CODE        => 'Line-level habits. Individually weak and easy to mask by renaming or reformatting; convincing only when four or more of them converge across a file.',
-    Catalog::CAT_CONTENT     => 'What the page says, as opposed to how it is built. Placeholder people, house-voice marketing copy and navigation that goes nowhere.',
-    Catalog::CAT_SECURITY    => 'The most durable family. Syntax correctness in generated code has climbed past 95% while security pass rates have stayed near 55%, so these signals decay far more slowly than the stylistic ones and will outlive most of this document.',
-    Catalog::CAT_AESTHETIC   => 'How it looks. Weak by construction and **capped as a group**, because a purple gradient and a default icon set are a reason to look closer and never a conclusion.',
-    Catalog::CAT_PROVENANCE  => 'Evidence of a human having been present: outside context a generator has no access to, inconsistency, accretion, mess. These subtract from the score and are weighted as heavily as the signals pointing the other way.',
+$blurbs[Catalog::CAT_HISTORY] = str_replace(
+    'a pasted git log', 'a pasted `git log`', $blurbs[Catalog::CAT_HISTORY]
 );
 
 $all = Catalog::all();

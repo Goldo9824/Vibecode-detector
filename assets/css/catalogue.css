@@ -1,0 +1,122 @@
+/*
+ * The signal catalogue.
+ *
+ * A reference page, so it is built to be scanned rather than read: the weight
+ * and the identifier are aligned in the same place on every row, and nothing
+ * moves, animates or hides itself behind a control. The only colour is the
+ * one the rest of the site uses, and it is used for exactly one thing here —
+ * telling a signal that raises the score from one that lowers it.
+ */
+
+.cat-index {
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  padding: 1.5rem 0;
+  margin-bottom: 1rem;
+}
+.cat-index ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: .3rem 1.5rem;
+}
+.cat-index a {
+  display: block;
+  padding: .2rem 0;
+  font-size: .9375rem;
+  text-decoration: none;
+  color: var(--ink-2);
+}
+.cat-index a:hover { color: var(--red); }
+.cat-index span {
+  display: inline-block;
+  min-width: 1.9rem;
+  font-family: var(--mono);
+  font-size: .6875rem;
+  color: var(--ink-3);
+}
+
+.cat {
+  padding: clamp(2rem, 5vw, 3rem) 0 1rem;
+  border-top: 1px solid var(--rule);
+  scroll-margin-top: 1rem;
+}
+.cat:first-of-type { border-top: 0; }
+
+.cat-head { max-width: 44rem; }
+.cat-head h2 { font-size: 1.5rem; margin-bottom: .75rem; }
+.cat-blurb { color: var(--ink-2); margin: 0 0 .6rem; }
+.cat-cap {
+  margin: 0;
+  font-size: .875rem;
+  color: var(--ink-3);
+  border-left: 2px solid var(--rule-2);
+  padding-left: .75rem;
+}
+.cat-cap strong { color: var(--ink-2); font-weight: 600; }
+
+.sig-list {
+  list-style: none;
+  margin: 1.75rem 0 0;
+  padding: 0;
+}
+.sig {
+  padding: 1rem 0;
+  border-top: 1px solid var(--rule);
+  scroll-margin-top: 1rem;
+}
+.sig:last-child { border-bottom: 1px solid var(--rule); }
+.sig:target { background: var(--red-soft); box-shadow: 0 0 0 .75rem var(--red-soft); }
+
+.sig-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: .35rem .85rem;
+  margin-bottom: .35rem;
+}
+.sig-head h3 {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+.sig-id {
+  grid-row: 1;
+  font-family: var(--mono);
+  font-size: .75rem;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+.sig-weight {
+  grid-row: 1;
+  font-family: var(--mono);
+  font-size: .8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--red);
+}
+.sig.is-human .sig-weight { color: var(--green); }
+.sig-strength {
+  grid-row: 1;
+  font-family: var(--mono);
+  font-size: .6875rem;
+  letter-spacing: .04em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+}
+.sig p {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--ink-2);
+  font-size: .9375rem;
+}
+
+@media (min-width: 46rem) {
+  .sig-head { grid-template-columns: minmax(0, 1fr) 5.5rem 5rem; }
+  .sig-head h3 { grid-column: 1; grid-row: 1; }
+  .sig-id { grid-column: 1; grid-row: 2; }
+  .sig-weight { grid-column: 2; grid-row: 1; text-align: right; }
+  .sig-strength { grid-column: 3; grid-row: 1; text-align: right; }
+}

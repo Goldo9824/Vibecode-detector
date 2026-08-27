@@ -128,10 +128,11 @@ foreach ($all as $signal) {
     </a>
     <nav>
       <a href="./">Analyse something</a>
+      <a href="method.php">Method</a>
       <a href="signs.php">Visual signs</a>
-      <a href="./#method">Method</a>
-      <a href="./#limits">Limits</a>
+      <a href="catalogue.php" aria-current="page">Signals</a>
       <a href="verify.php">Verify</a>
+      <a href="<?= h(VCD_REPO_URL) ?>" rel="noopener">Source</a>
     </nav>
   </div>
 </header>
@@ -242,7 +243,7 @@ foreach ($all as $signal) {
   <div class="shell colophon-grid">
     <div>
       <p><strong>Vibe Code Detector</strong> is free, open source, and keeps nothing.</p>
-      <p><a href="./#provenance">Half of this site was vibecoded</a>, and it scores 73% on its own detector.</p>
+      <p><a href="method.php#provenance">Half of this site was vibecoded</a>, and its own detector cannot tell which half.</p>
     </div>
     <div class="links">
       <a href="./">Analyse something &rarr;</a>

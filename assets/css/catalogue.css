@@ -19,7 +19,7 @@
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
   gap: .3rem 1.5rem;
 }
 .cat-index a {
@@ -68,7 +68,7 @@
   scroll-margin-top: 1rem;
 }
 .sig:last-child { border-bottom: 1px solid var(--rule); }
-.sig:target { background: var(--red-soft); box-shadow: 0 0 0 .75rem var(--red-soft); }
+.sig:target { background: var(--red-soft); box-shadow: 0 0 0 .75rem var(--red-soft), inset 2px 0 0 var(--red); }
 
 .sig-head {
   display: grid;

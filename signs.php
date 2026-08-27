@@ -226,9 +226,10 @@ $signs = array(
     </a>
     <nav>
       <a href="./">Analyse something</a>
+      <a href="method.php">Method</a>
+      <a href="signs.php" aria-current="page">Visual signs</a>
       <a href="catalogue.php">Signals</a>
-      <a href="./#method">Method</a>
-      <a href="./#limits">Limits</a>
+      <a href="verify.php">Verify</a>
       <a href="<?= h(VCD_REPO_URL) ?>" rel="noopener">Source</a>
     </nav>
   </div>
@@ -288,7 +289,7 @@ $signs = array(
         <p>That is why the detector caps this whole family. Visual signs tell you where to look; they do not tell you what you found. The things that actually carry weight are further down: a builder's fingerprint in the markup, the shape of the repository history, whether the same problem got solved three different ways.</p>
 
         <h3>This page fails its own test</h3>
-        <p>Run this page through the detector and it comes back <strong id="signs-score">83%, likely AI-generated</strong> &mdash; because it is full of hero pills, gradient headlines, blurred orbs and invented testimonials. It has no way to tell exhibiting from doing. Neither would a person glancing at a screenshot, which is rather the point of the warning above.</p>
+        <p>Run this page through the detector and it comes back near the top of the scale &mdash; because it is full of hero pills, gradient headlines, neon, blurred orbs and invented testimonials, every one of them put there deliberately. It has no way to tell exhibiting from doing. Neither would a person glancing at a screenshot, which is rather the point of the warning above.</p>
         <p>It is left standing. Special-casing the page would mean a detector that lies about one address, and the false positive teaches more than the fix would.</p>
         <p><a href="./">Run something through the detector &rarr;</a> or read <a href="catalogue.php">the full catalogue of <?= h(Num::exact(count(Catalog::all()))) ?> signals &rarr;</a></p>
       </div>
@@ -310,7 +311,7 @@ $signs = array(
   <div class="shell colophon-grid">
     <div>
       <p><strong>Vibe Code Detector</strong> is free, open source, and keeps nothing.</p>
-      <p><a href="./#provenance">Half of this site was vibecoded</a>, and it scores 55% on its own detector.</p>
+      <p><a href="method.php#provenance">Half of this site was vibecoded</a>, and its own detector cannot tell which half.</p>
     </div>
     <div class="links">
       <a href="./">Analyse something &rarr;</a>

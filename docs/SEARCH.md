@@ -28,18 +28,21 @@ can fetch.
 
 ## Structured data
 
-Three blocks on the front page, four on the field guide, three on the
-catalogue, all of them `application/ld+json`:
+Two blocks on the front page, four on the method page, four on the field
+guide, three on the catalogue, all of them `application/ld+json`:
 
 - **WebSite**, on every page, so a result carries the site's name rather than
   one guessed out of the domain.
 - **WebApplication** on the front page: what it is, that it is free, what it
   runs on, where the source is.
-- **FAQPage** on the front page: the three questions the page is actually
-  asked, answered in the words it already answers them in further down. In
-  particular the first answer is the disclaimer, not a sales line — a rich
-  result that oversells a detector is the one thing this site must not
-  produce.
+- **FAQPage** on `method.php`, with **Article** and **BreadcrumbList**: the
+  three questions the tool is actually asked, answered in the words the page
+  already answers them in. In particular the first answer is the disclaimer,
+  not a sales line — a rich result that oversells a detector is the one thing
+  this site must not produce. It sits here rather than on the front page
+  because that is where the answers are: FAQ markup describing content a
+  visitor cannot see on the page is the kind of thing that gets structured
+  data ignored altogether, and it would deserve to be.
 - **Article**, **ItemList** and **BreadcrumbList** on `signs.php`. The list is
   built from the `$signs` array that renders the page, so a sign added to the
   guide cannot go missing from the markup.
@@ -59,7 +62,8 @@ rather than a static file for the same reason as above: a committed
 no `mod_rewrite` there is simply no sitemap, which costs nothing a crawler
 cannot work out by following links.
 
-It lists three pages: the front page, the field guide and the catalogue. The
+It lists four pages: the front page, the method page, the field guide and the
+catalogue. The
 verify form has one useful state and a different URL per certificate; the admin
 panel is gated; the API is for callers who were given a key.
 

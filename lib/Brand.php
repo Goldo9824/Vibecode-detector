@@ -19,8 +19,20 @@ final class Brand
 {
     const INK    = array(23, 20, 15);
     const PAPER  = array(251, 249, 244);
-    /** The website's warmer ground, for artwork that has to sit next to it. */
-    const PAPER_WEB = array(246, 242, 233);
+    /*
+     * Two palettes, because there are two grounds.
+     *
+     * INK/PAPER/RED are the printed certificate's: dark ink on light stock,
+     * which is what a document handed to a third party has to be. The *_WEB
+     * pair is the site's, which is dark. Artwork that sits next to the site —
+     * the favicon, the social card — has to use the second set or it renders
+     * dark on dark and reads as a different site's mark.
+     */
+    const PAPER_WEB = array(11, 11, 12);
+    const INK_WEB   = array(244, 244, 245);
+    const RED_WEB   = array(255, 77, 46);
+    const GREY_WEB  = array(117, 116, 125);
+    const RULE_WEB  = array(38, 38, 43);
     const RED    = array(184, 64, 46);
     const GREEN  = array(63, 107, 74);
     const AMBER  = array(176, 125, 26);

@@ -54,6 +54,11 @@
     var button = form.querySelector('button[type="submit"]');
     if (button) button.disabled = on;
     spinner.hidden = !on;
+    // The run button shows one thing at a time: an arrow, or that it is
+    // running. Toggled here rather than in CSS because :has() is younger than
+    // the browsers this has to work in.
+    var mark = button && button.querySelector('.go-mark');
+    if (mark) mark.hidden = on;
   }
 
   // Fetching a slow site can legitimately take a while, but not forever. Without
@@ -149,6 +154,35 @@
     body.append('log', value);
     send(this, $('spin-git'), body);
   });
+
+  // Two things worth pointing the tool at, one of which is this project. They
+  // fill the field and run it, so the claim on the front page is one click from
+  // being checked rather than something to take on trust. Revealed only now,
+  // because a button that fills a field and submits it is a lie without this
+  // script to do either.
+  var tries = $('tries');
+  if (tries) {
+    var byMode = { url: { tab: 0, input: 'url' }, repo: { tab: 1, input: 'repo' } };
+    tries.addEventListener('click', function (e) {
+      var button = e.target.closest ? e.target.closest('.try') : null;
+      if (!button) return;
+      var mode = byMode[button.getAttribute('data-mode')];
+      if (!mode) return;
+      selectTab(mode.tab);
+      var field = $(mode.input);
+      field.value = button.getAttribute('data-value') || '';
+      field.focus();
+      var form = field.form;
+      if (form) {
+        if (typeof form.requestSubmit === 'function') {
+          form.requestSubmit();
+        } else {
+          form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        }
+      }
+    });
+    tries.hidden = false;
+  }
 
   // Click the command to select it — it is there to be copied.
   var command = $('git-command');

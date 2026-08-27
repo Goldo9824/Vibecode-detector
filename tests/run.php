@@ -2564,9 +2564,12 @@ ok(substr_count($page, 'id="analyzer"') === 1, 'the front page still carries the
 // Prose creeps back one helpful sentence at a time, so the shape is asserted
 // rather than trusted: nothing between the headline and the tool, and the
 // per-field hints stay hints.
-preg_match('~<section class="hero[^"]*">(.*?)</section>~s', $page, $heroHtml);
-ok(isset($heroHtml[1]) && strpos($heroHtml[1], '<p') === false,
+// The headline and the mode selector are adjacent: no paragraph may open
+// between them, which is where explanatory prose always tries to land.
+preg_match('~<h1 class="console-title">.*?</h1>(.*?)<div class="segmented"~s', $page, $betweenHtml);
+ok(isset($betweenHtml[1]) && strpos($betweenHtml[1], '<p') === false,
    'nothing sits between the headline and the tool');
+ok(substr_count($page, 'class="console"') === 1, 'the front page is one console');
 
 preg_match_all('~<p class="hint[^"]*">(.*?)</p>~s', $page, $hints);
 $longest = 0;

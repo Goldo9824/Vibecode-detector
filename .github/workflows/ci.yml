@@ -116,6 +116,22 @@ jobs:
           done
           echo "front page OK ($(echo "$home" | wc -c) bytes), method OK ($(echo "$method" | wc -c) bytes)"
 
+      - name: Auto mode works out what it was given
+        run: |
+          check() {
+            got=$(curl -s -X POST http://127.0.0.1:8080/api/analyze.php \
+                    -F mode=auto -F "input=<$1" \
+                  | sed -n 's/.*"mode":"\([a-z]*\)".*/\1/p')
+            if [ "$got" != "$2" ]; then
+              echo "::error::auto read $1 as '$got', wanted '$2'"; exit 1
+            fi
+            echo "auto -> $2 OK"
+          }
+          printf 'function x() { return 1 }\n' > /tmp/probe-code.txt
+          printf 'commit 9f8e7d6c5b4a3210\nAuthor: D <d@e.com>\nDate:   Tue Jan 14 11:02:03 2025 +0000\n\n    tidy\n' > /tmp/probe-git.txt
+          check /tmp/probe-code.txt code
+          check /tmp/probe-git.txt git
+
       - name: The signal catalogue renders every signal
         run: |
           body=$(curl -sf http://127.0.0.1:8080/catalogue.php)

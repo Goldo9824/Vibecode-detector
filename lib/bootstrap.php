@@ -72,6 +72,7 @@ define('VCD_SLOT_TTL', 40);
 require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/ApiKeys.php';
 require_once __DIR__ . '/Catalog.php';
+require_once __DIR__ . '/Subject.php';
 require_once __DIR__ . '/Report.php';
 require_once __DIR__ . '/Text.php';
 require_once __DIR__ . '/CodeAnalyzer.php';

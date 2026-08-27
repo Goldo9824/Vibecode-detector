@@ -13,8 +13,10 @@
  *     the labels, the headings. A proportional face only where there are
  *     paragraphs to read. No serif anywhere on the site — it survives in the
  *     PDF certificate, which is a printed document and a different problem.
- *   - Square corners and hairline rules. No shadows at all: depth comes from
- *     surface value and a 1px line, the way it does on a panel meter.
+ *   - Softly rounded corners and hairline rules. No shadows at all: depth
+ *     comes from surface value and a 1px line, the way it does on a panel
+ *     meter. The radius is deliberately modest — enough to look made rather
+ *     than drawn, well short of the pill this thing flags on other people.
  *   - No gradient anywhere on this site, on any element, ever. The tool has an
  *     opinion about gradients.
  *   - One accent, and it means "this fired" — never decoration.
@@ -54,8 +56,10 @@
 
   --measure: 38rem;
   --gutter: clamp(1rem, 3.5vw, 2.5rem);
-  --radius: 0;
-  --radius-sm: 0;
+  /* Softened, but nowhere near the component-kit default: 10px reads
+     considered, 24px reads scaffolded, and 0 read like a spreadsheet. */
+  --radius: 10px;
+  --radius-sm: 7px;
 }
 
 @media (prefers-color-scheme: light) {
@@ -149,7 +153,7 @@ h1, h2, h3 {
 /* ------------------------------------------------------------------- header */
 
 /*
- * A rail across the top: opaque, square, hairline under it. Deliberately not
+ * A rail across the top: opaque, full-bleed, hairline under it. Deliberately not
  * the detached pill with a blur behind it — this site would be flagged by its
  * own detector for wearing one, and it would deserve it.
  */
@@ -209,6 +213,7 @@ h1, h2, h3 {
   letter-spacing: .08em;
   text-transform: uppercase;
   padding: .5rem .75rem;
+  border-radius: var(--radius-sm);
   transition: color .1s linear, background .1s linear;
 }
 .masthead nav a:hover { color: var(--ink); background: var(--paper-3); }
@@ -255,80 +260,305 @@ h1, h2, h3 {
 }
 .hero .disclaimer strong { color: var(--ink); font-weight: 600; }
 
-/* A row of onward links under the tool, so the front page can be the tool
-   without the rest of the site becoming unreachable from it. */
-.signposts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-  gap: 0;
-  margin-top: 3rem;
+/*
+ * The console.
+ *
+ * The front page is one composition on one screen: the question, the mode, the
+ * field, and a couple of things worth pointing it at. Everything that used to
+ * explain itself here is on /method, one link away in the rail.
+ *
+ * It borrows a shape that has become common for tools like this — centred,
+ * one big field, examples underneath — and refuses the styling that usually
+ * comes with it. No pills, no soft card floating on a colour field, no drop
+ * shadow: square edges, hairline rules, monospace, and the accent used only
+ * where something is selected or about to run. Familiar to use, and not
+ * mistakable for anything else.
+ */
+.console {
+  /* Enough of the viewport that the tool is the screen, with the rail above
+     it and the caveat below still in view on a laptop. */
+  min-height: calc(100dvh - 14rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(1.5rem, 5vw, 3rem) 0;
+}
+
+.console-title {
+  font-size: clamp(1.75rem, 5.2vw, 3.5rem);
+  font-weight: 600;
+  letter-spacing: -.055em;
+  line-height: 1.05;
+  text-align: center;
+  max-width: 20ch;
+  margin: 0 auto clamp(1.75rem, 4vw, 2.75rem);
+  text-wrap: balance;
+}
+
+/* ------------------------------------------------------ the mode selector */
+
+/*
+ * A row of hard-edged cells rather than a floating pill. The selected one is
+ * filled in the accent, so which mode is armed is the single most saturated
+ * thing on the page — which is what it should be.
+ */
+.segmented {
+  display: flex;
+  margin: 0 auto 1rem;
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius);
+  width: max-content;
+  max-width: 100%;
+  overflow: hidden;
+  scrollbar-width: none;
+}
+.segmented::-webkit-scrollbar { display: none; }
+
+.segmented .tab {
+  appearance: none;
+  border: 0;
+  border-right: 1px solid var(--rule-2);
+  background: transparent;
+  padding: .6rem 1.1rem;
+  font: inherit;
+  font-size: .6875rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .1s linear, background .1s linear;
+}
+.segmented .tab:last-child { border-right: 0; }
+.segmented .tab:hover { color: var(--ink); background: var(--paper-3); }
+.segmented .tab[aria-selected="true"] {
+  background: var(--red);
+  color: var(--paper);
+  font-weight: 600;
+}
+
+/* -------------------------------------------------------------- the field */
+
+.tabpanel { padding: 0; }
+.tabpanel[hidden] { display: none; }
+
+/*
+ * Field and run button share one bordered box, so the pair reads as a single
+ * control. The border is the whole chrome — no fill, no shadow, no radius.
+ */
+.entry {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius);
+  background: var(--paper-2);
+  overflow: hidden;
+  transition: border-color .1s linear;
+}
+.entry:focus-within { border-color: var(--red); }
+
+.entry input,
+.entry textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 1rem;
+  line-height: 1.5;
+  padding: 1.15rem 1.25rem;
+}
+.entry input:focus,
+.entry textarea:focus { outline: none; box-shadow: none; }
+.entry input::placeholder,
+.entry textarea::placeholder { color: var(--ink-3); }
+
+.entry-block { flex-direction: column; align-items: stretch; }
+.entry-block textarea {
+  min-height: 11rem;
+  resize: vertical;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+  font-size: .875rem;
+}
+.entry-block .entry-foot {
+  display: flex;
+  justify-content: flex-end;
   border-top: 1px solid var(--rule);
-  border-left: 1px solid var(--rule);
 }
-.signposts a {
-  color: var(--ink-2);
-  text-decoration: none;
+
+/* The run button: a square of accent, the same height as the field it ends. */
+.go {
+  appearance: none;
+  flex: none;
+  align-self: stretch;
+  width: 3.75rem;
+  border: 0;
+  border-left: 1px solid var(--rule-2);
+  /* The box it closes is already rounded and clips it, so a radius of its own
+     only shows as a notch in the corner. */
+  border-radius: 0;
+  background: var(--red);
+  color: var(--paper);
+  font: inherit;
+  font-size: 1.125rem;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background .1s linear;
+}
+.go:hover { background: var(--red-2); }
+.go[disabled] { opacity: .45; cursor: progress; }
+.entry-block .go {
+  align-self: auto;
+  height: 3rem;
+  border-left: 0;
+}
+
+/* Arrow or running, never both. app.js hides whichever is not current. */
+.go .spinner { font-size: 1.125rem; letter-spacing: .05em; color: var(--paper); text-transform: none; }
+.go .spinner[hidden], .go .go-mark[hidden] { display: none; }
+
+/*
+ * Auto mode's field: one box that starts a line tall and grows with the paste,
+ * because the same control has to take an address and four hundred lines of a
+ * git log without looking wrong holding either.
+ */
+.entry-auto { align-items: stretch; }
+.entry-auto textarea {
+  resize: none;
+  overflow-y: auto;
+  min-height: 3.5rem;
+  max-height: 20rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 1.1rem 1.25rem;
+}
+
+/*
+ * What it thinks you pasted, live.
+ *
+ * A guess, said as one — the server classifies again on submit and the report
+ * says which way it went. Reserving the line's height whether or not there is
+ * a guess in it stops the field jumping the moment somebody starts typing.
+ */
+.reads {
+  margin: .85rem 0 0;
+  min-height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  font-size: .75rem;
+}
+.reads-idle { color: var(--ink-3); font-family: var(--sans); }
+.reads-label {
+  font-size: .625rem;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.reads-value {
+  color: var(--ink);
+  border-bottom: 1px solid var(--red);
+  padding-bottom: .1rem;
+}
+
+/* -------------------------------------------------------- under the field */
+
+/* Whole-site mode, as a switch rather than a paragraph with a box round it. */
+.switch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .6rem;
+  margin: 1rem 0 0;
+  font-size: .75rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.switch:hover { color: var(--ink-2); }
+.switch input { accent-color: var(--red); margin: 0; }
+
+.hint {
+  font-family: var(--sans);
   font-size: .8125rem;
-  padding: .9rem 1rem;
-  border-right: 1px solid var(--rule);
-  border-bottom: 1px solid var(--rule);
-  transition: background .1s linear, color .1s linear;
+  color: var(--ink-3);
+  margin: 1rem auto 0;
+  max-width: 60ch;
+  text-align: center;
+  text-transform: none;
+  letter-spacing: 0;
 }
-.signposts a:hover { color: var(--ink); background: var(--paper-2); }
-.signposts a::after { content: " \2192"; color: var(--ink-3); }
+.hint-run code {
+  font-family: var(--mono);
+  font-size: .95em;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Two things worth pointing it at, one of which is this project. Shown only
+ * once the script is running, because a control that fills a field and submits
+ * it is a lie when there is no script to do either.
+ */
+.tries {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: .5rem .75rem;
+  margin-top: 1.75rem;
+}
+.tries[hidden] { display: none; }
+.tries-label {
+  font-size: .625rem;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.try {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: .75rem;
+  padding: .35rem .7rem;
+  cursor: pointer;
+  transition: border-color .1s linear, color .1s linear;
+}
+.try:hover { border-color: var(--red); color: var(--ink); }
+
+/*
+ * The one sentence that could not go.
+ *
+ * The rest of the argument moved to its own page; this stayed, because it is
+ * the thing that has to be read before the number is, and a detector that
+ * buries it one click away is a detector selling certainty.
+ */
+.caveat {
+  margin: 0 0 clamp(2rem, 5vw, 3rem);
+  text-align: center;
+  font-family: var(--sans);
+  font-size: .8125rem;
+  color: var(--ink-3);
+}
+.caveat a { color: var(--ink-2); }
 
 /* ------------------------------------------------------------------- panels */
 
 .panel {
   background: var(--paper-2);
   border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
 }
-
-.tabs {
-  display: flex;
-  border-bottom: 1px solid var(--rule);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.tabs::-webkit-scrollbar { display: none; }
-
-.tab {
-  appearance: none;
-  border: 0;
-  border-right: 1px solid var(--rule);
-  background: transparent;
-  padding: .8rem 1.1rem;
-  font: inherit;
-  font-size: .75rem;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  cursor: pointer;
-  white-space: nowrap;
-  position: relative;
-  transition: color .1s linear, background .1s linear;
-}
-.tab:hover { color: var(--ink); background: var(--paper-3); }
-.tab[aria-selected="true"] {
-  color: var(--ink);
-  background: var(--paper-3);
-}
-/*
- * The state marker is a bar on the active tab's top edge — the one place the
- * accent is allowed to be purely positional. On the top edge rather than the
- * bottom because the strip scrolls horizontally, and a scroll container clips
- * on both axes: a marker hung a pixel below the row is a marker nobody sees.
- */
-.tab[aria-selected="true"]::after {
-  content: "";
-  position: absolute;
-  left: 0; right: 0; top: 0;
-  height: 2px;
-  background: var(--red);
-}
-
-.tabpanel { padding: clamp(1.25rem, 4vw, 1.75rem); }
-.tabpanel[hidden] { display: none; }
 
 label.field {
   display: block;
@@ -348,7 +578,7 @@ input[type="url"], input[type="text"], textarea {
   font-size: .875rem;
   line-height: 1.5;
   padding: .75rem .85rem;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   transition: border-color .1s linear;
 }
 input::placeholder, textarea::placeholder { color: var(--ink-3); }
@@ -381,7 +611,7 @@ input:focus, textarea:focus { border-color: var(--red); outline: none; }
   letter-spacing: .12em;
   text-transform: uppercase;
   cursor: pointer;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   text-decoration: none;
   display: inline-block;
   transition: background .1s linear, border-color .1s linear;
@@ -430,6 +660,7 @@ label.check strong { color: var(--ink); font-weight: 600; }
   padding: .75rem .85rem;
   background: var(--paper-3);
   border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
   color: var(--ink);
   overflow-x: auto;
   cursor: text;
@@ -452,6 +683,7 @@ label.field code { font-family: var(--mono); font-size: .95em; text-transform: n
   padding: .85rem 1rem;
   background: var(--red-soft);
   border: 1px solid var(--red);
+  border-radius: var(--radius-sm);
   color: var(--ink);
   font-family: var(--sans);
   font-size: .9375rem;
@@ -605,6 +837,7 @@ label.field code { font-family: var(--mono); font-size: .95em; text-transform: n
   font-size: .75rem;
   background: var(--paper-3);
   border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
   padding: .55rem .7rem;
   margin-bottom: .6rem;
   overflow-wrap: anywhere;
@@ -616,7 +849,8 @@ label.field code { font-family: var(--mono); font-size: .95em; text-transform: n
   font-size: .625rem;
   color: var(--ink-3);
   border: 1px solid var(--rule-2);
-  padding: .05rem .4rem;
+  border-radius: 999px;
+  padding: .05rem .45rem;
   white-space: nowrap;
 }
 
@@ -637,6 +871,7 @@ label.field code { font-family: var(--mono); font-size: .95em; text-transform: n
   padding: .4rem 0;
   background: var(--paper);
   border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
   overflow-x: auto;
   font-size: .6875rem;
   line-height: 1.6;
@@ -762,6 +997,7 @@ label.field code { font-family: var(--mono); font-size: .95em; text-transform: n
   background: var(--paper-3);
   border: 1px solid var(--rule);
   padding: .08em .35em;
+  border-radius: 4px;
 }
 
 section.band { padding: clamp(2.5rem, 6vw, 4rem) 0; border-top: 1px solid var(--rule); }
@@ -855,8 +1091,43 @@ section.band { padding: clamp(2.5rem, 6vw, 4rem) 0; border-top: 1px solid var(--
 }
 
 @media (max-width: 40rem) {
+  /* On a phone the console packs rather than stretches: a centred composition
+     inside a forced full height is mostly empty space above the fold. */
+  .console { min-height: auto; padding-top: 2rem; }
+  .console-title { font-size: 1.625rem; letter-spacing: -.04em; margin-bottom: 1.5rem; }
+
+  /* Four modes across 390px is four cropped labels and a scrollbar. Two by
+     two shows all of them, which is the point of a mode selector. */
+  .segmented {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+    overflow: visible;
+  }
+  .segmented .tab {
+    border-right: 1px solid var(--rule-2);
+    border-bottom: 1px solid var(--rule-2);
+    padding: .7rem .5rem;
+  }
+  .segmented .tab:nth-child(2n) { border-right: 0; }
+  /* Five modes across two columns leaves one over; it takes the last row to
+     itself rather than sitting half-width with a divider going nowhere. */
+  .segmented .tab:last-child {
+    grid-column: 1 / -1;
+    border-right: 0;
+    border-bottom: 0;
+  }
+
+  /* Two lines of placeholder need room for two lines of placeholder. */
+  .entry-auto textarea { min-height: 4.75rem; padding: .9rem 1rem; }
+
+  .entry input, .entry textarea { padding: 1rem; font-size: .9375rem; }
+  .go { width: 3.25rem; }
+  .switch { align-items: flex-start; text-align: left; }
+  .switch input { margin-top: .15rem; }
+
   .hero { padding-top: 1.75rem; }
-  .hero h1 { font-size: 1.875rem; letter-spacing: -.045em; }
+  .hero h1 { font-size: 1.625rem; letter-spacing: -.04em; }
   .hero p { font-size: 1rem; }
   .hero .disclaimer { font-size: .875rem; padding: .8rem .9rem; }
   .brand-tag { display: none; }
@@ -864,13 +1135,15 @@ section.band { padding: clamp(2.5rem, 6vw, 4rem) 0; border-top: 1px solid var(--
   .masthead nav {
     margin-left: 0;
     width: 100%;
+    /* One scrolling row, not two wrapped ones: the wrap costs a whole line of
+       vertical space above the tool, which is the thing the page is for. */
+    flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
     border-top: 1px solid var(--rule);
   }
   .masthead nav::-webkit-scrollbar { display: none; }
   .masthead nav a { padding: .55rem .6rem; white-space: nowrap; }
-  .signposts { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 34rem) {

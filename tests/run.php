@@ -1077,6 +1077,70 @@ ok(!$rg->has('cd.generic_domain_names'), 'domain names are not flagged as vague'
 ok(!$rg->has('cd.assistant_chatter'), 'a why-comment is not chatter');
 between($rg->toArray()['score'], 3, 55, 'the guide\'s counter-example does not read as generated');
 
+// ---------------------------------------------------------- auto detection
+
+group('Working out what was pasted');
+
+/*
+ * Auto mode's whole job. Every case here is one somebody will actually paste,
+ * and the ones that matter most are the near-misses: a file path is owner/name
+ * shaped, a module name is domain shaped, and guessing wrong on either sends a
+ * request somewhere nobody asked for.
+ */
+$subjects = array(
+    // Addresses, written out and in the shorthand everybody types.
+    'https://example.com'                        => Subject::URL,
+    'http://example.com/pricing?a=1'             => Subject::URL,
+    'example.com'                                => Subject::URL,
+    'example.com/pricing'                        => Subject::URL,
+    'www.example.co.uk/a/b'                      => Subject::URL,
+    'my-site.vercel.app'                         => Subject::URL,
+    'example.com:8080/x'                         => Subject::URL,
+
+    // Repositories, as a link, as a clone URL, and as people say them.
+    'https://github.com/vercel/next.js'          => Subject::REPO,
+    'github.com/vercel/next.js/'                 => Subject::REPO,
+    'https://github.com/vercel/next.js/blob/main/a.js' => Subject::REPO,
+    'git@github.com:vercel/next.js.git'          => Subject::REPO,
+    'goldo9824/vibecode-detector'                => Subject::REPO,
+    'sindresorhus/slugify'                       => Subject::REPO,
+
+    // Source. The first three are the near-misses that must not read as a
+    // domain: a module name, a file, and a document all end in a public-suffix
+    // shaped label.
+    'app.js'                                     => Subject::CODE,
+    'src/main.tsx'                               => Subject::CODE,
+    'README.md'                                  => Subject::CODE,
+    'function x() { return 1; }'                 => Subject::CODE,
+    "const a = 1;\nconst b = 2;"                 => Subject::CODE,
+    'https://example.com is where it lives'      => Subject::CODE,
+    ''                                           => Subject::CODE,
+
+    // Histories, in all three formats the git tab accepts.
+    "commit 9f8e7d6c5b4a3210\nAuthor: Dana <d@e.com>\nDate:   Tue Jan 14 11:02:03 2025 +0000\n\n    tidy" => Subject::GIT,
+    'a1b2c3d|1700000000|Sam Rivera|initial commit' => Subject::GIT,
+    "3f21a9c tidy the readme\n9c8b7a6 add the licence\n1d2e3f4 initial commit" => Subject::GIT,
+);
+foreach ($subjects as $input => $want) {
+    $got = Subject::classify((string) $input);
+    ok($got === $want,
+       'reads ' . ($input === '' ? 'an empty paste' : '"' . str_replace("\n", '\\n', substr((string) $input, 0, 44)) . '"') . ' as ' . $want,
+       'got ' . $got);
+}
+
+// A multi-line paste is a document, whatever its first line looks like: the
+// single-line shapes are only tested when the paste is a single line.
+ok(Subject::classify("example.com\nexample.org") === Subject::CODE,
+   'a list of addresses is not one address');
+ok(Subject::classify("goldo9824/vibecode-detector\nsomeone/else") === Subject::CODE,
+   'a list of repositories is not one repository');
+
+// Every mode it can choose has a sentence explaining the choice, because a
+// guess the reader cannot see is a guess they cannot override.
+foreach (array(Subject::URL, Subject::REPO, Subject::GIT, Subject::CODE) as $mode) {
+    ok(strlen(Subject::describe($mode)) > 30, 'auto mode explains choosing ' . $mode);
+}
+
 // ------------------------------------------------------- github repository
 
 group('Reading a GitHub repository');
@@ -2560,6 +2624,40 @@ ok(strpos($page, 'A Landfall studio product') !== false, 'the studio credit is i
 ok(strpos($page, 'class="band"') === false,
    'the front page carries no long-form sections under the analyser');
 ok(substr_count($page, 'id="analyzer"') === 1, 'the front page still carries the analyser');
+
+// Prose creeps back one helpful sentence at a time, so the shape is asserted
+// rather than trusted: nothing between the headline and the tool, and the
+// per-field hints stay hints.
+// The headline and the mode selector are adjacent: no paragraph may open
+// between them, which is where explanatory prose always tries to land.
+preg_match('~<h1 class="console-title">.*?</h1>(.*?)<div class="segmented"~s', $page, $betweenHtml);
+ok(isset($betweenHtml[1]) && strpos($betweenHtml[1], '<p') === false,
+   'nothing sits between the headline and the tool');
+ok(substr_count($page, 'class="console"') === 1, 'the front page is one console');
+
+// Auto is the default, so somebody who pastes without reading anything gets
+// the right reading rather than whichever mode happened to be listed first.
+ok(strpos($page, 'id="tab-auto" aria-controls="panel-auto" aria-selected="true"') !== false,
+   'auto is the mode selected on arrival');
+ok(substr_count($page, 'role="tab"') === 5, 'five modes are offered', (string) substr_count($page, 'role="tab"'));
+
+preg_match_all('~<p class="hint[^"]*">(.*?)</p>~s', $page, $hints);
+$longest = 0;
+foreach ($hints[1] as $hint) {
+    $longest = max($longest, strlen(trim(strip_tags($hint))));
+}
+ok($longest > 0 && $longest <= 120,
+   'every hint under a field is a hint rather than a paragraph',
+   $longest . ' characters at the longest');
+
+// The one caveat that could not move. A detector whose front page does not say
+// this is a detector selling certainty, so its absence is a test failure and
+// not a design choice somebody gets to make later.
+ok(substr_count($page, 'class="caveat"') === 1,
+   'the front page still says the reading proves nothing');
+preg_match('~<p class="caveat">(.*?)</p>~s', $page, $caveat);
+ok(isset($caveat[1]) && strpos($caveat[1], 'method.php') !== false,
+   'and points at the page that explains why');
 foreach (array('id="method"', 'id="limits"', 'id="provenance"') as $anchor) {
     ok(strpos($method, $anchor) !== false, 'method.php carries ' . $anchor);
     ok(strpos($page, '<section class="band" ' . $anchor) === false,

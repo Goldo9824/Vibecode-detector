@@ -56,7 +56,24 @@ if ($slot !== '') {
 
 $url   = isset($_REQUEST['url']) ? (string) $_REQUEST['url'] : '';
 $repo  = isset($_REQUEST['repo']) ? (string) $_REQUEST['repo'] : '';
-$crawl = !empty($_REQUEST['crawl']);
+
+/*
+ * How much to read, the same two knobs the browser exposes as sliders.
+ *
+ * Both clamp rather than refuse, because a caller who sends 900 wants as much
+ * as they can have, and the reading says how much it actually managed either
+ * way. `crawl` predates `pages` and still works: it means "as many as you
+ * would have", which is what its tickbox always meant.
+ */
+$pages = isset($_REQUEST['pages']) ? (int) $_REQUEST['pages'] : 1;
+if ($pages <= 1 && !empty($_REQUEST['crawl'])) {
+    $pages = Crawler::MAX_PAGES;
+}
+$pages = max(1, min($pages, Crawler::MAX_PAGES));
+$crawl = $pages > 1;
+
+$files = isset($_REQUEST['files']) ? (int) $_REQUEST['files'] : RepoAnalyzer::MAX_CODE_FILES;
+$files = max(1, min($files, RepoAnalyzer::MAX_CODE_FILES_CAP));
 
 if ($url !== '' && $repo !== '') {
     vcd_fail('Send either url or repo, not both — they are different subjects and would need two readings.');
@@ -72,7 +89,9 @@ if ($repo !== '') {
     // may ask, not how much of somebody else's allowance one ask can spend.
     try {
         list($owner, $name) = GitHub::parse($repo);
-        $result = (new RepoAnalyzer(new GitHub($owner, $name, $fetcher)))->analyze()->toArray();
+        $analyzer = (new RepoAnalyzer(new GitHub($owner, $name, $fetcher)))->readAtMost($files);
+        $result = $analyzer->analyze()->toArray();
+        $result['stats']['filesAsked'] = $files;
     } catch (RepoError $e) {
         vcd_fail($e->getMessage(), 400);
     } catch (FetchError $e) {
@@ -81,13 +100,14 @@ if ($repo !== '') {
 } elseif ($crawl) {
     try {
         $crawler = new Crawler($fetcher);
-        $pages = $crawler->crawl($url);
+        $crawled = $crawler->crawl($url, $pages);
     } catch (FetchError $e) {
         vcd_fail($e->getMessage(), 400);
     }
 
-    $entry = $pages[0]['url'];
-    $result = (new SiteSurvey($entry, $pages, $crawler->notes(), $crawler->sitemap(), $crawler->missing()))->analyze()->toArray();
+    $entry = $crawled[0]['url'];
+    $result = (new SiteSurvey($entry, $crawled, $crawler->notes(), $crawler->sitemap(), $crawler->missing()))->analyze()->toArray();
+    $result['stats']['pagesAsked'] = $pages;
 } else {
     try {
         $doc = $fetcher->fetchSite($url);

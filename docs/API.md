@@ -65,7 +65,9 @@ field, so it doesn't end up in access logs or browser history.
 |---|---|---|
 | `url` | one of `url` or `repo` | The page to fetch and analyse. |
 | `repo` | one of `url` or `repo` | A public GitHub repository, as `owner/name` or any github.com URL for it — same as the "GitHub repo" tab in the UI. Sending both `url` and `repo` is refused rather than guessed at. |
-| `crawl` | no | Only meaningful with `url`. Any truthy value follows links from that page and analyses the whole site, same as the "Read the whole site" checkbox in the UI. Slower, and costs the site being read more too. |
+| `pages` | no | Only meaningful with `url`. How many pages to read, 1 to 50; anything above 1 follows links from that page and analyses the site. Out-of-range values are clamped, not refused. The reading reports `stats.pagesAsked` alongside the pages it actually managed. |
+| `files` | no | Only meaningful with `repo`. How many source files to open and read in full, 1 to 25 — the default is 3. These come off the raw host and so spend nothing from the shared GitHub allowance; the limit is wall clock, and the reading stops early and says how far it got. Reported back as `stats.filesAsked`. |
+| `crawl` | no | Superseded by `pages`, still honoured. Only meaningful with `url`; any truthy value means "as many pages as you would have", i.e. the same as `pages=50`. |
 
 `GET` and `POST` are both accepted; every parameter can be sent as a query
 parameter either way.

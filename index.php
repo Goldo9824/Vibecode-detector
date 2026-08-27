@@ -5,6 +5,7 @@ require_once __DIR__ . '/lib/bootstrap.php';
 require_once __DIR__ . '/lib/Brand.php';
 require_once __DIR__ . '/lib/VisitLog.php';
 require_once __DIR__ . '/lib/Seo.php';
+require_once __DIR__ . '/lib/ParamsControl.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
@@ -88,6 +89,7 @@ VisitLog::record('/');
           <label class="visually-hidden" for="input">Anything to read</label>
           <div class="entry entry-auto">
             <textarea id="input" name="input" rows="1" spellcheck="false" placeholder="Paste an address, a repo, some source, or a git log&hellip;"></textarea>
+            <?= ParamsControl::render('auto', array(ParamsControl::pages(), ParamsControl::files())) ?>
             <button class="go" type="submit" aria-label="Read this">
               <span class="go-mark" aria-hidden="true">&rarr;</span>
               <span class="spinner" id="spin-auto" hidden>&middot;&middot;&middot;</span>
@@ -102,15 +104,12 @@ VisitLog::record('/');
           <label class="visually-hidden" for="url">Address of the page to read</label>
           <div class="entry">
             <input type="url" id="url" name="url" placeholder="Paste an address&hellip;" autocomplete="url" spellcheck="false">
+            <?= ParamsControl::render('url', array(ParamsControl::pages())) ?>
             <button class="go" type="submit" aria-label="Analyse this page">
               <span class="go-mark" aria-hidden="true">&rarr;</span>
               <span class="spinner" id="spin-url" hidden>&middot;&middot;&middot;</span>
             </button>
           </div>
-          <label class="switch" for="crawl">
-            <input type="checkbox" id="crawl" name="crawl" value="1">
-            <span>Read the whole site &mdash; up to fifty pages, and slower</span>
-          </label>
         </form>
       </div>
 
@@ -119,6 +118,7 @@ VisitLog::record('/');
           <label class="visually-hidden" for="repo">A public GitHub repository</label>
           <div class="entry">
             <input type="text" id="repo" name="repo" placeholder="owner/name on GitHub&hellip;" autocomplete="off" spellcheck="false">
+            <?= ParamsControl::render('repo', array(ParamsControl::files())) ?>
             <button class="go" type="submit" aria-label="Read this repository">
               <span class="go-mark" aria-hidden="true">&rarr;</span>
               <span class="spinner" id="spin-repo" hidden>&middot;&middot;&middot;</span>

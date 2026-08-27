@@ -1,7 +1,22 @@
-/* Admin panel additions on top of site.css. Same tokens, a few more shapes:
-   tables, a password field, status badges, a one-time flash banner. */
+/*
+ * The admin panel.
+ *
+ * Same tokens as the public site, same position: hairline rules, monospace
+ * labels, one accent, no shadows and no gradients. The difference is density.
+ * The front page is one control on an empty screen; this is six screens of
+ * numbers, so it is built as panels on the ground rather than a single
+ * composition, and every group of figures gets its own inset cell the way a
+ * rack of meters does.
+ *
+ * Nothing here invents a shape. Radii come from --radius and --radius-sm,
+ * surfaces from --paper-2 (raised) and --paper-3 (inset), so the panel follows
+ * the site's design without knowing what the values are.
+ */
 
-input[type="password"] {
+/* ------------------------------------------------------------------ fields */
+
+input[type="password"],
+.search-row input[type="search"] {
   width: 100%;
   background: var(--paper);
   border: 1px solid var(--rule-2);
@@ -9,50 +24,113 @@ input[type="password"] {
   font-family: var(--mono);
   font-size: .875rem;
   line-height: 1.5;
-  padding: .7rem .8rem;
-  border-radius: 2px;
+  padding: .75rem .85rem;
+  border-radius: var(--radius-sm);
+  transition: border-color .1s linear;
 }
-input[type="password"]:focus { border-color: var(--red); outline: none; }
+input[type="password"]:focus,
+.search-row input[type="search"]:focus { border-color: var(--red); outline: none; }
 
-.admin-shell { max-width: 52rem; padding-top: clamp(2rem, 5vw, 3.5rem); padding-bottom: 4rem; }
-.admin-shell.narrow { max-width: 26rem; padding-top: clamp(4rem, 12vw, 8rem); }
+/* ------------------------------------------------------------------- shell */
 
+.admin-shell { max-width: 56rem; padding-top: clamp(1.5rem, 4vw, 2.5rem); padding-bottom: 4rem; }
+.admin-shell.narrow { max-width: 24rem; padding-top: clamp(4rem, 12vw, 8rem); }
+.admin-shell.wide { max-width: 68rem; }
+
+/*
+ * The header is a rule with two things on it, which is the same bar the public
+ * masthead is. It is the only place on the page the h1 appears, so it carries
+ * the page's identity — often a host name — and is set in the mono face for
+ * that reason.
+ */
 .admin-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1.5rem;
   flex-wrap: wrap;
+  padding-bottom: .9rem;
+  margin-bottom: clamp(1.5rem, 4vw, 2.25rem);
+  border-bottom: 1px solid var(--rule);
 }
-.admin-head h1 { font-size: clamp(1.25rem, 3vw, 1.6rem); margin: 0; }
-.admin-head a { font-size: .8rem; color: var(--ink-3); }
-.admin-head a:hover { color: var(--red); }
-
-.admin-section { margin-bottom: 2.5rem; }
-.admin-section h2 {
+.admin-head h1 {
   font-family: var(--mono);
-  font-size: .75rem;
-  letter-spacing: .1em;
+  font-size: clamp(1.1rem, 3vw, 1.4rem);
+  font-weight: 600;
+  letter-spacing: -.02em;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.admin-head a {
+  font-size: .6875rem;
+  letter-spacing: .12em;
   text-transform: uppercase;
   color: var(--ink-3);
-  margin: 0 0 .9rem;
+  text-decoration: none;
+  padding: .45rem .7rem;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  transition: color .1s linear, background .1s linear;
+}
+.admin-head a:hover { color: var(--ink); background: var(--paper-3); }
+
+/* ------------------------------------------------------------------ panels */
+
+/*
+ * Each section is a raised panel. On the public site the console is the only
+ * panel on the page and the ground does the separating; here there are four or
+ * five of them stacked, and a hairline alone stops reading as a boundary once
+ * a table has hairlines of its own inside it.
+ */
+.admin-section,
+.admin-card {
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: clamp(1.1rem, 3vw, 1.6rem);
+  margin-bottom: 1.25rem;
+}
+.admin-section:last-of-type { margin-bottom: 0; }
+.admin-card { margin-bottom: 0; }
+.admin-card-title {
+  font-family: var(--mono);
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  margin: 0 0 1.25rem;
 }
 
+.admin-section h2 {
+  font-family: var(--mono);
+  font-size: .6875rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 1.1rem;
+  padding-bottom: .7rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+/* ------------------------------------------------------------------ notices */
+
+/*
+ * The key is shown once and never again, so this is the one moment in the
+ * panel where something has to be impossible to scroll past.
+ */
 .flash {
   background: var(--red-soft);
   border: 1px solid var(--red);
-  border-radius: 3px;
-  padding: 1rem 1.2rem;
-  margin-bottom: 2rem;
+  border-radius: var(--radius);
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1.25rem;
 }
-.flash p { margin: 0 0 .5rem; }
+.flash p { margin: 0 0 .6rem; }
 .flash code {
   display: block;
   background: var(--paper-2);
   border: 1px solid var(--rule-2);
-  border-radius: 2px;
-  padding: .6rem .7rem;
+  border-radius: var(--radius-sm);
+  padding: .7rem .8rem;
   font-family: var(--mono);
   font-size: .85rem;
   word-break: break-all;
@@ -61,32 +139,45 @@ input[type="password"]:focus { border-color: var(--red); outline: none; }
 
 .error-box { color: var(--red); margin: 0 0 1rem; }
 
+.no-db {
+  background: var(--paper-2);
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius);
+  padding: clamp(1.1rem, 3vw, 1.6rem);
+  color: var(--ink-2);
+}
+.no-db code { font-family: var(--mono); font-size: .85rem; color: var(--ink); }
+
+/* ------------------------------------------------------------------ tables */
+
 table.admin-table { width: 100%; border-collapse: collapse; font-size: .875rem; }
 table.admin-table th, table.admin-table td {
   text-align: left;
-  padding: .6rem .7rem;
+  padding: .65rem .7rem;
   border-bottom: 1px solid var(--rule);
   vertical-align: top;
 }
 table.admin-table th {
   font-family: var(--mono);
-  font-size: .7rem;
-  letter-spacing: .08em;
+  font-size: .6875rem;
+  letter-spacing: .1em;
   text-transform: uppercase;
   color: var(--ink-3);
   font-weight: 400;
+  border-bottom-color: var(--rule-2);
 }
 table.admin-table tr:last-child td { border-bottom: none; }
+table.admin-table tbody tr:hover td { background: var(--paper-3); }
 table.admin-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .badge {
   display: inline-block;
   font-family: var(--mono);
-  font-size: .7rem;
-  letter-spacing: .06em;
+  font-size: .6875rem;
+  letter-spacing: .08em;
   text-transform: uppercase;
   padding: .15rem .5rem;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--rule-2);
   color: var(--ink-3);
 }
@@ -95,30 +186,63 @@ table.admin-table td.num { text-align: right; font-variant-numeric: tabular-nums
 
 .inline-form { display: inline; }
 
+/* A destructive action inside a table row. A button, because it posts, but it
+   is one word among links and is dressed as one rather than as a slab of red. */
+.link-danger {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--red);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.link-danger:hover { color: var(--red-2); }
+
 .add-key-form { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; }
 .add-key-form > div { flex: 1 1 16rem; }
 .add-key-form label.field { margin-bottom: .3rem; }
 
-.stat-row { display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+/* ------------------------------------------------------------------- stats */
+
+/*
+ * Figures in inset cells rather than floating in the panel: a row of numbers
+ * with nothing around them reads as one long number at a glance, and the
+ * separation is what makes three of them countable without reading the labels.
+ */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: .5rem;
+  margin-bottom: 1.5rem;
+}
 .stat {
   font-family: var(--mono);
+  background: var(--paper-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  padding: .8rem .9rem;
 }
-.stat .n { display: block; font-size: 1.6rem; color: var(--ink); }
-.stat .l { font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.stat .n { display: block; font-size: 1.5rem; line-height: 1.15; color: var(--ink); font-variant-numeric: tabular-nums; }
+.stat .l { display: block; margin-top: .3rem; font-size: .6875rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.stat .n .of { font-size: .9rem; color: var(--ink-3); }
+/* A date is not a quantity: at full size it shouts over the numbers beside it. */
+.stat .n.is-date { font-size: 1.05rem; }
 
-.no-db {
-  border: 1px dashed var(--rule-2);
-  border-radius: 3px;
-  padding: 1.5rem;
-  color: var(--ink-2);
+/* ------------------------------------------------------------------ charts */
+
+/* Drawn as SVG on the server (lib/Chart.php), so the only job here is colour,
+   which comes from the same tokens as everything else and therefore follows
+   the theme without the chart knowing there is one. */
+
+.chart-figure {
+  margin: 0 0 .5rem;
+  background: var(--paper-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  padding: .9rem 1rem .7rem;
 }
-.no-db code { font-family: var(--mono); font-size: .85rem; }
-
-/* Charts. Drawn as SVG on the server (lib/Chart.php), so the only job here is
-   colour, which comes from the same tokens as everything else and therefore
-   follows the theme without the chart knowing there is one. */
-
-.chart-figure { margin: 0 0 .5rem; }
 .chart {
   display: block;
   width: 100%;
@@ -139,10 +263,10 @@ table.admin-table td.num { text-align: right; font-variant-numeric: tabular-nums
 
 .chart-figure figcaption {
   font-family: var(--mono);
-  font-size: .7rem;
+  font-size: .6875rem;
   letter-spacing: .04em;
   color: var(--ink-3);
-  margin-top: .4rem;
+  margin-top: .5rem;
 }
 .key {
   display: inline-block;
@@ -151,10 +275,11 @@ table.admin-table td.num { text-align: right; font-variant-numeric: tabular-nums
   vertical-align: -1px;
   margin-right: .15rem;
   margin-left: .6rem;
+  border-radius: 2px;
 }
 .key:first-child { margin-left: 0; }
 .key-bar { background: var(--rule-2); }
-.key-line { height: 2px; background: var(--red); vertical-align: 3px; }
+.key-line { height: 2px; background: var(--red); vertical-align: 3px; border-radius: 0; }
 
 /* A bar behind a table label: the same comparison a bar chart would draw,
    in a shape that stays readable at twenty rows and copyable as text. */
@@ -165,16 +290,21 @@ td.with-bar .bar {
   top: 2px;
   bottom: 2px;
   background: var(--paper-3);
-  border-radius: 2px;
+  /* Barely rounded, unlike everything else here: at the panel radius this
+     reads as a chip somebody can press rather than as a measure. */
+  border-radius: 3px;
   z-index: 0;
 }
+table.admin-table tbody tr:hover td.with-bar .bar { background: var(--rule); }
 td.with-bar .bar-label {
   position: relative;
   z-index: 1;
   word-break: break-all;
 }
 
-/* Window switcher. Links, not a form: every state is a URL you can bookmark. */
+/* ---------------------------------------------------------- window switcher */
+
+/* Links, not a form: every state is a URL you can bookmark. */
 .range-bar {
   display: flex;
   align-items: baseline;
@@ -185,7 +315,7 @@ td.with-bar .bar-label {
   font-size: .75rem;
 }
 .range-label {
-  letter-spacing: .1em;
+  letter-spacing: .12em;
   text-transform: uppercase;
   color: var(--ink-3);
   margin-right: .25rem;
@@ -199,18 +329,16 @@ a.range {
 a.range:hover { color: var(--ink); }
 a.range.is-on { color: var(--red); border-bottom-color: var(--red); }
 
-/* The websites list is four columns of mostly numbers and dates, so it gets
-   more room than the key list does. */
-.admin-shell.wide { max-width: 64rem; }
+/* ------------------------------------------------------------------- lists */
 
 .admin-sub {
   font-family: var(--mono);
-  font-size: .7rem;
-  letter-spacing: .08em;
+  font-size: .6875rem;
+  letter-spacing: .1em;
   text-transform: uppercase;
   color: var(--ink-3);
   font-weight: 400;
-  margin: 0 0 .6rem;
+  margin: 1.75rem 0 .6rem;
 }
 
 table.admin-table td.when {
@@ -220,10 +348,6 @@ table.admin-table td.when {
   white-space: nowrap;
 }
 table.admin-table td.wrap-any { word-break: break-all; }
-
-.stat .n .of { font-size: .9rem; color: var(--ink-3); }
-/* A date is not a quantity: at 1.6rem it shouts over the numbers beside it. */
-.stat .n.is-date { font-size: 1.05rem; }
 
 /* "See all N websites", under the twenty the front page has room for. */
 .see-more {
@@ -238,18 +362,7 @@ table.admin-table td.wrap-any { word-break: break-all; }
 .search-form { margin-bottom: 1.5rem; }
 .search-form label.field { display: block; margin-bottom: .3rem; }
 .search-row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
-.search-row input[type="search"] {
-  flex: 1 1 20rem;
-  background: var(--paper);
-  border: 1px solid var(--rule-2);
-  color: var(--ink);
-  font-family: var(--mono);
-  font-size: .875rem;
-  line-height: 1.5;
-  padding: .7rem .8rem;
-  border-radius: 2px;
-}
-.search-row input[type="search"]:focus { border-color: var(--red); outline: none; }
+.search-row input[type="search"] { flex: 1 1 20rem; width: auto; }
 
 /* Page numbers. Links, so every page of the list is its own URL — the same
    reason the window switcher above is links and not a <select>. */
@@ -268,12 +381,12 @@ table.admin-table td.wrap-any { word-break: break-all; }
   padding: .3rem .5rem;
   text-align: center;
   border: 1px solid var(--rule);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   color: var(--ink-2);
   text-decoration: none;
   font-variant-numeric: tabular-nums;
 }
-a.page:hover { border-color: var(--rule-2); color: var(--ink); }
+a.page:hover { border-color: var(--rule-2); color: var(--ink); background: var(--paper-3); }
 .pager .page.is-on { border-color: var(--red); color: var(--red); }
 .pager .page.is-off { color: var(--rule-2); border-color: transparent; }
 .pager .page-step { min-width: 0; }

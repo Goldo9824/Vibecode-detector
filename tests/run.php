@@ -25,6 +25,7 @@ require_once dirname(__DIR__) . '/lib/Pager.php';
 require_once dirname(__DIR__) . '/lib/AdminUi.php';
 require_once dirname(__DIR__) . '/lib/Num.php';
 require_once dirname(__DIR__) . '/lib/Seo.php';
+require_once dirname(__DIR__) . '/lib/ParamsControl.php';
 
 $passed = 0;
 $failed = 0;
@@ -1469,6 +1470,44 @@ ok(GitHub::MAX_REQUESTS <= 10,
    'one scan cannot spend a sixth of the hourly GitHub allowance', (string) GitHub::MAX_REQUESTS);
 ok(RepoAnalyzer::TIME_BUDGET <= 25,
    'a repository read leaves room to render inside a 30s request', (string) RepoAnalyzer::TIME_BUDGET);
+ok(RepoAnalyzer::TIME_CEILING <= 25,
+   'and still does when a reader asks for every file the slider offers',
+   (string) RepoAnalyzer::TIME_CEILING);
+
+// The file slider. A reading that opens more files buys more clock to do it
+// in, because a slider whose top three-quarters never delivers is a slider
+// that lies; and the extra clock stops at the ceiling above, because the
+// request still has to return.
+$budgetOf = function (int $files): float {
+    $a = (new RepoAnalyzer(new GitHub('o', 'r')))->readAtMost($files);
+    $m = new ReflectionMethod('RepoAnalyzer', 'budget');
+    $m->setAccessible(true);
+    return (float) $m->invoke($a);
+};
+$fileBudgetOf = function (int $files): int {
+    $a = (new RepoAnalyzer(new GitHub('o', 'r')))->readAtMost($files);
+    $p = new ReflectionProperty('RepoAnalyzer', 'fileBudget');
+    $p->setAccessible(true);
+    return (int) $p->getValue($a);
+};
+ok($fileBudgetOf(8) === 8, 'the file slider is honoured as sent', (string) $fileBudgetOf(8));
+ok($fileBudgetOf(0) === 1, 'nought files is clamped up to one, not refused');
+ok($fileBudgetOf(-5) === 1, 'and so is a negative');
+ok($fileBudgetOf(900) === RepoAnalyzer::MAX_CODE_FILES_CAP,
+   'an absurd ask is clamped to the cap rather than refused',
+   (string) $fileBudgetOf(900));
+ok($budgetOf(RepoAnalyzer::MAX_CODE_FILES) === RepoAnalyzer::TIME_BUDGET,
+   'a default reading gets the default clock');
+ok($budgetOf(RepoAnalyzer::MAX_CODE_FILES_CAP) > RepoAnalyzer::TIME_BUDGET,
+   'asking for more files buys more clock', sprintf('%.1fs', $budgetOf(RepoAnalyzer::MAX_CODE_FILES_CAP)));
+ok($budgetOf(RepoAnalyzer::MAX_CODE_FILES_CAP) <= RepoAnalyzer::TIME_CEILING,
+   'but never past the ceiling');
+// The two limits guard different things and are deliberately different sizes:
+// a page costs somebody else's server a request, a source file comes off the
+// raw host and costs only this installation's clock.
+ok(RepoAnalyzer::MAX_CODE_FILES_CAP < Crawler::MAX_PAGES,
+   'the file cap is the tighter of the two, because clock is the binding cost',
+   RepoAnalyzer::MAX_CODE_FILES_CAP . ' files vs ' . Crawler::MAX_PAGES . ' pages');
 ok(VCD_LIMIT_REPO[0] * GitHub::MAX_REQUESTS <= 100,
    'one visitor cannot spend more than the hourly allowance in a single window',
    sprintf('%d requests', VCD_LIMIT_REPO[0] * GitHub::MAX_REQUESTS));
@@ -2640,6 +2679,57 @@ ok(substr_count($page, 'class="console"') === 1, 'the front page is one console'
 ok(strpos($page, 'id="tab-auto" aria-controls="panel-auto" aria-selected="true"') !== false,
    'auto is the mode selected on arrival');
 ok(substr_count($page, 'role="tab"') === 5, 'five modes are offered', (string) substr_count($page, 'role="tab"'));
+
+// ------------------------------------------------- the reading settings
+//
+// The control that replaced the whole-site tickbox. It is rendered by
+// lib/ParamsControl.php rather than written out three times, and app.js
+// addresses every part of it by id, so what is asserted here is that the ids
+// the script reaches for are the ids the markup ships.
+$rendered = ParamsControl::render('auto', array(ParamsControl::pages(), ParamsControl::files()));
+foreach (array('params-open-auto', 'params-panel-auto', 'params-badge-auto',
+               'pages-auto', 'pages-out-auto', 'pages-note-auto',
+               'files-auto', 'files-out-auto', 'files-note-auto') as $id) {
+    ok(strpos($rendered, 'id="' . $id . '"') !== false, 'auto mode ships #' . $id);
+}
+ok(substr_count($rendered, 'class="params-slider"') + substr_count($rendered, 'class="params-slider" data-second="1"') === 2
+   || substr_count($rendered, 'params-slider') === 2,
+   'auto mode carries both sliders, because it does not know yet which applies');
+ok(substr_count($rendered, 'class="params-applies"') === 2,
+   'and says of each which kind of paste it applies to');
+
+$repoParams = ParamsControl::render('repo', array(ParamsControl::files()));
+ok(strpos($repoParams, 'id="files-repo"') !== false, 'the repository panel has the file slider');
+ok(strpos($repoParams, 'id="pages-repo"') === false, 'and not the page slider, which means nothing to it');
+ok(strpos($repoParams, 'class="params-applies"') === false,
+   'a single-slider panel does not explain which of one thing applies');
+
+$urlParams = ParamsControl::render('url', array(ParamsControl::pages()));
+ok(strpos($urlParams, 'id="pages-url"') !== false, 'the live-page panel has the page slider');
+ok(strpos($urlParams, 'id="files-url"') === false, 'and not the file slider');
+
+// The bounds are the read budgets, not decoration: a slider that offers more
+// than the endpoint will grant is a slider that silently discards the top of
+// its own range.
+ok(strpos($rendered, 'max="' . Crawler::MAX_PAGES . '"') !== false,
+   'the page slider stops where the crawler does');
+ok(strpos($rendered, 'max="' . RepoAnalyzer::MAX_CODE_FILES_CAP . '"') !== false,
+   'the file slider stops where the repository reader does');
+ok(strpos($rendered, 'value="' . RepoAnalyzer::MAX_CODE_FILES . '"') !== false,
+   'and opens on the default the endpoint uses when nothing is sent');
+
+// The tickbox it replaced is gone from the page and from the stylesheet.
+ok(strpos($page, 'id="crawl"') === false, 'the whole-site tickbox is gone from the front page');
+ok(strpos($css, '.switch') === false, 'and its styles went with it');
+// Every panel that can spend somebody else's resources offers the control.
+foreach (array('auto', 'url', 'repo') as $panelMode) {
+    ok(strpos($page, "ParamsControl::render('" . $panelMode . "'") !== false,
+       'the ' . $panelMode . ' panel carries the reading settings');
+}
+foreach (array('code', 'git') as $panelMode) {
+    ok(strpos($page, "ParamsControl::render('" . $panelMode . "'") === false,
+       'the ' . $panelMode . ' panel does not, because it reads only what it was handed');
+}
 
 preg_match_all('~<p class="hint[^"]*">(.*?)</p>~s', $page, $hints);
 $longest = 0;

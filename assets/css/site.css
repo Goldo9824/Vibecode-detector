@@ -13,8 +13,10 @@
  *     the labels, the headings. A proportional face only where there are
  *     paragraphs to read. No serif anywhere on the site — it survives in the
  *     PDF certificate, which is a printed document and a different problem.
- *   - Square corners and hairline rules. No shadows at all: depth comes from
- *     surface value and a 1px line, the way it does on a panel meter.
+ *   - Softly rounded corners and hairline rules. No shadows at all: depth
+ *     comes from surface value and a 1px line, the way it does on a panel
+ *     meter. The radius is deliberately modest — enough to look made rather
+ *     than drawn, well short of the pill this thing flags on other people.
  *   - No gradient anywhere on this site, on any element, ever. The tool has an
  *     opinion about gradients.
  *   - One accent, and it means "this fired" — never decoration.
@@ -54,8 +56,10 @@
 
   --measure: 38rem;
   --gutter: clamp(1rem, 3.5vw, 2.5rem);
-  --radius: 0;
-  --radius-sm: 0;
+  /* Softened, but nowhere near the component-kit default: 10px reads
+     considered, 24px reads scaffolded, and 0 read like a spreadsheet. */
+  --radius: 10px;
+  --radius-sm: 7px;
 }
 
 @media (prefers-color-scheme: light) {
@@ -149,7 +153,7 @@ h1, h2, h3 {
 /* ------------------------------------------------------------------- header */
 
 /*
- * A rail across the top: opaque, square, hairline under it. Deliberately not
+ * A rail across the top: opaque, full-bleed, hairline under it. Deliberately not
  * the detached pill with a blur behind it — this site would be flagged by its
  * own detector for wearing one, and it would deserve it.
  */
@@ -209,6 +213,7 @@ h1, h2, h3 {
   letter-spacing: .08em;
   text-transform: uppercase;
   padding: .5rem .75rem;
+  border-radius: var(--radius-sm);
   transition: color .1s linear, background .1s linear;
 }
 .masthead nav a:hover { color: var(--ink); background: var(--paper-3); }
@@ -272,7 +277,7 @@ h1, h2, h3 {
 .console {
   /* Enough of the viewport that the tool is the screen, with the rail above
      it and the caveat below still in view on a laptop. */
-  min-height: calc(100dvh - 12rem);
+  min-height: calc(100dvh - 14rem);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -301,9 +306,10 @@ h1, h2, h3 {
   display: flex;
   margin: 0 auto 1rem;
   border: 1px solid var(--rule-2);
+  border-radius: var(--radius);
   width: max-content;
   max-width: 100%;
-  overflow-x: auto;
+  overflow: hidden;
   scrollbar-width: none;
 }
 .segmented::-webkit-scrollbar { display: none; }
@@ -344,7 +350,9 @@ h1, h2, h3 {
   display: flex;
   align-items: stretch;
   border: 1px solid var(--rule-2);
+  border-radius: var(--radius);
   background: var(--paper-2);
+  overflow: hidden;
   transition: border-color .1s linear;
 }
 .entry:focus-within { border-color: var(--red); }
@@ -389,6 +397,9 @@ h1, h2, h3 {
   width: 3.75rem;
   border: 0;
   border-left: 1px solid var(--rule-2);
+  /* The box it closes is already rounded and clips it, so a radius of its own
+     only shows as a notch in the corner. */
+  border-radius: 0;
   background: var(--red);
   color: var(--paper);
   font: inherit;
@@ -409,6 +420,51 @@ h1, h2, h3 {
 /* Arrow or running, never both. app.js hides whichever is not current. */
 .go .spinner { font-size: 1.125rem; letter-spacing: .05em; color: var(--paper); text-transform: none; }
 .go .spinner[hidden], .go .go-mark[hidden] { display: none; }
+
+/*
+ * Auto mode's field: one box that starts a line tall and grows with the paste,
+ * because the same control has to take an address and four hundred lines of a
+ * git log without looking wrong holding either.
+ */
+.entry-auto { align-items: stretch; }
+.entry-auto textarea {
+  resize: none;
+  overflow-y: auto;
+  min-height: 3.5rem;
+  max-height: 20rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 1.1rem 1.25rem;
+}
+
+/*
+ * What it thinks you pasted, live.
+ *
+ * A guess, said as one — the server classifies again on submit and the report
+ * says which way it went. Reserving the line's height whether or not there is
+ * a guess in it stops the field jumping the moment somebody starts typing.
+ */
+.reads {
+  margin: .85rem 0 0;
+  min-height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  font-size: .75rem;
+}
+.reads-idle { color: var(--ink-3); font-family: var(--sans); }
+.reads-label {
+  font-size: .625rem;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.reads-value {
+  color: var(--ink);
+  border-bottom: 1px solid var(--red);
+  padding-bottom: .1rem;
+}
 
 /* -------------------------------------------------------- under the field */
 
@@ -469,6 +525,7 @@ h1, h2, h3 {
   appearance: none;
   background: transparent;
   border: 1px solid var(--rule);
+  border-radius: 999px;
   color: var(--ink-2);
   font: inherit;
   font-size: .75rem;
@@ -499,6 +556,8 @@ h1, h2, h3 {
 .panel {
   background: var(--paper-2);
   border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 
 label.field {
@@ -519,7 +578,7 @@ input[type="url"], input[type="text"], textarea {
   font-size: .875rem;
   line-height: 1.5;
   padding: .75rem .85rem;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   transition: border-color .1s linear;
 }
 input::placeholder, textarea::placeholder { color: var(--ink-3); }
@@ -552,7 +611,7 @@ input:focus, textarea:focus { border-color: var(--red); outline: none; }
   letter-spacing: .12em;
   text-transform: uppercase;
   cursor: pointer;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   text-decoration: none;
   display: inline-block;
   transition: background .1s linear, border-color .1s linear;
@@ -601,6 +660,7 @@ label.check strong { color: var(--ink); font-weight: 600; }
   padding: .75rem .85rem;
   background: var(--paper-3);
   border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
   color: var(--ink);
   overflow-x: auto;
   cursor: text;
@@ -623,6 +683,7 @@ label.field code { font-family: var(--mono); font-size: .95em; text-transform: n
   padding: .85rem 1rem;
   background: var(--red-soft);
   border: 1px solid var(--red);
+  border-radius: var(--radius-sm);
   color: var(--ink);
   font-family: var(--sans);
   font-size: .9375rem;
@@ -776,6 +837,7 @@ label.field code { font-family: var(--mono); font-size: .95em; text-transform: n
   font-size: .75rem;
   background: var(--paper-3);
   border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
   padding: .55rem .7rem;
   margin-bottom: .6rem;
   overflow-wrap: anywhere;
@@ -787,7 +849,8 @@ label.field code { font-family: var(--mono); font-size: .95em; text-transform: n
   font-size: .625rem;
   color: var(--ink-3);
   border: 1px solid var(--rule-2);
-  padding: .05rem .4rem;
+  border-radius: 999px;
+  padding: .05rem .45rem;
   white-space: nowrap;
 }
 
@@ -808,6 +871,7 @@ label.field code { font-family: var(--mono); font-size: .95em; text-transform: n
   padding: .4rem 0;
   background: var(--paper);
   border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
   overflow-x: auto;
   font-size: .6875rem;
   line-height: 1.6;
@@ -933,6 +997,7 @@ label.field code { font-family: var(--mono); font-size: .95em; text-transform: n
   background: var(--paper-3);
   border: 1px solid var(--rule);
   padding: .08em .35em;
+  border-radius: 4px;
 }
 
 section.band { padding: clamp(2.5rem, 6vw, 4rem) 0; border-top: 1px solid var(--rule); }
@@ -1045,7 +1110,16 @@ section.band { padding: clamp(2.5rem, 6vw, 4rem) 0; border-top: 1px solid var(--
     padding: .7rem .5rem;
   }
   .segmented .tab:nth-child(2n) { border-right: 0; }
-  .segmented .tab:nth-child(n+3) { border-bottom: 0; }
+  /* Five modes across two columns leaves one over; it takes the last row to
+     itself rather than sitting half-width with a divider going nowhere. */
+  .segmented .tab:last-child {
+    grid-column: 1 / -1;
+    border-right: 0;
+    border-bottom: 0;
+  }
+
+  /* Two lines of placeholder need room for two lines of placeholder. */
+  .entry-auto textarea { min-height: 4.75rem; padding: .9rem 1rem; }
 
   .entry input, .entry textarea { padding: 1rem; font-size: .9375rem; }
   .go { width: 3.25rem; }

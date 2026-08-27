@@ -171,6 +171,10 @@ Field notes:
 - Do not set `crawl=1` speculatively "just in case" — it is materially
   heavier on both this service and the site being read. Use it only when a
   single-page read is not enough for what you were asked to do.
+- There is no `auto` here on purpose. The browser endpoint guesses what a
+  paste is because a person should not have to classify their own input; you
+  are calling an API and already know what you are sending, so send it to the
+  right parameter and skip a guess that can be wrong.
 - `repo` is the heaviest mode and the one whose budget you cannot buy more of.
   Each call spends up to eight requests from **GitHub's** hourly allowance for
   this whole installation, which without an operator-configured token is 60 an

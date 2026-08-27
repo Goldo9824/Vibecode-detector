@@ -23,8 +23,12 @@
 
 ## What it does
 
-Five modes, no account, and nothing stored unless the operator has deliberately
-configured a database for the optional admin panel (see [Privacy](#privacy)).
+Paste anything into the **Auto** field and it works out which of the four
+readings it wants — an address, a GitHub repository, source, or a `git log` —
+and says which way it went. Pick a mode by hand if you disagree.
+
+No account, and nothing stored unless the operator has deliberately configured
+a database for the optional admin panel (see [Privacy](#privacy)).
 
 - **Live page** — fetches a URL and up to four of its own stylesheets and scripts,
   then reads it the way you would with View Source open: builder fingerprints
@@ -269,6 +273,7 @@ api/               analyze.php, website.php, certificate.php
 admin/             optional password-gated key management and usage dashboard
 lib/
   Catalog.php      every signal, its weight and its reasoning — the source of truth
+  Subject.php      works out whether a paste is an address, a repo, source or a log
   Report.php       scoring, verdict bands, guard rails
   SiteAnalyzer.php live-page analysis
   CodeAnalyzer.php source analysis

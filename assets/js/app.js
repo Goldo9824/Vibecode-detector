@@ -13,11 +13,21 @@
   // ------------------------------------------------------------------- tabs
 
   var tabs = [
+    { tab: $('tab-auto'), panel: $('panel-auto') },
     { tab: $('tab-url'), panel: $('panel-url') },
     { tab: $('tab-repo'), panel: $('panel-repo') },
     { tab: $('tab-code'), panel: $('panel-code') },
     { tab: $('tab-git'), panel: $('panel-git') }
   ];
+
+  // Tabs are addressed by id rather than by position, so adding one in the
+  // markup does not silently repoint everything that referred to an index.
+  function tabIndex(id) {
+    for (var i = 0; i < tabs.length; i++) {
+      if (tabs[i].tab && tabs[i].tab.id === id) return i;
+    }
+    return 0;
+  }
 
   function selectTab(index) {
     tabs.forEach(function (t, i) {
@@ -114,6 +124,16 @@
       });
   }
 
+  $('form-auto').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var value = $('input').value;
+    if (!value.trim()) { showError('Paste something first.'); return; }
+    var body = new FormData();
+    body.append('mode', 'auto');
+    body.append('input', value);
+    send(this, $('spin-auto'), body);
+  });
+
   $('form-url').addEventListener('submit', function (e) {
     e.preventDefault();
     var value = $('url').value.trim();
@@ -162,13 +182,13 @@
   // script to do either.
   var tries = $('tries');
   if (tries) {
-    var byMode = { url: { tab: 0, input: 'url' }, repo: { tab: 1, input: 'repo' } };
+    var byMode = { url: { tab: 'tab-url', input: 'url' }, repo: { tab: 'tab-repo', input: 'repo' } };
     tries.addEventListener('click', function (e) {
       var button = e.target.closest ? e.target.closest('.try') : null;
       if (!button) return;
       var mode = byMode[button.getAttribute('data-mode')];
       if (!mode) return;
-      selectTab(mode.tab);
+      selectTab(tabIndex(mode.tab));
       var field = $(mode.input);
       field.value = button.getAttribute('data-value') || '';
       field.focus();
@@ -182,6 +202,49 @@
       }
     });
     tries.hidden = false;
+  }
+
+  /*
+   * What the auto field looks like, as you type.
+   *
+   * A coarse mirror of Subject::classify() in PHP, which is the authority —
+   * this only has to be right often enough to be reassuring, and it says
+   * "looks like" rather than naming a decision it does not get to make. The
+   * server classifies again on submit and the result reports what it chose,
+   * so the two disagreeing costs a moment of surprise and never a wrong read.
+   */
+  var autoField = $('input');
+  var reads = $('reads');
+
+  function looksLike(value) {
+    var s = value.trim();
+    if (!s) return '';
+    if (/^\s*[0-9a-f]{6,40}\|\d{6,}\|/im.test(s)) return 'a git log';
+    if (/^commit\s+[0-9a-f]{7,40}\s*$/im.test(s) && /^(Author|Date):\s/im.test(s)) return 'a git log';
+    if (s.indexOf('\n') !== -1) return 'source';
+    if (/^(?:https?:\/\/)?(?:www\.)?github\.com\/[^/\s]+\/[^/\s?#]+/i.test(s)) return 'a repository';
+    if (/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9_-]{1,100}$/.test(s)) return 'a repository';
+    if (/^https?:\/\/\S+$/i.test(s)) return 'an address';
+    if (/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,24}(?::\d{1,5})?(?:\/\S*)?$/i.test(s) && !/[\s<>{}()[\]"'`;=,]/.test(s)) return 'an address';
+    return 'source';
+  }
+
+  if (autoField && reads) {
+    var idle = reads.innerHTML;
+    autoField.addEventListener('input', function () {
+      // Grow with the paste: one line for an address, several for a log.
+      autoField.style.height = 'auto';
+      autoField.style.height = Math.min(autoField.scrollHeight, 320) + 'px';
+
+      var guess = looksLike(autoField.value);
+      reads.innerHTML = '';
+      if (!guess) {
+        reads.innerHTML = idle;
+        return;
+      }
+      reads.appendChild(el('span', 'reads-label', 'Looks like'));
+      reads.appendChild(el('span', 'reads-value', guess));
+    });
   }
 
   // Click the command to select it — it is there to be copied.

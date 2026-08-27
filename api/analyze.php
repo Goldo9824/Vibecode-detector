@@ -17,6 +17,34 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
 
 $mode = isset($_POST['mode']) ? (string) $_POST['mode'] : '';
 
+// Auto mode is not a fifth reading — it is the other four with the choosing
+// done for you. Subject::classify() decides which one the paste is, the
+// request is rewritten as if that mode had been picked by hand, and the
+// result says which way it went so the guess is visible rather than silent.
+$autoChose = null;
+if ($mode === 'auto') {
+    $input = isset($_POST['input']) ? (string) $_POST['input'] : '';
+    $input = str_replace("\0", '', $input);
+    if (trim($input) === '') {
+        vcd_fail('Paste something first — an address, a repository, some source, or a git log.');
+    }
+    if (strlen($input) > 2097152) {
+        vcd_fail('That is a very large paste. Pick a mode and send the interesting part.');
+    }
+
+    $mode = Subject::classify($input);
+    $autoChose = $mode;
+
+    // Hand the chosen branch the field it expects, so nothing below has to
+    // know that auto mode exists.
+    switch ($mode) {
+        case Subject::URL:  $_POST['url']  = trim($input); break;
+        case Subject::REPO: $_POST['repo'] = trim($input); break;
+        case Subject::GIT:  $_POST['log']  = $input; break;
+        default:            $_POST['code'] = $input; break;
+    }
+}
+
 if ($mode === 'url') {
     $crawl = !empty($_POST['crawl']);
 
@@ -150,7 +178,14 @@ if ($mode === 'url') {
     $result = $analyzer->analyze()->toArray();
 
 } else {
-    vcd_fail('Unknown mode. Use "url", "repo", "code" or "git".');
+    vcd_fail('Unknown mode. Use "auto", "url", "repo", "code" or "git".');
+}
+
+// Say which way the guess went, in the report rather than only in the mode
+// field, so somebody who disagrees knows what to override.
+if ($autoChose !== null) {
+    array_unshift($result['notes'], Subject::describe($autoChose));
+    $result['autoDetected'] = true;
 }
 
 // If the operator has configured a database (see docs/ADMIN.md), this

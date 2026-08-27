@@ -76,13 +76,28 @@ VisitLog::record('/');
       <h1 class="console-title">Was this written by a person, or generated?</h1>
 
       <div class="segmented" role="tablist" aria-label="What to analyse">
-        <button class="tab" role="tab" id="tab-url" aria-controls="panel-url" aria-selected="true" type="button">Live page</button>
+        <button class="tab" role="tab" id="tab-auto" aria-controls="panel-auto" aria-selected="true" type="button">Auto</button>
+        <button class="tab" role="tab" id="tab-url" aria-controls="panel-url" aria-selected="false" type="button">Live page</button>
         <button class="tab" role="tab" id="tab-repo" aria-controls="panel-repo" aria-selected="false" type="button">Repository</button>
         <button class="tab" role="tab" id="tab-code" aria-controls="panel-code" aria-selected="false" type="button">Source</button>
         <button class="tab" role="tab" id="tab-git" aria-controls="panel-git" aria-selected="false" type="button">History</button>
       </div>
 
-      <div class="tabpanel" role="tabpanel" id="panel-url" aria-labelledby="tab-url">
+      <div class="tabpanel" role="tabpanel" id="panel-auto" aria-labelledby="tab-auto">
+        <form id="form-auto" novalidate>
+          <label class="visually-hidden" for="input">Anything to read</label>
+          <div class="entry entry-auto">
+            <textarea id="input" name="input" rows="1" spellcheck="false" placeholder="Paste an address, a repo, some source, or a git log&hellip;"></textarea>
+            <button class="go" type="submit" aria-label="Read this">
+              <span class="go-mark" aria-hidden="true">&rarr;</span>
+              <span class="spinner" id="spin-auto" hidden>&middot;&middot;&middot;</span>
+            </button>
+          </div>
+          <p class="reads" id="reads" aria-live="polite"><span class="reads-idle">It works out which of the four it is.</span></p>
+        </form>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-url" aria-labelledby="tab-url" hidden>
         <form id="form-url" novalidate>
           <label class="visually-hidden" for="url">Address of the page to read</label>
           <div class="entry">

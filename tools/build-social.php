@@ -73,10 +73,10 @@ $rgb = function (array $c) use ($img) {
 };
 
 $paper = $rgb(Brand::PAPER_WEB);
-$ink   = $rgb(Brand::INK);
-$red   = $rgb(Brand::RED);
-$grey  = $rgb(Brand::GREY);
-$rule  = $rgb(Brand::RULE);
+$ink   = $rgb(Brand::INK_WEB);
+$red   = $rgb(Brand::RED_WEB);
+$grey  = $rgb(Brand::GREY_WEB);
+$rule  = $rgb(Brand::RULE_WEB);
 
 imagefilledrectangle($img, 0, 0, W * SS, H * SS, $paper);
 

@@ -25,6 +25,7 @@ header('X-Content-Type-Options: nosniff');
 
 $pages = array(
     array('path' => '/',          'changefreq' => 'monthly', 'priority' => '1.0'),
+    array('path' => '/method.php', 'changefreq' => 'monthly', 'priority' => '0.9'),
     array('path' => '/signs.php', 'changefreq' => 'monthly', 'priority' => '0.8'),
     array('path' => '/catalogue.php', 'changefreq' => 'monthly', 'priority' => '0.8'),
 );
@@ -33,6 +34,7 @@ $pages = array(
 // honest answer available without a database and without a build step.
 $lastmod = gmdate('Y-m-d', max(
     (int) @filemtime(__DIR__ . '/index.php'),
+    (int) @filemtime(__DIR__ . '/method.php'),
     (int) @filemtime(__DIR__ . '/signs.php'),
     (int) @filemtime(__DIR__ . '/catalogue.php'),
     (int) @filemtime(__DIR__ . '/lib/Catalog.php'),

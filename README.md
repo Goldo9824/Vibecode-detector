@@ -169,24 +169,34 @@ calibration, the design direction, and the bug reports that fixed what the machi
 got wrong.
 
 So: **a half-vibecoded app for detecting vibecoded apps.** That is on the [front page
-of the site](https://vibecodedetector.fanficnow.com/#provenance), not buried here,
+of the site](https://vibecodedetector.fanficnow.com/method.php#provenance), not buried here,
 because it is the most useful thing this project has to say about its own reliability.
 
-Point the detector at this site and it returns **73% — Likely AI-generated**. It read
-55% for most of this project's life; the number moved because the detector got better
-at reading code, not because the site changed. It now catches its own JavaScript.
+Point the detector at this site and it comes back in the AI-leaning band. The exact
+figure is deliberately not written down here or on the site: it has read 55%, then
+73%, then lower again after the redesign, and a number typed into a paragraph is
+stale the week after it is typed. Run it yourself — that is what the front page is
+for, and a claim you can check in ten seconds beats one you have to take on trust.
+
+It moves in both directions and neither is an adjustment made in the project's
+favour: up when the detector got better at reading JavaScript and started catching
+its own, down when the front page stopped being four screens of prose under a text
+box. No signal that fires on this site has ever been exempted.
 
 - **Nothing to fingerprint.** Agentic editors write into an ordinary repository. No
   badge, no builder subdomain, no injected runtime. Signs run in one direction only,
   and this repo is the direction they do not run in.
 - **The tells were avoided on purpose.** No what-comments, no docblock on every
-  trivial function, no indigo gradient, no Inter, no three-card grid. That is
-  masking, and masking is cheap. It took no particular effort.
+  trivial function, no indigo gradient, no Inter, no frosted glass, no neon, no
+  three-card grid — and, since the redesign, no gradient anywhere on the site at
+  all. That is masking, and masking is cheap. It took no particular effort, and
+  it is the reason the aesthetic family scores this site at zero: not restraint,
+  just knowing what the list says.
 
-What fires is small and fair: formal error messages, heavy em-dash use, a `border-left`
-accent, vocabulary in the front-end script that names nothing in particular. Every one
-is genuinely present. The reading is no longer flattering and it has not been adjusted,
-because a detector that quietly exempts the site it runs on is worth nothing at all.
+What fires is small and fair: formal error messages, heavy em-dash use, vocabulary in
+the front-end script that names nothing in particular. Every one is genuinely present.
+The reading is not flattering and it has not been adjusted, because a detector that
+quietly exempts the site it runs on is worth nothing at all.
 
 None of it is special-cased away, and a detector that exempted itself would be worth
 less than one that takes the hit.
@@ -247,7 +257,8 @@ canonicals, Open Graph, structured data and the sitemap — is in
 ## Layout
 
 ```
-index.php          the page
+index.php          the analyser, and nothing else
+method.php         how the number is arrived at, where it is wrong, who wrote this
 signs.php          the visual field guide, every specimen rendered live
 catalogue.php      every signal, its weight and its reasoning, on the site
 verify.php         certificate verification

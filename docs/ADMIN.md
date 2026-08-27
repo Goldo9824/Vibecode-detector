@@ -214,6 +214,7 @@ for instance — is a code change to where `UsageLog::record()` is called from
 one, on purpose, to keep the actual behaviour legible in the places it
 happens rather than scattered behind a setting. The same reasoning is why
 `VisitLog::record()` is called in the first lines of `index.php`,
-`verify.php` and `signs.php` rather than from `lib/bootstrap.php`: every page
+`method.php`, `verify.php`, `signs.php` and `catalogue.php` rather than from
+`lib/bootstrap.php`: every page
 that counts a visit says so in its own opening lines, and a page that does
 not appear in that list does not count one.

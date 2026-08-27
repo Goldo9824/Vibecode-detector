@@ -105,6 +105,17 @@ jobs:
           if echo "$body" | grep -qi '<?php'; then echo "::error::PHP leaked into the output"; exit 1; fi
           echo "homepage OK ($(echo "$body" | wc -c) bytes)"
 
+      - name: The front page is the analyser, and the argument has a page
+        run: |
+          home=$(curl -sf http://127.0.0.1:8080/)
+          echo "$home" | grep -q 'id="analyzer"' || { echo "::error::no analyser on the front page"; exit 1; }
+          echo "$home" | grep -q 'class="band"' && { echo "::error::long-form sections are back on the front page"; exit 1; }
+          method=$(curl -sf http://127.0.0.1:8080/method.php)
+          for anchor in 'id="method"' 'id="limits"' 'id="provenance"'; do
+            echo "$method" | grep -q "$anchor" || { echo "::error::method.php is missing $anchor"; exit 1; }
+          done
+          echo "front page OK ($(echo "$home" | wc -c) bytes), method OK ($(echo "$method" | wc -c) bytes)"
+
       - name: The signal catalogue renders every signal
         run: |
           body=$(curl -sf http://127.0.0.1:8080/catalogue.php)

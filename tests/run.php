@@ -2535,9 +2535,14 @@ ok(isset($spanRule[1]) && strpos($spanRule[1], 'grid-column: 2') !== false,
 
 // Every grid in the stylesheet: count declared columns against the children
 // the markup puts in it, so this class of bug is caught generally.
-$page = (string) file_get_contents(dirname(__DIR__) . '/index.php');
-ok(substr_count($page, 'class="ladder"') === 1, 'the ladder list is where the test expects it');
-preg_match('~<ol class="ladder">(.*?)</ol>~s', $page, $ladderHtml);
+//
+// The ladder lives on the method page rather than the front page: the front
+// page is the analyser and nothing else. The invariant it guards is the same
+// wherever the markup sits.
+$page   = (string) file_get_contents(dirname(__DIR__) . '/index.php');
+$method = (string) file_get_contents(dirname(__DIR__) . '/method.php');
+ok(substr_count($method, 'class="ladder"') === 1, 'the ladder list is where the test expects it');
+preg_match('~<ol class="ladder">(.*?)</ol>~s', $method, $ladderHtml);
 // The count is not the point — the invariant is. Each rung puts three children
 // into a two-column grid, so a rung whose description is missing, or a stray
 // extra element, is what actually breaks the layout.
@@ -2549,6 +2554,23 @@ ok(substr_count((string) ($ladderHtml[1] ?? ''), '<strong>') === $items,
    'every rung has exactly one term');
 
 ok(strpos($page, 'A Landfall studio product') !== false, 'the studio credit is in the footer');
+
+// The front page is the analyser. The long-form argument moved to method.php,
+// and a reader who wants it is one link away rather than four screens down.
+ok(strpos($page, 'class="band"') === false,
+   'the front page carries no long-form sections under the analyser');
+ok(substr_count($page, 'id="analyzer"') === 1, 'the front page still carries the analyser');
+foreach (array('id="method"', 'id="limits"', 'id="provenance"') as $anchor) {
+    ok(strpos($method, $anchor) !== false, 'method.php carries ' . $anchor);
+    ok(strpos($page, '<section class="band" ' . $anchor) === false,
+       'the front page no longer carries ' . $anchor);
+}
+// Every page that links to those anchors has to link to the page they are on.
+foreach (array('index.php', 'signs.php', 'catalogue.php') as $file) {
+    $src = (string) file_get_contents(dirname(__DIR__) . '/' . $file);
+    ok(!preg_match('~href="(?:\./)?#(?:method|limits|provenance)"~', $src),
+       $file . ' does not link to sections that left the front page');
+}
 ok(strpos($css, '.colophon .studio') !== false, 'the studio credit is styled');
 
 // The certificate is a finding handed to a third party. It states the limits of

@@ -49,7 +49,7 @@ final class VisitLog
     /**
      * Record one page view. Never throws, never blocks the page.
      *
-     * @param string $path the route being viewed, e.g. '/', '/verify', '/signs'
+     * @param string $path the route being viewed, e.g. '/', '/method', '/signs'
      */
     public static function record(string $path): void
     {

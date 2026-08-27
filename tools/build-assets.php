@@ -27,15 +27,15 @@ $files = array(
     // Standalone: a favicon has no page to inherit from.
     $dir . '/favicon.svg' => str_replace(
         '<svg ',
-        '<svg style="background:#f6f2e9" ',
-        Brand::markSvg(64, '#17140f', '#b8402e')
+        '<svg style="background:#0b0b0c" ',
+        Brand::markSvg(64, '#f4f4f5', '#ff4d2e')
     ),
 
     // Social card mark on the paper ground, large.
     $dir . '/mark-512.svg' => str_replace(
         '<svg ',
-        '<svg style="background:#f6f2e9" ',
-        Brand::markSvg(512, '#17140f', '#b8402e', 'role="img" aria-label="Vibe Code Detector"')
+        '<svg style="background:#0b0b0c" ',
+        Brand::markSvg(512, '#f4f4f5', '#ff4d2e', 'role="img" aria-label="Vibe Code Detector"')
     ),
 );
 

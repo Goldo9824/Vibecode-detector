@@ -33,11 +33,34 @@ require_once __DIR__ . '/Text.php';
  */
 final class RepoAnalyzer
 {
-    /** Source files read in full and put through the code analyser. */
+    /** Source files read in full and put through the code analyser, by default. */
     const MAX_CODE_FILES = 3;
 
-    /** Wall clock for the whole reading, in seconds. Shared hosting is not patient. */
+    /**
+     * The most a reader may ask for.
+     *
+     * Not fifty, which is what the live-page crawler offers, because the two
+     * limits are limits on different things. A page costs a request to
+     * somebody's server; a source file comes off raw.githubusercontent.com,
+     * which spends nothing from the hourly GitHub allowance this whole
+     * installation shares — so the only cost here is wall clock, and wall
+     * clock is what a shared host stops being patient about first. Twenty-five
+     * is what fits in the budget below with room left to render the page.
+     */
+    const MAX_CODE_FILES_CAP = 25;
+
+    /**
+     * Wall clock for the whole reading, in seconds. Shared hosting is not
+     * patient. This is the budget for a default reading; asking for more files
+     * buys more time, up to TIME_CEILING and no further.
+     */
     const TIME_BUDGET = 18.0;
+
+    /** The hard stop, chosen to leave room to render inside a 30s request. */
+    const TIME_CEILING = 25.0;
+
+    /** Seconds bought per extra file asked for, over the default three. */
+    const SECONDS_PER_EXTRA_FILE = 0.3;
 
     /** Below this a tree is a gist, not a codebase, and the tree signals stay quiet. */
     const SUBSTANTIAL_FILES = 25;
@@ -52,10 +75,25 @@ final class RepoAnalyzer
     private $paths = array();
     /** @var array<string,string> path => contents, for the files that were read */
     private $files = array();
+    /** @var int how many source files this reading may open */
+    private $fileBudget = self::MAX_CODE_FILES;
 
     public function __construct(GitHub $api)
     {
         $this->api = $api;
+    }
+
+    /**
+     * How many source files to open, from one to MAX_CODE_FILES_CAP.
+     *
+     * Clamped rather than rejected: this arrives from a slider in a browser,
+     * and a reading that refuses to happen because somebody sent 900 is worse
+     * for everyone than a reading that quietly reads twenty-five.
+     */
+    public function readAtMost(int $files): self
+    {
+        $this->fileBudget = max(1, min($files, self::MAX_CODE_FILES_CAP));
+        return $this;
     }
 
     /** @throws RepoError */
@@ -670,7 +708,7 @@ final class RepoAnalyzer
 
         $read = array();
         foreach ($candidates as $candidate) {
-            if (count($read) >= self::MAX_CODE_FILES || $this->timeLeft() < 3.0) {
+            if (count($read) >= $this->fileBudget || $this->timeLeft() < 3.0) {
                 break;
             }
             $source = $this->fileContents($candidate['path'], $branch);
@@ -799,9 +837,23 @@ final class RepoAnalyzer
         }
     }
 
+    /**
+     * Seconds left in this reading's budget.
+     *
+     * A reader who asks for twenty-five files and gets four because the
+     * default eighteen seconds ran out has been given a slider that does not
+     * do anything past its first quarter, so the budget grows with the ask —
+     * bounded, because the request still has to return.
+     */
+    private function budget(): float
+    {
+        $extra = max(0, $this->fileBudget - self::MAX_CODE_FILES) * self::SECONDS_PER_EXTRA_FILE;
+        return min(self::TIME_BUDGET + $extra, self::TIME_CEILING);
+    }
+
     private function timeLeft(): float
     {
-        return self::TIME_BUDGET - (microtime(true) - $this->started);
+        return $this->budget() - (microtime(true) - $this->started);
     }
 
     /** @param array{total:int,read:int} $commits */

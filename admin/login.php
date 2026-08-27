@@ -41,17 +41,19 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 </head>
 <body>
 <main class="shell admin-shell narrow">
-  <h1>Admin</h1>
-  <?php if ($error !== ''): ?>
-    <p class="error-box"><?= h($error) ?></p>
-  <?php endif; ?>
-  <form method="post" novalidate>
-    <label class="field" for="password">Password</label>
-    <input type="password" id="password" name="password" autocomplete="current-password" autofocus required>
-    <div class="actions">
-      <button class="btn" type="submit">Log in</button>
-    </div>
-  </form>
+  <div class="admin-card">
+    <h1 class="admin-card-title">Admin</h1>
+    <?php if ($error !== ''): ?>
+      <p class="error-box"><?= h($error) ?></p>
+    <?php endif; ?>
+    <form method="post" novalidate>
+      <label class="field" for="password">Password</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" autofocus required>
+      <div class="actions">
+        <button class="btn" type="submit">Log in</button>
+      </div>
+    </form>
+  </div>
 </main>
 </body>
 </html>

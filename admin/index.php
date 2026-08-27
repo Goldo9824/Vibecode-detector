@@ -182,7 +182,7 @@ if ($pdo !== null) {
                       <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
                       <input type="hidden" name="action" value="revoke_key">
                       <input type="hidden" name="id" value="<?= (int) $k['id'] ?>">
-                      <button type="submit" class="btn-quiet" style="border:none;padding:0;text-decoration:underline;background:none;font:inherit;text-transform:none;letter-spacing:normal;cursor:pointer;color:var(--red);">Remove</button>
+                      <button type="submit" class="link-danger">Remove</button>
                     </form>
                   <?php endif; ?>
                 </td>

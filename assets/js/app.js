@@ -124,6 +124,120 @@
       });
   }
 
+  /*
+   * The reading settings.
+   *
+   * A panel of sliders that hangs off a small button inside the field, one
+   * slider per thing this reading is allowed to open. It replaced a tickbox
+   * that could say "one page" or "all fifty" and nothing in between, which is
+   * the wrong shape for a control whose cost lands on somebody else.
+   *
+   * Auto mode carries both sliders, because which one matters is not decided
+   * until the paste has been read. Sending the one that turns out not to
+   * apply costs nothing: the endpoint ignores a parameter its chosen mode has
+   * no use for.
+   *
+   * Shut by default, because the default is right almost every time, and the
+   * button carries the settings that are not so nothing is silently on.
+   */
+  var SLIDERS = {
+    pages: {
+      fallback: 1,
+      describe: function (n) {
+        if (n === 1) return 'One page, read deeply — its stylesheets, its scripts and its source maps.';
+        if (n <= 5) return n + ' pages, compared against each other. Site-wide signals need a few to fire.';
+        return 'Up to ' + n + ' pages. It stops early if the site is slow, and says how many it managed.';
+      }
+    },
+    files: {
+      fallback: 3,
+      describe: function (n) {
+        if (n === 1) return 'One source file, the largest worth reading. A style needs more than one file to be a style.';
+        if (n <= 5) return n + ' source files, the largest worth reading. Enough for a style, not for a codebase.';
+        return 'Up to ' + n + ' source files. It stops early if the clock runs out, and says how many it managed.';
+      }
+    }
+  };
+
+  function paramsControl(mode, keys) {
+    var open = $('params-open-' + mode);
+    var panel = $('params-panel-' + mode);
+    var badge = $('params-badge-' + mode);
+    var parts = [];
+
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i];
+      var range = $(key + '-' + mode);
+      if (!range) continue;
+      parts.push({
+        key: key,
+        spec: SLIDERS[key],
+        range: range,
+        out: $(key + '-out-' + mode),
+        note: $(key + '-note-' + mode)
+      });
+    }
+    if (!open || !panel || !parts.length) {
+      return { value: function (key) { return SLIDERS[key] ? SLIDERS[key].fallback : 1; } };
+    }
+
+    function read(part) {
+      return parseInt(part.range.value, 10) || part.spec.fallback;
+    }
+
+    function paint() {
+      var set = [];
+      for (var i = 0; i < parts.length; i++) {
+        var part = parts[i];
+        var n = read(part);
+        if (part.out) part.out.textContent = String(n);
+        if (part.note) part.note.textContent = part.spec.describe(n);
+        if (n !== part.spec.fallback) set.push(String(n));
+      }
+      // One number when one slider has been moved, both separated when two
+      // have. It is a readout of the settings, so it shows all of them.
+      if (badge) {
+        badge.textContent = set.join('·');
+        badge.hidden = set.length === 0;
+      }
+      open.classList.toggle('is-set', set.length > 0);
+    }
+
+    function setOpen(on) {
+      panel.hidden = !on;
+      open.setAttribute('aria-expanded', on ? 'true' : 'false');
+    }
+
+    open.addEventListener('click', function (e) {
+      e.stopPropagation();
+      setOpen(panel.hidden);
+    });
+    panel.addEventListener('click', function (e) { e.stopPropagation(); });
+    // Anywhere else, and Escape, closes it. A panel that traps a click is a
+    // panel somebody has to hunt for the way out of.
+    document.addEventListener('click', function () { setOpen(false); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !panel.hidden) { setOpen(false); open.focus(); }
+    });
+    for (var j = 0; j < parts.length; j++) {
+      parts[j].range.addEventListener('input', paint);
+    }
+    paint();
+
+    return {
+      value: function (key) {
+        for (var i = 0; i < parts.length; i++) {
+          if (parts[i].key === key) return read(parts[i]);
+        }
+        return SLIDERS[key] ? SLIDERS[key].fallback : 1;
+      }
+    };
+  }
+
+  var autoParams = paramsControl('auto', ['pages', 'files']);
+  var urlParams = paramsControl('url', ['pages']);
+  var repoParams = paramsControl('repo', ['files']);
+
   $('form-auto').addEventListener('submit', function (e) {
     e.preventDefault();
     var value = $('input').value;
@@ -131,6 +245,10 @@
     var body = new FormData();
     body.append('mode', 'auto');
     body.append('input', value);
+    // Both are sent whatever the paste turns out to be; the endpoint reads
+    // only the one its chosen mode has a use for.
+    body.append('pages', String(autoParams.value('pages')));
+    body.append('files', String(autoParams.value('files')));
     send(this, $('spin-auto'), body);
   });
 
@@ -141,7 +259,7 @@
     var body = new FormData();
     body.append('mode', 'url');
     body.append('url', value);
-    if ($('crawl').checked) body.append('crawl', '1');
+    body.append('pages', String(urlParams.value('pages')));
     send(this, $('spin-url'), body);
   });
 
@@ -152,6 +270,7 @@
     var body = new FormData();
     body.append('mode', 'repo');
     body.append('repo', value);
+    body.append('files', String(repoParams.value('files')));
     send(this, $('spin-repo'), body);
   });
 

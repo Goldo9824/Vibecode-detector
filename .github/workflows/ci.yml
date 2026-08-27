@@ -132,6 +132,26 @@ jobs:
           check /tmp/probe-code.txt code
           check /tmp/probe-git.txt git
 
+      - name: The reading settings are on every panel that spends someone else's resources
+        run: |
+          home=$(curl -sf http://127.0.0.1:8080/)
+          for id in params-open-auto pages-auto files-auto params-open-url pages-url params-open-repo files-repo; do
+            echo "$home" | grep -q "id=\"$id\"" || { echo "::error::missing #$id"; exit 1; }
+          done
+          for id in files-url pages-repo; do
+            echo "$home" | grep -q "id=\"$id\"" && { echo "::error::#$id is on a panel it means nothing to"; exit 1; }
+          done
+          echo "$home" | grep -q 'id="crawl"' && { echo "::error::the whole-site tickbox is back"; exit 1; }
+          echo "reading settings OK"
+
+      - name: An out-of-range page count is clamped, not refused
+        run: |
+          got=$(curl -s -X POST http://127.0.0.1:8080/api/analyze.php \
+                  -F mode=repo -F repo=not-a-repo -F files=9000 -o /dev/null -w '%{http_code}')
+          # Refused for naming a repository that is not one, never for the slider.
+          [ "$got" = "400" ] || { echo "::error::files=9000 gave HTTP $got, wanted a plain 400 about the repo"; exit 1; }
+          echo "clamping OK"
+
       - name: The signal catalogue renders every signal
         run: |
           body=$(curl -sf http://127.0.0.1:8080/catalogue.php)

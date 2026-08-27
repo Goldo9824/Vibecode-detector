@@ -38,7 +38,7 @@ if ($mode === 'auto') {
     // Hand the chosen branch the field it expects, so nothing below has to
     // know that auto mode exists.
     switch ($mode) {
-        case Subject::URL:  $_POST['url']  = trim($input); break;
+        case Subject::URL:  $_POST['url'] = trim($input); break;
         case Subject::REPO: $_POST['repo'] = trim($input); break;
         case Subject::GIT:  $_POST['log']  = $input; break;
         default:            $_POST['code'] = $input; break;
@@ -46,7 +46,25 @@ if ($mode === 'auto') {
 }
 
 if ($mode === 'url') {
-    $crawl = !empty($_POST['crawl']);
+    /*
+     * How many pages to read, 1 to Crawler::MAX_PAGES.
+     *
+     * This replaced a tickbox. A tickbox could say "read one page" or "read
+     * as many as fifty" and nothing in between, which is the wrong shape for
+     * a control whose cost lands on somebody else's server: a reader who
+     * wants six pages should be able to ask for six rather than being made to
+     * choose between one and everything.
+     *
+     * One page is still one page — no crawl, and the deeper single-page read
+     * with source maps. The tickbox is still honoured for callers that send
+     * it, and means "as many as you would have".
+     */
+    $pages = isset($_POST['pages']) ? (int) $_POST['pages'] : 1;
+    if ($pages <= 1 && !empty($_POST['crawl'])) {
+        $pages = Crawler::MAX_PAGES;
+    }
+    $pages = max(1, min($pages, Crawler::MAX_PAGES));
+    $crawl = $pages > 1;
 
     // A crawl spends from both buckets: it is still a page fetch, and its own
     // budget should not be a way around the page limit. VCD_LIMIT_URL is sized
@@ -81,13 +99,14 @@ if ($mode === 'url') {
     if ($crawl) {
         try {
             $crawler = new Crawler($fetcher);
-            $pages = $crawler->crawl($url);
+            $crawled = $crawler->crawl($url, $pages);
         } catch (FetchError $e) {
             vcd_fail($e->getMessage(), 400);
         }
 
-        $entry = $pages[0]['url'];
-        $result = (new SiteSurvey($entry, $pages, $crawler->notes(), $crawler->sitemap(), $crawler->missing()))->analyze()->toArray();
+        $entry = $crawled[0]['url'];
+        $result = (new SiteSurvey($entry, $crawled, $crawler->notes(), $crawler->sitemap(), $crawler->missing()))->analyze()->toArray();
+        $result['stats']['pagesAsked'] = $pages;
     } else {
         try {
             $doc = $fetcher->fetchSite($url);
@@ -150,9 +169,23 @@ if ($mode === 'url') {
         register_shutdown_function('vcd_release_fetch_slot', $slot);
     }
 
+    /*
+     * How much of the repository to open, 1 to RepoAnalyzer::MAX_CODE_FILES_CAP.
+     *
+     * The companion to the page slider, and deliberately a different ceiling:
+     * source files come off the raw host, which spends nothing from the shared
+     * GitHub allowance, so the limit here is wall clock rather than somebody
+     * else's quota. RepoAnalyzer clamps it again and grows its own time budget
+     * to match, then reports how many it actually managed.
+     */
+    $files = isset($_POST['files']) ? (int) $_POST['files'] : RepoAnalyzer::MAX_CODE_FILES;
+    $files = max(1, min($files, RepoAnalyzer::MAX_CODE_FILES_CAP));
+
     try {
         list($owner, $name) = GitHub::parse(isset($_POST['repo']) ? (string) $_POST['repo'] : '');
-        $result = (new RepoAnalyzer(new GitHub($owner, $name)))->analyze()->toArray();
+        $analyzer = (new RepoAnalyzer(new GitHub($owner, $name)))->readAtMost($files);
+        $result = $analyzer->analyze()->toArray();
+        $result['stats']['filesAsked'] = $files;
     } catch (RepoError $e) {
         vcd_fail($e->getMessage(), 400);
     } catch (FetchError $e) {

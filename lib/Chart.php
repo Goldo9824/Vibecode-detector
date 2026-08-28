@@ -19,6 +19,9 @@ require_once __DIR__ . '/Num.php';
  */
 final class Chart
 {
+    /** How many bands share() and stack() will paint before folding the rest into one. */
+    const SHADES = 5;
+
     /**
      * Daily traffic: views as columns, distinct visitors as a line over them.
      *
@@ -102,7 +105,13 @@ final class Chart
      * no second quantity to draw and a lone line over a lone bar would just be
      * the same data twice.
      *
-     * @param array<int,array{day:string,n:int}> $rows oldest first
+     * A row may carry 'flag' => true, which paints that column in the accent
+     * instead of the neutral. It is the emphasis form rather than a second
+     * series: on a chart of requests per hour, the hours GitHub said no in are
+     * the whole point, and a second stacked band would say the same thing in a
+     * shape that is harder to find.
+     *
+     * @param array<int,array{day:string,n:int,label?:string,flag?:bool}> $rows oldest first
      */
     public static function series(array $rows, string $label = 'Per day', string $noun = 'analyses'): string
     {
@@ -140,11 +149,12 @@ final class Chart
             $cx = $padL + $slot * ($i + 0.5);
             $bh = ($value / $scale) * $plotH;
             $bars .= sprintf(
-                '<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" rx="1" class="c-bar"><title>%s — %d %s</title></rect>',
+                '<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" rx="1" class="c-bar%s"><title>%s — %d %s</title></rect>',
                 $cx - $barW / 2,
                 $padT + $plotH - $bh,
                 $barW,
                 $bh,
+                empty($r['flag']) ? '' : ' is-hit',
                 self::esc(self::rowLabel($r)),
                 $value,
                 self::esc($noun)
@@ -168,11 +178,11 @@ final class Chart
     }
 
     /**
-     * Views by hour of day, 0–23, in UTC.
+     * One quantity by hour of day, 0–23, in UTC.
      *
      * @param array<int,int> $counts indexed by hour
      */
-    public static function hours(array $counts, string $label = 'Views by hour of day, UTC'): string
+    public static function hours(array $counts, string $label = 'Views by hour of day, UTC', string $noun = 'views'): string
     {
         $max = 0;
         foreach ($counts as $n) {
@@ -198,8 +208,8 @@ final class Chart
             }
             $bh = ($n / $max) * $plotH;
             $bars .= sprintf(
-                '<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" rx="1" class="c-bar"><title>%02d:00 UTC — %d views</title></rect>',
-                $slot * $hour + ($slot - $barW) / 2, $padT + $plotH - $bh, $barW, $bh, $hour, $n
+                '<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" rx="1" class="c-bar"><title>%02d:00 UTC — %d %s</title></rect>',
+                $slot * $hour + ($slot - $barW) / 2, $padT + $plotH - $bh, $barW, $bh, $hour, $n, self::esc($noun)
             );
         }
 
@@ -214,6 +224,273 @@ final class Chart
             . '<title>%s</title>%s%s</svg>',
             (int) $w, (int) $h, self::esc($label), self::esc($label), $bars, $ticks
         );
+    }
+
+    /**
+     * Views by weekday, Monday first.
+     *
+     * @param array<int,int> $counts indexed 1 (Monday) to 7 (Sunday)
+     */
+    public static function weekdays(array $counts, string $label = 'By weekday', string $noun = 'views'): string
+    {
+        $names = array(1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 'Sat', 7 => 'Sun');
+
+        $max = 0;
+        foreach ($names as $i => $name) {
+            $max = max($max, isset($counts[$i]) ? (int) $counts[$i] : 0);
+        }
+        if ($max === 0) {
+            return '';
+        }
+
+        $w = 720.0;
+        $h = 110.0;
+        $padT = 8.0;
+        $padB = 20.0;
+        $plotH = $h - $padT - $padB;
+        $slot = $w / 7;
+        // Seven slots across 720 units is a hundred each: at half a slot the
+        // "bars" are blocks. Capped the same way the daily charts cap theirs.
+        $barW = min(22.0, $slot * 0.5);
+
+        $bars = '';
+        $ticks = '';
+        foreach ($names as $i => $name) {
+            $n = isset($counts[$i]) ? (int) $counts[$i] : 0;
+            if ($n > 0) {
+                $bh = ($n / $max) * $plotH;
+                $bars .= sprintf(
+                    '<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" rx="1" class="c-bar"><title>%s — %d %s</title></rect>',
+                    $slot * ($i - 1) + ($slot - $barW) / 2, $padT + $plotH - $bh, $barW, $bh,
+                    self::esc($name), $n, self::esc($noun)
+                );
+            }
+            $ticks .= sprintf('<text x="%.2f" y="%.2f" class="c-axis" text-anchor="middle">%s</text>',
+                $slot * ($i - 1) + $slot / 2, $h - 6, self::esc($name));
+        }
+
+        return sprintf(
+            '<svg class="chart chart-hours" viewBox="0 0 %d %d" preserveAspectRatio="none" role="img" aria-label="%s">'
+            . '<title>%s</title>%s%s</svg>',
+            (int) $w, (int) $h, self::esc($label), self::esc($label), $bars, $ticks
+        );
+    }
+
+    /**
+     * Part-to-whole, as one horizontal bar with the figures written out beside it.
+     *
+     * Not a pie and not a donut: a ring is only readable when the slices are far
+     * apart, and the question here — "how much of this month was whole-site
+     * reads" — is usually asked of two numbers that are close. A single bar
+     * answers it along one axis, at any width, and keeps its labels legible on
+     * a phone.
+     *
+     * The shades are one colour at five strengths rather than five colours,
+     * because the categories are ordered by size: a sequential ramp says
+     * "bigger" where a set of hues would only say "different", and the panel
+     * keeps its one accent for the thing that is actually wrong. Anything past
+     * the fifth category folds into "Other" — a sixth shade would be a shade
+     * nobody can tell from the fifth.
+     *
+     * Every segment carries its number in the list underneath, so the reading
+     * never depends on telling two greys apart.
+     *
+     * @param  array<int,array{label:string,n:int}> $slices biggest first
+     */
+    public static function share(array $slices, string $noun = '', int $keep = self::SHADES): string
+    {
+        $slices = self::fold($slices, $keep);
+        $total = 0;
+        foreach ($slices as $slice) {
+            $total += max(0, (int) $slice['n']);
+        }
+        if ($total <= 0) {
+            return '';
+        }
+
+        $w = 720.0;
+        $h = 26.0;
+        $gap = 2.0;   // surface showing through, rather than a stroke around each segment
+
+        $bar = '';
+        $list = '';
+        $x = 0.0;
+        $last = count($slices) - 1;
+
+        foreach ($slices as $i => $slice) {
+            $n = max(0, (int) $slice['n']);
+            $share = $n / $total;
+            $segW = $share * $w;
+            // The gap comes off every segment but the last, so the bar still
+            // ends exactly at full width.
+            $drawn = max(0.0, $segW - ($i === $last ? 0.0 : $gap));
+
+            if ($drawn > 0) {
+                $bar .= sprintf(
+                    '<rect x="%.2f" y="0" width="%.2f" height="%.2f" rx="2" class="c-seg" fill-opacity="%.2f">'
+                    . '<title>%s — %s %s(%d%%)</title></rect>',
+                    $x, $drawn, $h, self::shade($i),
+                    self::esc((string) $slice['label']),
+                    self::esc(Num::exact($n)),
+                    $noun !== '' ? self::esc($noun) . ' ' : '',
+                    (int) round($share * 100)
+                );
+            }
+            $x += $segW;
+
+            $list .= sprintf(
+                '<li><span class="key key-seg" style="opacity:%.2f"></span>'
+                . '<span class="share-label">%s</span>'
+                . '<span class="share-n">%s</span>'
+                . '<span class="share-pct">%d%%</span></li>',
+                self::shade($i),
+                self::esc((string) $slice['label']),
+                self::esc(Num::compact($n)),
+                (int) round($share * 100)
+            );
+        }
+
+        return sprintf(
+            '<svg class="chart chart-share" viewBox="0 0 %d %d" preserveAspectRatio="none" role="img" aria-label="%s">'
+            . '<title>%s</title>%s</svg><ul class="share-key">%s</ul>',
+            (int) $w, (int) $h,
+            self::esc('Share by ' . ($noun !== '' ? $noun : 'count')),
+            self::esc('Share by ' . ($noun !== '' ? $noun : 'count')),
+            $bar, $list
+        );
+    }
+
+    /**
+     * Several quantities per day, stacked into one column each.
+     *
+     * The same shape as series(), for a total that is made of parts: the height
+     * is what happened that day and the bands say what it was made of. Stacked
+     * rather than side by side, because at ninety days a grouped column is four
+     * bars a pixel wide and the total — the thing worth reading first —
+     * disappears.
+     *
+     * @param array<int,array<string,mixed>> $rows  oldest first, each with 'day' and one integer per key
+     * @param array<int,string>              $keys  which fields to stack, bottom first
+     * @param array<string,string>           $names key => what to call it in the tooltip
+     */
+    public static function stack(array $rows, array $keys, array $names = array(), string $label = 'Per day'): string
+    {
+        $n = count($rows);
+        if ($n === 0 || count($keys) === 0) {
+            return '';
+        }
+
+        $w = 720.0;
+        $h = 180.0;
+        $padL = 34.0;
+        $padR = 8.0;
+        $padT = 12.0;
+        $padB = 22.0;
+        $plotW = $w - $padL - $padR;
+        $plotH = $h - $padT - $padB;
+
+        $max = 0;
+        $totals = array();
+        foreach ($rows as $i => $row) {
+            $sum = 0;
+            foreach ($keys as $key) {
+                $sum += isset($row[$key]) ? max(0, (int) $row[$key]) : 0;
+            }
+            $totals[$i] = $sum;
+            $max = max($max, $sum);
+        }
+        $scale = $max > 0 ? $max : 1;
+
+        $slot = $plotW / $n;
+        $barW = max(1.0, min(18.0, $slot * 0.7));
+
+        $bars = '';
+        foreach ($rows as $i => $row) {
+            if ($totals[$i] <= 0) {
+                continue;
+            }
+            $cx = $padL + $slot * ($i + 0.5);
+            $foot = $padT + $plotH;
+
+            foreach ($keys as $k => $key) {
+                $value = isset($row[$key]) ? max(0, (int) $row[$key]) : 0;
+                if ($value <= 0) {
+                    continue;
+                }
+                $bh = ($value / $scale) * $plotH;
+                $bars .= sprintf(
+                    '<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" class="c-seg" fill-opacity="%.2f">'
+                    . '<title>%s — %d %s</title></rect>',
+                    $cx - $barW / 2, $foot - $bh, $barW, $bh, self::shade($k),
+                    self::esc(self::rowLabel($row)),
+                    $value,
+                    self::esc(isset($names[$key]) ? $names[$key] : $key)
+                );
+                $foot -= $bh;
+            }
+        }
+
+        $grid = self::gridlines($max, $padL, $padT, $plotH, $w - $padR);
+
+        $axis = sprintf('<text x="%.2f" y="%.2f" class="c-axis">%s</text>',
+                    $padL, $h - 6, self::esc(self::rowLabel($rows[0])))
+              . sprintf('<text x="%.2f" y="%.2f" class="c-axis" text-anchor="end">%s</text>',
+                    $w - $padR, $h - 6, self::esc(self::rowLabel($rows[$n - 1])));
+
+        return sprintf(
+            '<svg class="chart" viewBox="0 0 %d %d" preserveAspectRatio="none" role="img" aria-label="%s">'
+            . '<title>%s</title>%s%s%s</svg>',
+            (int) $w, (int) $h,
+            self::esc($label), self::esc($label),
+            $grid, $bars, $axis
+        );
+    }
+
+    /**
+     * A legend swatch at the same strength stack() and share() paint the nth
+     * band, so a caption written by hand cannot drift out of step with the
+     * chart above it.
+     */
+    public static function key(int $index, string $text): string
+    {
+        return sprintf('<span class="key key-seg" style="opacity:%.2f"></span> %s',
+            self::shade($index), self::esc($text));
+    }
+
+    /**
+     * Everything past the nth category, added up and called "Other".
+     *
+     * @param  array<int,array{label:string,n:int}> $slices biggest first
+     * @return array<int,array{label:string,n:int}>
+     */
+    public static function fold(array $slices, int $keep = self::SHADES, string $label = 'Other'): array
+    {
+        $keep = max(1, $keep);
+        if (count($slices) <= $keep) {
+            return array_values($slices);
+        }
+
+        $out = array_slice(array_values($slices), 0, $keep - 1);
+        $rest = 0;
+        foreach (array_slice(array_values($slices), $keep - 1) as $slice) {
+            $rest += max(0, (int) $slice['n']);
+        }
+        $out[] = array('label' => $label, 'n' => $rest);
+        return $out;
+    }
+
+    /**
+     * How strongly the nth band is painted, 0 to 1.
+     *
+     * One colour at five strengths, spaced so that the palest still stands off
+     * the surface it is drawn on. Past the fifth it stops getting fainter
+     * rather than fading into the panel — fold() is what keeps it from getting
+     * that far.
+     */
+    public static function shade(int $index): float
+    {
+        $steps = array(1.0, 0.82, 0.66, 0.51, 0.38);
+        return $steps[max(0, min(count($steps) - 1, $index))];
     }
 
     /**

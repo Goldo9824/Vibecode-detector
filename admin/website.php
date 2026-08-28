@@ -55,6 +55,7 @@ $modes = array();
 $sources = array();
 $callers = array();
 $recent = array();
+$hours = array();
 
 if ($pdo === null) {
     $error = 'No database configured, so nothing is being recorded. See docs/ADMIN.md.';
@@ -90,6 +91,10 @@ if ($pdo === null) {
             $sources    = UsageLog::hostSources($pdo, $host, $days);
             $callers    = UsageLog::hostCallers($pdo, $host, $days);
             $recent     = UsageLog::hostRecent($pdo, $host, $days, 25);
+            // Windowed to the same period as everything else on the page, and
+            // to a year at most on "all time" — a clock chart of five years is
+            // a shape nobody is asking about.
+            $hours      = UsageLog::byHour($pdo, $days > 0 ? $days : VCD_CHART_MAX_DAYS, $host);
         }
     } catch (Throwable $e) {
         $error = 'Connected to the database, but a query failed: ' . $e->getMessage();
@@ -164,8 +169,33 @@ foreach ($callers as $caller) {
       <?php endif; ?>
     </section>
 
+    <?php if (!empty($hours)): ?>
+      <section class="admin-section">
+        <h2>When it is checked, UTC</h2>
+        <?php $hourChart = Chart::hours($hours, 'Analyses of ' . $host . ' by hour of day, UTC', 'analyses'); ?>
+        <?php if ($hourChart !== ''): ?>
+          <figure class="chart-figure">
+            <?= $hourChart ?>
+            <figcaption>Analyses by hour of day, added up across the window. A site
+              checked at the same hour every day is usually something on a schedule
+              rather than somebody with a question.</figcaption>
+          </figure>
+        <?php else: ?>
+          <p class="hint">Not enough analyses yet to show a shape.</p>
+        <?php endif; ?>
+      </section>
+    <?php endif; ?>
+
     <section class="admin-section">
       <h2>How it was checked</h2>
+      <?php
+        $modeSlices = array();
+        foreach ($modes as $mode => $n) {
+            $modeSlices[] = array('label' => AdminUi::modeLabel((string) $mode), 'n' => (int) $n);
+        }
+      ?>
+      <figure class="chart-figure"><?= Chart::share($modeSlices, 'analyses') ?></figure>
+
       <div class="table-scroll">
         <table class="admin-table">
           <thead><tr><th>Mode</th><th class="num">Analyses</th><th class="num">Share</th></tr></thead>
@@ -187,6 +217,16 @@ foreach ($callers as $caller) {
 
     <section class="admin-section">
       <h2>Where the request came from</h2>
+      <?php
+        $sourceSlices = array();
+        foreach ($sources as $source => $n) {
+            $sourceSlices[] = array('label' => AdminUi::sourceLabel((string) $source), 'n' => (int) $n);
+        }
+      ?>
+      <?php if (count($sourceSlices) > 1): ?>
+        <figure class="chart-figure"><?= Chart::share($sourceSlices, 'analyses') ?></figure>
+      <?php endif; ?>
+
       <div class="table-scroll">
         <table class="admin-table">
           <thead><tr><th>Door</th><th class="num">Analyses</th><th class="num">Share</th></tr></thead>

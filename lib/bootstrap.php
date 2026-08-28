@@ -9,7 +9,7 @@ declare(strict_types=1);
  * assume Composer, a writable temp dir, a database or a CLI.
  */
 
-define('VCD_VERSION', '1.0.0');
+define('VCD_VERSION', '1.1.0');
 define('VCD_ROOT', dirname(__DIR__));
 define('VCD_DATA', VCD_ROOT . '/data');
 define('VCD_SITE_URL', 'https://vibecodedetector.fanficnow.com');

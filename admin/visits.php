@@ -30,6 +30,7 @@ $paths = array();
 $referrers = array();
 $devices = array();
 $hours = array();
+$weekdays = array();
 $pruned = 0;
 
 if ($pdo === null) {
@@ -48,6 +49,7 @@ if ($pdo === null) {
         $referrers = VisitLog::topReferrers($pdo, $days, 15);
         $devices   = VisitLog::byDevice($pdo, $days);
         $hours     = VisitLog::byHour($pdo, $days);
+        $weekdays  = VisitLog::byWeekday($pdo, $days, $withBots);
     } catch (Throwable $e) {
         $error = 'Connected to the database, but a query failed: ' . $e->getMessage();
     }
@@ -82,6 +84,8 @@ $deviceTotal = array_sum($devices);
     <h1>Traffic</h1>
     <a href="index.php">&larr; Back to admin</a>
   </div>
+
+  <?= AdminUi::nav('visits') ?>
 
   <?php if ($error !== ''): ?>
     <p class="error-box"><?= h($error) ?></p>
@@ -144,9 +148,25 @@ $deviceTotal = array_sum($devices);
         <h2>When people come, UTC</h2>
         <?php $hourChart = Chart::hours($hours); ?>
         <?php if ($hourChart !== ''): ?>
-          <figure class="chart-figure"><?= $hourChart ?></figure>
+          <figure class="chart-figure">
+            <?= $hourChart ?>
+            <figcaption>Views by hour of day, added up across the window. Bots excluded
+              from this one whatever the switch above says &mdash; a crawler on a schedule
+              draws a shape that says nothing about when people are here.</figcaption>
+          </figure>
         <?php else: ?>
           <p class="hint">Not enough traffic yet to show a shape.</p>
+        <?php endif; ?>
+
+        <?php $weekChart = Chart::weekdays($weekdays, 'Views by day of the week'); ?>
+        <?php if ($weekChart !== ''): ?>
+          <h3 class="admin-sub">Which days</h3>
+          <figure class="chart-figure">
+            <?= $weekChart ?>
+            <figcaption>The companion to the chart above: a weekday average hides a
+              Saturday that is half of everything<?php if ($withBots): ?>. Bots
+              included<?php endif; ?>.</figcaption>
+          </figure>
         <?php endif; ?>
       </section>
     <?php endif; ?>
@@ -203,6 +223,16 @@ $deviceTotal = array_sum($devices);
       <?php if ($deviceTotal === 0): ?>
         <p class="hint">Nothing recorded in this window.</p>
       <?php else: ?>
+        <?php
+          $deviceSlices = array();
+          foreach ($devices as $device => $n) {
+              if ($n > 0) {
+                  $deviceSlices[] = array('label' => ucfirst((string) $device), 'n' => (int) $n);
+              }
+          }
+        ?>
+        <figure class="chart-figure"><?= Chart::share($deviceSlices, 'hits') ?></figure>
+
         <table class="admin-table">
           <thead><tr><th>Client</th><th class="num">Hits</th><th class="num">Share</th></tr></thead>
           <tbody>

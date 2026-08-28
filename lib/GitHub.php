@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/Fetcher.php';
+require_once __DIR__ . '/GitHubLog.php';
 
 /** A repository that could not be read, with a sentence saying why. */
 final class RepoError extends RuntimeException
@@ -334,11 +335,48 @@ class GitHub
         try {
             $res = $this->fetcher->fetchApi(self::API . $path, self::headers(), $maxBytes, $timeout);
         } catch (FetchError $e) {
+            // A request that never landed is still a request that was made,
+            // and an hour of them is worth being able to see. Status 0 says it
+            // got no answer at all rather than a refusing one.
+            GitHubLog::record($this->fullName(), self::endpointName($path), 0);
             throw new RepoError('Could not reach GitHub: ' . $e->getMessage());
         }
 
         $this->lastHeaders = isset($res['headers']) ? (array) $res['headers'] : array();
+
+        // What this cost, and what GitHub said was left. Recorded only when the
+        // operator has configured a database; a no-op otherwise, like every
+        // other logging call in this project. See lib/GitHubLog.php.
+        GitHubLog::record($this->fullName(), self::endpointName($path), (int) $res['status'], $this->lastHeaders);
+
         return $res;
+    }
+
+    /**
+     * Which endpoint a path was, as one word.
+     *
+     * The log stores this rather than the URL: the owner and repository are
+     * already in their own column, and a path keeps a query string, which is
+     * where the page number and the per-page count live — detail that makes
+     * every row look distinct without saying anything a reader wanted.
+     */
+    public static function endpointName(string $path): string
+    {
+        $path = (string) preg_replace('~[?#].*$~', '', $path);
+
+        if (preg_match('~/git/trees/~', $path)) {
+            return 'tree';
+        }
+        if (preg_match('~/commits/[^/]+$~', $path)) {
+            return 'commit';
+        }
+        if (preg_match('~/commits$~', $path)) {
+            return 'commits';
+        }
+        if (preg_match('~^/repos/[^/]+/[^/]+$~', $path)) {
+            return 'repository';
+        }
+        return 'other';
     }
 
     /** @throws RepoError */

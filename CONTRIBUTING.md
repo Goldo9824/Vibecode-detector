@@ -49,13 +49,23 @@ very good argument and a conversation first.
 
 The one deliberate, opt-in exception is `admin/` (see `docs/ADMIN.md`): an operator
 who configures a database gets a password-gated panel for managing named API keys
-and seeing usage. That records two things — the mode and, for URL and repository
-checks, the address or repository name of each analysis; and one row per page view,
+and seeing usage. That records four things — the mode and, for URL and repository
+checks, the address or repository name of each analysis; one row per page view,
 holding a path, a timestamp, a referring host and a visitor token salted with the
-day so it can count people today and recognise nobody tomorrow. Never the pasted
-content, never the fetched page, never a repository's source, never an address,
-never a cookie. With no database configured, that code path is inert and
-the claim above is exactly true.
+day so it can count people today and recognise nobody tomorrow; one row per request
+this site makes to the GitHub API, holding the repository, the endpoint, the status
+and what GitHub said was left of the hourly allowance; and one row per reading
+somebody deliberately reported as wrong, holding that reading and what they said
+about it. Never the pasted content, never the fetched page, never a repository's
+source, never an address, never a cookie. With no database configured, every one of
+those code paths is inert and the claim above is exactly true.
+
+The same rule applies to the two newer logs. `GitHubLog::record()` is called from
+`GitHub::api()` — the one place every GitHub API request passes through — so that
+what is recorded is visible where it happens rather than configured somewhere else.
+`Feedback::record()` is called from `api/feedback.php` and only ever with a report
+somebody deliberately sent, carrying the certificate the reading was issued with:
+a report can only dispute a reading this site actually produced.
 
 If you add a page that should be counted, call `VisitLog::record('/its-path')` in
 its opening lines the way `index.php` does, rather than moving the call into

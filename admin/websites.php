@@ -48,6 +48,8 @@ $rows = array();
 $total = 0;
 $analyses = 0;
 $totalPages = 1;
+$newHosts = array();
+$newHostsWindow = 90;
 
 if ($pdo === null) {
     $error = 'No database configured, so nothing is being recorded. See docs/ADMIN.md.';
@@ -72,6 +74,12 @@ if ($pdo === null) {
         foreach ($rows as $row) {
             $analyses += $row['n'];
         }
+
+        // Not "websites analysed that day": a host checked every day for a
+        // month is one column here, on the day it arrived. It answers whether
+        // the tool is reaching new things or being run against the same dozen,
+        // which no total on this page can.
+        $newHosts = UsageLog::newHostsDaily($pdo, $days > 0 ? $days : $newHostsWindow);
     } catch (Throwable $e) {
         $error = 'Connected to the database, but a query failed: ' . $e->getMessage();
     }
@@ -106,6 +114,8 @@ $lastRow = Pager::offset($page, Pager::PER_PAGE) + count($rows);
     <h1>Websites</h1>
     <a href="index.php">&larr; Back to admin</a>
   </div>
+
+  <?= AdminUi::nav('websites') ?>
 
   <?php if ($error !== ''): ?>
     <p class="error-box"><?= h($error) ?></p>
@@ -158,6 +168,24 @@ $lastRow = Pager::offset($page, Pager::PER_PAGE) + count($rows);
           <span class="l">Page</span>
         </div>
       </div>
+
+      <?php
+        $newChart = Chart::series($newHosts, 'Websites seen for the first time, per day', 'new websites');
+      ?>
+      <?php if ($newChart !== '' && $total > 0): ?>
+        <figure class="chart-figure">
+          <?= $newChart ?>
+          <figcaption>
+            <span class="key key-bar"></span> websites seen for the first time that day
+            <?php if ($days === 0): ?>
+              &middot; the last <?= (int) $newHostsWindow ?> days; the count above covers everything
+            <?php endif; ?>
+          </figcaption>
+        </figure>
+        <p class="hint">First sightings, not activity: a site checked every day appears
+           once, on the day it arrived. The search box does not narrow this chart &mdash;
+           it is about the list as a whole.</p>
+      <?php endif; ?>
 
       <?php if (empty($rows)): ?>
         <?php if ($search !== ''): ?>

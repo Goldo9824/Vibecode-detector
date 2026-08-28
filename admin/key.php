@@ -6,6 +6,7 @@ require_once dirname(__DIR__) . '/lib/AdminAuth.php';
 require_once dirname(__DIR__) . '/lib/ApiKeys.php';
 require_once dirname(__DIR__) . '/lib/UsageLog.php';
 require_once dirname(__DIR__) . '/lib/AdminUi.php';
+require_once dirname(__DIR__) . '/lib/Chart.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
@@ -20,6 +21,8 @@ $pdo = Db::connect();
 $key = null;
 $count = 0;
 $hosts = array();
+$daily = array();
+$modes = array();
 $error = '';
 
 if ($pdo === null) {
@@ -34,6 +37,8 @@ if ($pdo === null) {
         } else {
             $count = UsageLog::countForKey($pdo, $id, 30);
             $hosts = UsageLog::topHosts($pdo, 30, $id, 20);
+            $daily = UsageLog::keyDaily($pdo, $id, 30);
+            $modes = UsageLog::keyModes($pdo, $id, 30);
         }
     } catch (Throwable $e) {
         $error = 'A query failed: ' . $e->getMessage();
@@ -72,20 +77,49 @@ if ($pdo === null) {
         <div class="stat"><span class="n"><?= AdminUi::count((int) $count) ?></span><span class="l">Requests with this key</span></div>
       </div>
 
+      <?php $keyChart = Chart::series($daily, 'Requests with this key, per day', 'requests'); ?>
+      <?php if ($keyChart !== '' && $count > 0): ?>
+        <figure class="chart-figure">
+          <?= $keyChart ?>
+          <figcaption><span class="key key-bar"></span> requests with this key per day</figcaption>
+        </figure>
+      <?php endif; ?>
+
+      <?php if ($count > 0 && !empty($modes)): ?>
+        <h3 class="admin-sub">What it asks for</h3>
+        <figure class="chart-figure"><?= Chart::share(UsageLog::modeSlices($modes), 'requests') ?></figure>
+      <?php endif; ?>
+
       <?php if (empty($hosts)): ?>
-        <p class="hint">No requests with this key in the last 30 days.</p>
+        <p class="hint">No websites recorded against this key in the last 30 days. Pasted
+           code and git history are counted above but never listed here &mdash; they carry
+           no website to attribute a request to.</p>
       <?php else: ?>
-        <table class="admin-table">
-          <thead><tr><th>Website</th><th class="num">Analyses</th></tr></thead>
-          <tbody>
-            <?php foreach ($hosts as $row): ?>
-              <tr>
-                <td><a href="website.php?host=<?= h(rawurlencode((string) $row['target_host'])) ?>&amp;days=30"><?= h((string) $row['target_host']) ?></a></td>
-                <td class="num"><?= AdminUi::count((int) $row['n']) ?></td>
-              </tr>
-            <?php endforeach; ?>
-          </tbody>
-        </table>
+        <?php
+          $hostMax = 0;
+          foreach ($hosts as $row) {
+              $hostMax = max($hostMax, (int) $row['n']);
+          }
+        ?>
+        <h3 class="admin-sub">What it points at</h3>
+        <div class="table-scroll">
+          <table class="admin-table">
+            <thead><tr><th>Website</th><th class="num">Analyses</th></tr></thead>
+            <tbody>
+              <?php foreach ($hosts as $row): ?>
+                <tr>
+                  <td class="with-bar">
+                    <span class="bar" style="width:<?= h(Chart::barWidth((int) $row['n'], $hostMax)) ?>"></span>
+                    <span class="bar-label">
+                      <a href="website.php?host=<?= h(rawurlencode((string) $row['target_host'])) ?>&amp;days=30"><?= h((string) $row['target_host']) ?></a>
+                    </span>
+                  </td>
+                  <td class="num"><?= AdminUi::count((int) $row['n']) ?></td>
+                </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
       <?php endif; ?>
     </section>
   <?php endif; ?>

@@ -218,6 +218,71 @@ VisitLog::record('/');
           <ul id="r-notes"></ul>
         </div>
 
+        <?php /*
+             Under the reading, not in the footer: the moment somebody thinks
+             the number is wrong is this moment, and a link to an issue
+             tracker asks them to open an account, write a title and describe
+             a reading the site already knows. This asks the one thing it
+             cannot work out on its own — which way it is wrong — and carries
+             the reading itself in the certificate the result was issued with.
+
+             It only offers to file anything when this installation has
+             somewhere to file it. With no database configured nothing is
+             recorded anywhere (see docs/ADMIN.md), so rather than take a
+             report and drop it, the block sends people to the issue tracker,
+             which works either way.
+        */ ?>
+        <div class="report" id="r-report"
+             data-collect="<?= Db::available() ? '1' : '0' ?>"
+             data-issues="<?= h(VCD_REPO_URL) ?>/issues/new?template=false_positive.yml">
+          <p class="eyebrow">Does this reading look wrong?</p>
+          <p class="report-lead" id="report-lead">
+            Report it here, on the reading itself. No account, nothing recorded about you,
+            and no reply &mdash; it is counted, not answered.
+          </p>
+
+          <form id="form-report" novalidate>
+            <div class="report-choices" role="group" aria-label="Which way the score is wrong">
+              <label class="report-choice">
+                <input type="radio" name="direction" value="too_high">
+                <span class="report-choice-label">Score too high</span>
+                <span class="report-choice-note">It reads more generated than it is</span>
+              </label>
+              <label class="report-choice">
+                <input type="radio" name="direction" value="too_low">
+                <span class="report-choice-label">Score too low</span>
+                <span class="report-choice-note">It reads more hand-written than it is</span>
+              </label>
+              <label class="report-choice">
+                <input type="radio" name="direction" value="about_right">
+                <span class="report-choice-label">About right</span>
+                <span class="report-choice-note">Worth knowing too &mdash; it is the control group</span>
+              </label>
+            </div>
+
+            <div class="report-more" id="report-more" hidden>
+              <fieldset class="report-truth">
+                <legend>Do you know what it actually is?</legend>
+                <label><input type="radio" name="truth" value="human"> Hand-written</label>
+                <label><input type="radio" name="truth" value="ai"> AI-generated</label>
+                <label><input type="radio" name="truth" value="mixed"> Both</label>
+                <label><input type="radio" name="truth" value="unsure" checked> Not sure</label>
+              </fieldset>
+
+              <label class="field" for="report-comment">Anything to add &mdash; optional</label>
+              <textarea id="report-comment" name="comment" rows="2" maxlength="500"
+                        placeholder="e.g. I wrote this by hand in 2019&hellip;"></textarea>
+
+              <div class="report-send">
+                <button class="btn" type="submit">Send report</button>
+                <span class="report-note" id="report-note">Sent with the reading above and nothing else.</span>
+              </div>
+            </div>
+          </form>
+
+          <p class="report-done" id="report-done" hidden role="status"></p>
+        </div>
+
         <div class="cert-bar">
           <a class="btn" id="r-cert" href="#">Download certificate (PDF)</a>
           <p>A signed one-page PDF stating the reading, the evidence and the caveats. Anyone can check it at <a href="verify.php">/verify</a>.</p>

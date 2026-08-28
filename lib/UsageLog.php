@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/Db.php';
+require_once __DIR__ . '/AdminUi.php';
 
 /**
  * Records one row per analysis, and answers the admin panel's usage
@@ -73,7 +74,7 @@ final class UsageLog
         );
         $stmt->execute(array($days));
 
-        $out = array('url' => 0, 'site' => 0, 'code' => 0, 'git' => 0);
+        $out = array('url' => 0, 'site' => 0, 'repo' => 0, 'code' => 0, 'git' => 0);
         foreach ($stmt->fetchAll() as $row) {
             $out[$row['mode']] = (int) $row['n'];
         }
@@ -110,6 +111,193 @@ final class UsageLog
         );
         $stmt->execute(array($apiKeyId, $days));
         return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Analyses per day across everything, split by mode, quiet days included.
+     *
+     * The panel's front page had a chart of visits and a table of totals, and
+     * nothing that drew the totals: "412 analyses this month" is a number, and
+     * whether that was a steady trickle or one afternoon is the actual
+     * question. Split by mode because the modes cost wildly different things —
+     * an afternoon of whole-site crawls is not an afternoon of pasted
+     * snippets.
+     *
+     * @return array<int,array{day:string,url:int,site:int,repo:int,code:int,git:int,n:int}>
+     */
+    public static function daily(PDO $pdo, int $days = 30): array
+    {
+        $days = max(1, $days);
+        $stmt = $pdo->prepare(
+            'SELECT DATE(created_at) AS day, mode, COUNT(*) AS n
+             FROM usage_log
+             WHERE created_at >= UTC_DATE() - INTERVAL ? DAY
+             GROUP BY DATE(created_at), mode'
+        );
+        $stmt->execute(array($days - 1));
+
+        $empty = array('url' => 0, 'site' => 0, 'repo' => 0, 'code' => 0, 'git' => 0, 'n' => 0);
+        $found = array();
+        foreach ($stmt->fetchAll() as $row) {
+            $day = (string) $row['day'];
+            $mode = (string) $row['mode'];
+            if (!isset($found[$day])) {
+                $found[$day] = $empty;
+            }
+            if (isset($found[$day][$mode])) {
+                $found[$day][$mode] += (int) $row['n'];
+            }
+            $found[$day]['n'] += (int) $row['n'];
+        }
+
+        $out = array();
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $day = gmdate('Y-m-d', time() - $i * 86400);
+            $out[] = array_merge(array('day' => $day), isset($found[$day]) ? $found[$day] : $empty);
+        }
+        return $out;
+    }
+
+    /** @return array<int,int> analyses per hour of the day, 0–23, UTC */
+    public static function byHour(PDO $pdo, int $days = 30, ?string $host = null): array
+    {
+        $params = array(max(1, $days) - 1);
+        $sql = 'SELECT HOUR(created_at) AS h, COUNT(*) AS n
+                FROM usage_log
+                WHERE created_at >= UTC_DATE() - INTERVAL ? DAY';
+        if ($host !== null) {
+            $sql .= ' AND target_host = ?';
+            $params[] = $host;
+        }
+        $sql .= ' GROUP BY HOUR(created_at)';
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+
+        $out = array_fill(0, 24, 0);
+        foreach ($stmt->fetchAll() as $row) {
+            $out[(int) $row['h']] = (int) $row['n'];
+        }
+        return $out;
+    }
+
+    /** @return array<string,int> analyses per source (ui, api) across everything */
+    public static function totalsBySource(PDO $pdo, int $days = 30): array
+    {
+        $stmt = $pdo->prepare(
+            'SELECT source, COUNT(*) AS n FROM usage_log
+             WHERE created_at >= UTC_DATE() - INTERVAL ? DAY
+             GROUP BY source ORDER BY n DESC'
+        );
+        $stmt->execute(array(max(1, $days) - 1));
+
+        $out = array();
+        foreach ($stmt->fetchAll() as $row) {
+            $out[(string) $row['source']] = (int) $row['n'];
+        }
+        return $out;
+    }
+
+    /**
+     * Websites seen for the first time on each day of the window.
+     *
+     * Not "websites analysed that day": a host that has been checked every day
+     * for a month is one line on this chart, on the day it arrived. It answers
+     * whether the tool is reaching new things or being run against the same
+     * dozen, which the total cannot.
+     *
+     * @return array<int,array{day:string,n:int}> oldest first
+     */
+    public static function newHostsDaily(PDO $pdo, int $days = 30): array
+    {
+        $days = max(1, $days);
+        $stmt = $pdo->prepare(
+            'SELECT DATE(first_seen) AS day, COUNT(*) AS n FROM (
+                SELECT target_host, MIN(created_at) AS first_seen
+                FROM usage_log
+                WHERE target_host IS NOT NULL
+                GROUP BY target_host
+             ) f
+             WHERE f.first_seen >= UTC_DATE() - INTERVAL ? DAY
+             GROUP BY DATE(first_seen)'
+        );
+        $stmt->execute(array($days - 1));
+
+        $found = array();
+        foreach ($stmt->fetchAll() as $row) {
+            $found[(string) $row['day']] = (int) $row['n'];
+        }
+        return self::fillDays($found, $days);
+    }
+
+    /**
+     * Analyses per day for one API key, quiet days included.
+     *
+     * @return array<int,array{day:string,n:int}> oldest first
+     */
+    public static function keyDaily(PDO $pdo, int $apiKeyId, int $days = 30): array
+    {
+        $days = max(1, $days);
+        $stmt = $pdo->prepare(
+            'SELECT DATE(created_at) AS day, COUNT(*) AS n
+             FROM usage_log
+             WHERE api_key_id = ? AND created_at >= UTC_DATE() - INTERVAL ? DAY
+             GROUP BY DATE(created_at)'
+        );
+        $stmt->execute(array($apiKeyId, $days - 1));
+
+        $found = array();
+        foreach ($stmt->fetchAll() as $row) {
+            $found[(string) $row['day']] = (int) $row['n'];
+        }
+        return self::fillDays($found, $days);
+    }
+
+    /** @return array<string,int> analyses per mode for one API key, biggest first */
+    public static function keyModes(PDO $pdo, int $apiKeyId, int $days = 30): array
+    {
+        $stmt = $pdo->prepare(
+            'SELECT mode, COUNT(*) AS n
+             FROM usage_log
+             WHERE api_key_id = ? AND created_at >= UTC_DATE() - INTERVAL ? DAY
+             GROUP BY mode ORDER BY n DESC'
+        );
+        $stmt->execute(array($apiKeyId, max(1, $days) - 1));
+
+        $out = array();
+        foreach ($stmt->fetchAll() as $row) {
+            $out[(string) $row['mode']] = (int) $row['n'];
+        }
+        return $out;
+    }
+
+    /**
+     * Turn a mode => count map into the slices Chart::share() draws, in the
+     * order the modes are listed everywhere else rather than by size.
+     *
+     * A share bar is read against its own key, and a key whose rows move about
+     * between two windows of the same page is a key that has to be re-read
+     * every time. Ordering is therefore fixed here and the sizes fall where
+     * they fall.
+     *
+     * @param  array<string,int> $modes
+     * @return array<int,array{label:string,n:int}>
+     */
+    public static function modeSlices(array $modes): array
+    {
+        $order = array('url', 'site', 'repo', 'code', 'git');
+        $out = array();
+        foreach ($order as $mode) {
+            if (!empty($modes[$mode])) {
+                $out[] = array('label' => AdminUi::modeLabel($mode), 'n' => (int) $modes[$mode]);
+            }
+        }
+        foreach ($modes as $mode => $n) {
+            if (!in_array($mode, $order, true) && $n > 0) {
+                $out[] = array('label' => AdminUi::modeLabel((string) $mode), 'n' => (int) $n);
+            }
+        }
+        return $out;
     }
 
     // ------------------------------------------------- the whole list of sites

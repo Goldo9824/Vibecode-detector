@@ -6,6 +6,8 @@ require_once dirname(__DIR__) . '/lib/AdminAuth.php';
 require_once dirname(__DIR__) . '/lib/ApiKeys.php';
 require_once dirname(__DIR__) . '/lib/UsageLog.php';
 require_once dirname(__DIR__) . '/lib/VisitLog.php';
+require_once dirname(__DIR__) . '/lib/GitHubLog.php';
+require_once dirname(__DIR__) . '/lib/Feedback.php';
 require_once dirname(__DIR__) . '/lib/Chart.php';
 require_once dirname(__DIR__) . '/lib/AdminUi.php';
 
@@ -61,19 +63,31 @@ $flash = AdminAuth::takeFlash();
 $csrf = AdminAuth::csrfToken();
 
 $keys = array();
-$totalsByMode = array('url' => 0, 'site' => 0, 'code' => 0, 'git' => 0);
+$totalsByMode = array('url' => 0, 'site' => 0, 'repo' => 0, 'code' => 0, 'git' => 0);
+$totalsBySource = array();
 $totalCount = 0;
 $topHosts = array();
+$usageDaily = array();
+$usageHours = array();
 $visits = array('views' => 0, 'visitors' => 0, 'bots' => 0, 'busiest' => null);
 $visitDaily = array();
 $hostsEver = 0;
+$github = array('requests' => 0, 'repos' => 0, 'blocked' => 0, 'lowest' => null, 'last_block' => null);
+$githubHours = array();
+$githubCeiling = array('blocks' => 0, 'typical' => null, 'earliest' => null,
+                       'latest' => null, 'clean' => null, 'cleanHours' => 0);
+$reports = array('n' => 0, 'too_high' => 0, 'too_low' => 0, 'about_right' => 0,
+                 'hosts' => 0, 'avg_high' => null, 'avg_low' => null, 'last' => null);
 
 if ($pdo !== null) {
     try {
         $keys = ApiKeys::all($pdo);
         $totalsByMode = UsageLog::totalsByMode($pdo, 30);
+        $totalsBySource = UsageLog::totalsBySource($pdo, 30);
         $totalCount = UsageLog::totalCount($pdo, 30);
         $topHosts = UsageLog::topHosts($pdo, 30, null, 20);
+        $usageDaily = UsageLog::daily($pdo, 30);
+        $usageHours = UsageLog::byHour($pdo, 30);
         // Not restricted to the window: the link below promises the whole
         // list, so the number beside it has to be the whole list.
         $hostsEver = UsageLog::hostTotal($pdo, 0, '');
@@ -81,9 +95,20 @@ if ($pdo !== null) {
         // which is where the window switcher and the breakdowns are.
         $visits = VisitLog::summary($pdo, 30);
         $visitDaily = VisitLog::daily($pdo, 30, false);
+        // Same again for the two pages below: the figure that would make
+        // somebody open them, and nothing else.
+        $github = GitHubLog::summary($pdo, 30);
+        $githubHours = GitHubLog::hourly($pdo, 7);
+        $githubCeiling = GitHubLog::ceiling(GitHubLog::runsBeforeBlock($pdo, 30), $githubHours);
+        $reports = Feedback::summary($pdo, 30);
     } catch (Throwable $e) {
         $dbError = 'Connected to the database, but a query failed: ' . $e->getMessage();
     }
+}
+
+$sourceSlices = array();
+foreach ($totalsBySource as $source => $n) {
+    $sourceSlices[] = array('label' => AdminUi::sourceLabel((string) $source), 'n' => (int) $n);
 }
 ?>
 <!doctype html>
@@ -103,6 +128,10 @@ if ($pdo !== null) {
     <h1>Admin</h1>
     <a href="logout.php">Log out</a>
   </div>
+
+  <?php if ($pdo !== null): ?>
+    <?= AdminUi::nav('index') ?>
+  <?php endif; ?>
 
   <?php if ($pdo === null): ?>
     <div class="no-db">
@@ -231,6 +260,43 @@ if ($pdo !== null) {
         <div class="stat"><span class="n"><?= AdminUi::count((int) $totalsByMode['git']) ?></span><span class="l">Git history</span></div>
       </div>
 
+      <?php $usageChart = Chart::stack(
+              $usageDaily,
+              array('url', 'site', 'repo', 'code', 'git'),
+              array('url' => 'live page', 'site' => 'whole site', 'repo' => 'repository',
+                    'code' => 'pasted code', 'git' => 'git history'),
+              'Analyses per day'
+            ); ?>
+      <?php if ($usageChart !== '' && $totalCount > 0): ?>
+        <figure class="chart-figure">
+          <?= $usageChart ?>
+          <figcaption>
+            <?= Chart::key(0, 'live page') ?>
+            <?= Chart::key(1, 'whole site') ?>
+            <?= Chart::key(2, 'repository') ?>
+            <?= Chart::key(3, 'pasted code') ?>
+            <?= Chart::key(4, 'git history') ?>
+          </figcaption>
+        </figure>
+
+        <h3 class="admin-sub">What is being read</h3>
+        <figure class="chart-figure"><?= Chart::share(UsageLog::modeSlices($totalsByMode), 'analyses') ?></figure>
+
+        <?php if (count($sourceSlices) > 1): ?>
+          <h3 class="admin-sub">Which door it came through</h3>
+          <figure class="chart-figure"><?= Chart::share($sourceSlices, 'analyses') ?></figure>
+        <?php endif; ?>
+
+        <?php $usageHourChart = Chart::hours($usageHours, 'Analyses by hour of day, UTC', 'analyses'); ?>
+        <?php if ($usageHourChart !== ''): ?>
+          <h3 class="admin-sub">When it is used, UTC</h3>
+          <figure class="chart-figure">
+            <?= $usageHourChart ?>
+            <figcaption>Analyses by hour of day, added up across the thirty days.</figcaption>
+          </figure>
+        <?php endif; ?>
+      <?php endif; ?>
+
       <?php if (empty($topHosts)): ?>
         <p class="hint">No live-page or whole-site checks in the last 30 days yet.
            <?php if ($hostsEver > 0): ?>
@@ -254,6 +320,63 @@ if ($pdo !== null) {
           <a class="btn" href="websites.php">See all <?= AdminUi::count($hostsEver) ?> websites</a>
           <span class="hint">Everything ever searched, searchable and in any order &mdash; not just the busiest twenty of the last thirty days.</span>
         </p>
+      <?php endif; ?>
+    </section>
+
+    <section class="admin-section">
+      <h2>GitHub, last 30 days</h2>
+      <div class="stat-row">
+        <div class="stat"><span class="n"><?= AdminUi::count((int) $github['repos']) ?></span><span class="l">Repositories read</span></div>
+        <div class="stat"><span class="n"><?= AdminUi::count((int) $github['requests']) ?></span><span class="l">API requests</span></div>
+        <div class="stat<?= $github['blocked'] > 0 ? ' is-warn' : ' is-good' ?>">
+          <span class="n"><?= AdminUi::count((int) $github['blocked']) ?></span>
+          <span class="l">Times refused</span>
+        </div>
+        <div class="stat">
+          <span class="n"><?= $githubCeiling['typical'] !== null ? AdminUi::count((int) $githubCeiling['typical']) : '—' ?></span>
+          <span class="l">Repos per hour before a block</span>
+        </div>
+      </div>
+
+      <?php $ghChart = Chart::series(GitHubLog::hourColumns($githubHours), 'Repositories read per hour', 'repositories'); ?>
+      <?php if ($ghChart !== ''): ?>
+        <figure class="chart-figure">
+          <?= $ghChart ?>
+          <figcaption>
+            <span class="key key-bar"></span> repositories read that hour, last 7 days
+            <span class="key key-hit"></span> GitHub refused at some point in it
+          </figcaption>
+        </figure>
+      <?php endif; ?>
+
+      <p class="see-more">
+        <a class="btn" href="github.php">The allowance in detail</a>
+        <span class="hint">Every repository searched, every refusal, and how far an hour
+          gets before GitHub says no &mdash; which is the only thing that decides how many
+          people can use the repository tab at once.</span>
+      </p>
+    </section>
+
+    <section class="admin-section">
+      <h2>Reported readings, last 30 days</h2>
+      <div class="stat-row">
+        <div class="stat"><span class="n"><?= AdminUi::count((int) $reports['n']) ?></span><span class="l">Reports</span></div>
+        <div class="stat"><span class="n"><?= AdminUi::count((int) $reports['too_high']) ?></span><span class="l">Score too high</span></div>
+        <div class="stat"><span class="n"><?= AdminUi::count((int) $reports['too_low']) ?></span><span class="l">Score too low</span></div>
+        <div class="stat"><span class="n"><?= AdminUi::count((int) $reports['about_right']) ?></span><span class="l">About right</span></div>
+      </div>
+
+      <?php if ($reports['n'] > 0): ?>
+        <p class="see-more">
+          <a class="btn" href="feedback.php">Read the reports</a>
+          <span class="hint">Where on the scale people disagree, how often a reading is
+            disputed per hundred analyses, and what they say the subject really was.</span>
+        </p>
+      <?php else: ?>
+        <p class="hint">Nobody has reported a reading yet. The block under every result on
+           the front page is what fills this &mdash; it offers to file a report only when a
+           database is configured, which it is.
+           <a href="feedback.php">The reports page &rarr;</a></p>
       <?php endif; ?>
     </section>
 

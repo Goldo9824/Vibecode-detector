@@ -88,7 +88,7 @@ final class Db
     }
 
     /**
-     * Creates the three tables this feature needs if they are not already
+     * Creates the five tables this feature needs if they are not already
      * there. Idempotent, so it is safe to call on every admin page load —
      * called there rather than from the high-traffic logging path, so a
      * database that has not been initialised yet fails a login attempt with
@@ -140,6 +140,54 @@ final class Db
                 KEY path (path),
                 KEY device (device),
                 KEY referer_host (referer_host)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+
+        // One row per request this site makes to the GitHub API — what it
+        // asked for, what came back, and what GitHub said was left of the
+        // hourly allowance. Nothing about who asked for it. This is the only
+        // way to see the ceiling being hit, because a scan that dies on a
+        // refusal never reaches usage_log at all. See lib/GitHubLog.php.
+        $pdo->exec(
+            "CREATE TABLE IF NOT EXISTS github_log (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                repo VARCHAR(255) NOT NULL DEFAULT '',
+                endpoint VARCHAR(32) NOT NULL,
+                status SMALLINT UNSIGNED NOT NULL,
+                outcome ENUM('ok','blocked','missing','error') NOT NULL,
+                remaining INT NULL,
+                allowance INT NULL,
+                reset_at DATETIME NULL,
+                created_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                KEY created_at (created_at),
+                KEY outcome (outcome),
+                KEY repo (repo)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+
+        // One row per reading somebody disagreed with. Keyed on the
+        // certificate id, which is unique per reading, so a second thought
+        // replaces the first report rather than counting twice. See
+        // lib/Feedback.php for what a report does and does not carry.
+        $pdo->exec(
+            "CREATE TABLE IF NOT EXISTS result_feedback (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                cert_id CHAR(12) NOT NULL,
+                mode VARCHAR(16) NOT NULL,
+                target VARCHAR(2048) NULL,
+                target_host VARCHAR(255) NULL,
+                score TINYINT UNSIGNED NOT NULL,
+                verdict VARCHAR(32) NOT NULL,
+                direction ENUM('too_high','too_low','about_right') NOT NULL,
+                truth ENUM('human','ai','mixed','unsure') NOT NULL DEFAULT 'unsure',
+                comment VARCHAR(500) NULL,
+                created_at DATETIME NOT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY cert_id (cert_id),
+                KEY created_at (created_at),
+                KEY direction (direction),
+                KEY target_host (target_host)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
         );
     }

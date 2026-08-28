@@ -193,6 +193,39 @@ jobs:
           tail -c 6 /tmp/cert.pdf | grep -q '%%EOF' || { echo "::error::truncated PDF"; exit 1; }
           echo "certificate OK ($(stat -c%s /tmp/cert.pdf) bytes)"
 
+      - name: A result carries a way to report it
+        run: |
+          home=$(curl -sf http://127.0.0.1:8080/)
+          echo "$home" | grep -q 'id="r-report"' || { echo "::error::no report block under the result"; exit 1; }
+          for value in too_high too_low about_right; do
+            echo "$home" | grep -q "value=\"$value\"" || { echo "::error::the report form cannot say $value"; exit 1; }
+          done
+          # With no database configured there is nowhere to file one, and the
+          # page has to say so rather than take a report and drop it.
+          echo "$home" | grep -q 'data-collect="0"' || { echo "::error::the block claims to collect reports with no database"; exit 1; }
+          echo "report block OK"
+
+      - name: A report is only accepted with the reading it disputes
+        run: |
+          json=$(curl -sf -X POST http://127.0.0.1:8080/api/analyze.php \
+                   -F mode=code -F "code=<tests/fixtures/ai-code.js")
+          p=$(printf '%s' "$json" | sed -n 's/.*"payload":"\([^"]*\)".*/\1/p')
+          s=$(printf '%s' "$json" | sed -n 's/.*"sig":"\([^"]*\)".*/\1/p')
+
+          good=$(curl -s -X POST http://127.0.0.1:8080/api/feedback.php \
+                   -F "p=$p" -F "s=$s" -F direction=too_high -F truth=human)
+          echo "$good" | grep -q '"ok":true' || { echo "::error::a signed reading was refused: $good"; exit 1; }
+          # No database here, so it is accepted and honestly reported as unfiled.
+          echo "$good" | grep -q '"recorded":false' || { echo "::error::claims to have filed a report with no database: $good"; exit 1; }
+
+          forged=$(curl -s -X POST http://127.0.0.1:8080/api/feedback.php \
+                     -F "p=$p" -F "s=deadbeef" -F direction=too_low)
+          echo "$forged" | grep -q '"ok":false' || { echo "::error::an unsigned reading was accepted: $forged"; exit 1; }
+
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/feedback.php)
+          [ "$code" = "405" ] || { echo "::error::GET on the report endpoint gave $code, wanted 405"; exit 1; }
+          echo "report endpoint OK"
+
       - name: A tampered certificate is refused
         run: |
           code=$(curl -s -o /dev/null -w '%{http_code}' \

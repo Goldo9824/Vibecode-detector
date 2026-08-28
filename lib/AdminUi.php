@@ -109,6 +109,65 @@ final class AdminUi
     }
 
     /**
+     * The row of links across the top of every panel page.
+     *
+     * One page with a link on it became five pages with links between some of
+     * them, which is how a panel ends up with a page nobody can reach from the
+     * one they are on. Written once here so that adding a page is one line
+     * rather than five edits.
+     *
+     * @param string $current the key of the page being rendered, so it can say so
+     */
+    public static function nav(string $current = ''): string
+    {
+        $pages = array(
+            'index'    => array('Overview', 'index.php'),
+            'visits'   => array('Traffic', 'visits.php'),
+            'websites' => array('Websites', 'websites.php'),
+            'github'   => array('GitHub', 'github.php'),
+            'feedback' => array('Reports', 'feedback.php'),
+        );
+
+        $out = '<nav class="admin-nav" aria-label="Admin pages">';
+        foreach ($pages as $key => $page) {
+            $on = $key === $current;
+            $out .= sprintf('<a href="%s"%s%s>%s</a>',
+                self::esc($page[1]),
+                $on ? ' class="is-on"' : '',
+                $on ? ' aria-current="page"' : '',
+                self::esc($page[0]));
+        }
+        return $out . '</nav>';
+    }
+
+    /**
+     * Which band of the meter a score fell in, as a class name.
+     *
+     * The same four thresholds the front page paints, kept here so a table of
+     * scores in the panel is coloured the way the reader saw them. In step
+     * with band() in assets/js/app.js and Feedback::band().
+     */
+    public static function scoreBand(int $score): string
+    {
+        if ($score >= 70) {
+            return 'is-ai';
+        }
+        if ($score >= 55) {
+            return 'is-mixed';
+        }
+        if ($score >= 42) {
+            return 'is-unknown';
+        }
+        return 'is-human';
+    }
+
+    /** A score, in the colour the meter painted it. */
+    public static function score(int $score): string
+    {
+        return sprintf('<span class="score-chip %s">%d%%</span>', self::scoreBand($score), $score);
+    }
+
+    /**
      * The strip of page links: ‹ Prev, 1 2 … 7 8 9 … 40, Next ›.
      *
      * Links rather than a form, like the window switcher above it: every state

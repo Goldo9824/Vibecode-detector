@@ -65,11 +65,25 @@ with a per-form CSRF token and a rate-limited login. `data/admin-password.php` a
 `data/db-config.php` are denied the same two ways as `data/secret.key`, and no
 admin route is reachable without a valid session. In scope: anything that reaches
 a dashboard action without a valid session or a valid CSRF token, a session fixation
-or timing issue in the password check, or SQL injection in `lib/ApiKeys.php` /
-`lib/UsageLog.php` (both use prepared statements throughout — a report showing that
-assumption broken anywhere is high priority). Out of scope: brute-forcing the
-password itself, which is rate-limited but not otherwise this project's problem to
-solve — pick a strong one.
+or timing issue in the password check, or SQL injection in `lib/ApiKeys.php`,
+`lib/UsageLog.php`, `lib/VisitLog.php`, `lib/GitHubLog.php` or `lib/Feedback.php`
+(all use prepared statements throughout, with the one thing that cannot be bound —
+`ORDER BY` — resolved through a whitelist; a report showing that assumption broken
+anywhere is high priority). Out of scope: brute-forcing the password itself, which
+is rate-limited but not otherwise this project's problem to solve — pick a strong
+one.
+
+**7. Result reports (`api/feedback.php`, `lib/Feedback.php`).** The one unauthenticated
+endpoint that writes to the database. It accepts a report only with the certificate
+its reading was issued with, so the mode, address, score and verdict it stores come
+from a signature this site produced rather than from the form; the direction, the
+"what it really is" and the note are the only reader-supplied fields, and the first
+two are whitelisted to a fixed set. The certificate id is unique per reading, so a
+repeat report replaces rather than accumulates, and the endpoint is per-IP
+rate-limited. In scope: getting an unsigned or edited reading into the table,
+getting a note out of it and into a page unescaped, or filling the table faster than
+the rate limit should allow. Not in scope: that somebody can run an analysis and then
+report it — the certificate is provenance, not authentication, and the panel says so.
 
 ## Out of scope
 

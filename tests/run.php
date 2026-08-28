@@ -19,6 +19,8 @@ require_once dirname(__DIR__) . '/lib/Crawler.php';
 require_once dirname(__DIR__) . '/lib/RepoAnalyzer.php';
 require_once dirname(__DIR__) . '/lib/AdminAuth.php';
 require_once dirname(__DIR__) . '/lib/UsageLog.php';
+require_once dirname(__DIR__) . '/lib/GitHubLog.php';
+require_once dirname(__DIR__) . '/lib/Feedback.php';
 require_once dirname(__DIR__) . '/lib/VisitLog.php';
 require_once dirname(__DIR__) . '/lib/Chart.php';
 require_once dirname(__DIR__) . '/lib/Pager.php';
@@ -3158,6 +3160,228 @@ $survey = (new SiteSurvey('https://demo.example.com/', pageSet(array(
     stubPage('home'), stubPage('about'), stubPage('team'),
 )), array(), array(), $deep))->analyze();
 ok(!$survey->has('xs.broken_nav_links'), 'and treats one rotten deep link as the ordinary decay it is');
+
+// --------------------------------------------- what GitHub's allowance costs
+
+group('Watching the GitHub allowance');
+
+// Which endpoint a path was. The log stores a word rather than the URL, so a
+// page number in a query string does not make every row look distinct.
+ok(GitHub::endpointName('/repos/a/b') === 'repository', 'the repository itself is named as such');
+ok(GitHub::endpointName('/repos/a/b/commits?per_page=100') === 'commits', 'a page of commits is "commits"');
+ok(GitHub::endpointName('/repos/a/b/commits/0f1e2d3') === 'commit', 'and one commit is "commit"');
+ok(GitHub::endpointName('/repos/a/b/git/trees/main?recursive=1') === 'tree', 'a file tree is "tree"');
+ok(GitHub::endpointName('/rate_limit') === 'other', 'and anything else is not guessed at');
+
+// What a status code amounted to. The whole page depends on telling "GitHub
+// said no" apart from "there is no such repository", which arrive as different
+// codes and mean completely different things about this server's health.
+ok(GitHubLog::outcome(200) === 'ok', '200 is an answer');
+ok(GitHubLog::outcome(403) === 'blocked', '403 is a refusal');
+ok(GitHubLog::outcome(429) === 'blocked', 'and so is 429');
+ok(GitHubLog::outcome(404) === 'missing', '404 is a repository that is not there, not an outage');
+ok(GitHubLog::outcome(451) === 'missing', 'and neither is a takedown');
+ok(GitHubLog::outcome(500) === 'error', 'a server error is an error');
+ok(GitHubLog::outcome(0) === 'error', 'and a request that never landed is one too');
+
+// The ceiling: how far an hour got before it was refused. Reported as a pair —
+// the emptiest hour that was stopped and the fullest that was not — because
+// either alone reads as the ceiling being somewhere it is not.
+$runs = array(
+    array('hour' => '2026-08-01 09', 'requests' => 40, 'repos' => 5),
+    array('hour' => '2026-08-01 11', 'requests' => 56, 'repos' => 7),
+    array('hour' => '2026-08-02 14', 'requests' => 48, 'repos' => 6),
+);
+$hoursSeen = array(
+    array('hour' => '2026-08-01 09', 'requests' => 48, 'repos' => 6, 'blocked' => 2),
+    array('hour' => '2026-08-01 10', 'requests' => 24, 'repos' => 3, 'blocked' => 0),
+    array('hour' => '2026-08-01 11', 'requests' => 60, 'repos' => 8, 'blocked' => 1),
+    array('hour' => '2026-08-02 14', 'requests' => 52, 'repos' => 7, 'blocked' => 4),
+    array('hour' => '2026-08-02 15', 'requests' => 32, 'repos' => 4, 'blocked' => 0),
+);
+$ceiling = GitHubLog::ceiling($runs, $hoursSeen);
+ok($ceiling['blocks'] === 3, 'counts the hours that ended in a refusal');
+ok($ceiling['earliest'] === 5, 'the earliest it was ever stopped');
+ok($ceiling['latest'] === 7, 'the latest it ever got');
+ok($ceiling['typical'] === 6, 'and the middle of the three', (string) $ceiling['typical']);
+ok($ceiling['clean'] === 4, 'the busiest hour that was never refused', (string) $ceiling['clean']);
+ok($ceiling['cleanHours'] === 2, 'out of two that were not', (string) $ceiling['cleanHours']);
+
+$none = GitHubLog::ceiling(array(), array(array('hour' => '2026-08-01 09', 'requests' => 8, 'repos' => 1, 'blocked' => 0)));
+ok($none['blocks'] === 0 && $none['typical'] === null,
+   'with nothing ever refused there is no ceiling to report');
+ok($none['clean'] === 1, 'only how far it has got so far');
+ok(GitHubLog::ceiling(array(), array())['clean'] === null, 'and an empty log reports nothing at all');
+
+ok(GitHubLog::median(array()) === null, 'the middle of nothing is nothing');
+ok(GitHubLog::median(array(4)) === 4, 'the middle of one is itself');
+ok(GitHubLog::median(array(2, 4, 9)) === 4, 'the middle of three is the middle one');
+// Repositories are counted in whole numbers: "seven and a half" is not a
+// number of repositories, so an even list takes the lower of the two middles.
+ok(GitHubLog::median(array(2, 4, 9, 11)) === 4, 'and an even list rounds down rather than inventing a half');
+
+// The hour chart leaves quiet hours out rather than drawing them as zero: a
+// quiet night would otherwise be forty empty bars between two real ones.
+$columns = GitHubLog::hourColumns($hoursSeen);
+ok(count($columns) === 5, 'one column per hour that saw traffic');
+ok($columns[0]['flag'] === true && $columns[1]['flag'] === false,
+   'the hours that were refused are flagged for the accent colour');
+ok(strpos($columns[0]['label'], '09:00') !== false, 'and each column says which hour it is',
+   $columns[0]['label']);
+$flagSvg = Chart::series($columns, 'Repositories per hour', 'repositories');
+ok(substr_count($flagSvg, 'c-bar is-hit') === 3, 'which reaches the chart as a class',
+   (string) substr_count($flagSvg, 'c-bar is-hit'));
+
+// ------------------------------------------------- reporting a wrong reading
+
+group('Reporting a wrong reading');
+
+ok(Feedback::normaliseDirection('too_low') === 'too_low', 'a direction the form offers is kept');
+ok(Feedback::normaliseDirection('') === 'too_high', 'and anything else becomes the default');
+ok(Feedback::normaliseDirection('DROP TABLE') === 'too_high', 'including something that was not a direction at all');
+ok(Feedback::normaliseTruth('ai') === 'ai', 'the same for what the reader says it really is');
+ok(Feedback::normaliseTruth('maybe') === 'unsure', 'with "not sure" as the safe answer');
+
+ok(Feedback::normaliseComment('  ') === null, 'an empty note is no note');
+ok(Feedback::normaliseComment("I wrote this\nby hand") === 'I wrote this by hand',
+   'a note is folded onto one line', (string) Feedback::normaliseComment("I wrote this\nby hand"));
+ok(Feedback::normaliseComment("bad\x00actor") === 'badactor', 'and control characters are dropped');
+ok(strlen((string) Feedback::normaliseComment(str_repeat('a', 900))) === Feedback::MAX_COMMENT,
+   'a very long note is cut to length');
+// A /u pattern matches nothing on invalid UTF-8 and preg_replace returns null,
+// which would quietly turn somebody's note into an empty one. The encoding is
+// repaired first instead.
+ok(Feedback::normaliseComment("bad\xC3\x28 byte") !== null,
+   'a note with a broken byte in it survives rather than vanishing');
+ok(Feedback::normaliseComment('café — fine') === 'café — fine',
+   'and one that was fine all along is untouched',
+   (string) Feedback::normaliseComment('café — fine'));
+
+// The bands are the ones the meter on the front page is painted in, so a
+// report about the 55–70 band is a report about something the reader saw.
+ok(Feedback::band(0) === 'human' && Feedback::band(41) === 'human', 'under 42 is the hand-written band');
+ok(Feedback::band(42) === 'unknown' && Feedback::band(54) === 'unknown', '42 to 54 is inconclusive');
+ok(Feedback::band(55) === 'mixed' && Feedback::band(69) === 'mixed', '55 to 69 is possibly assisted');
+ok(Feedback::band(70) === 'ai' && Feedback::band(100) === 'ai', 'and 70 up is the AI band');
+foreach (array(0, 41, 42, 54, 55, 69, 70, 100) as $score) {
+    if (AdminUi::scoreBand($score) !== 'is-' . Feedback::band($score)) {
+        ok(false, 'the panel paints a score the same way the meter did', 'disagreed at ' . $score);
+        break;
+    }
+}
+ok(AdminUi::scoreBand(88) === 'is-ai', 'the panel paints a score the same way the meter did');
+
+// A count of complaints says nothing without what it is a count of.
+$rates = Feedback::rates(
+    array(array('mode' => 'url', 'n' => 5), array('mode' => 'code', 'n' => 5)),
+    array('url' => 500, 'code' => 20)
+);
+ok($rates[0]['per100'] === 1.0, 'five reports in five hundred readings is one per hundred');
+ok($rates[1]['per100'] === 25.0, 'and five in twenty is twenty-five', (string) $rates[1]['per100']);
+$noAnalyses = Feedback::rates(array(array('mode' => 'git', 'n' => 3)), array());
+ok($noAnalyses[0]['per100'] === 0.0, 'reports about a window with no analyses in it divide by nothing');
+
+// A report can only ever dispute a reading this site actually issued: the
+// certificate is a signature over the mode, the address, the score and the
+// verdict, and that is where every stored figure comes from.
+$signed = vcd_cert_token(array(
+    'mode' => 'url', 'target' => 'https://example.com/', 'score' => 81,
+    'verdict' => array('code' => 'likely_ai'), 'confidence' => array('level' => 'medium'),
+    'analyzedAt' => '2026-08-28T10:00:00Z', 'signals' => array(),
+));
+$opened = vcd_cert_open($signed['payload'], $signed['sig']);
+ok($opened !== null && (int) $opened['s'] === 81, 'a report carries the score the reading was given');
+ok($opened !== null && $opened['id'] === $signed['id'], 'and an id that is unique to that reading');
+ok(vcd_cert_open($signed['payload'], 'not-the-signature') === null,
+   'a made-up score cannot be reported: the signature is what carries it');
+$tampered = vcd_b64url_encode(str_replace('"s":81', '"s":12', (string) vcd_b64url_decode($signed['payload'])));
+ok(vcd_cert_open($tampered, $signed['sig']) === null, 'and editing the score invalidates it');
+
+// ------------------------------------------------------ part-to-whole charts
+
+group('Charts of a whole made of parts');
+
+$slices = array(
+    array('label' => 'Live page', 'n' => 60),
+    array('label' => 'Whole site', 'n' => 30),
+    array('label' => 'Pasted code', 'n' => 10),
+);
+$share = Chart::share($slices, 'analyses');
+ok(strpos($share, '<svg') === 0, 'the share bar is an SVG');
+ok(substr_count($share, '<rect') === 3, 'one segment per category');
+ok(substr_count($share, '<li>') === 3, 'and every segment has its figure written out beside it');
+ok(strpos($share, '60%') !== false && strpos($share, '30%') !== false,
+   'the percentages are on the page as text, not only as a width');
+ok(strpos($share, 'fill-opacity') !== false && strpos($share, 'fill="#') === false,
+   'the bands are one colour at different strengths, from the stylesheet');
+ok(Chart::share(array()) === '', 'nothing to divide draws nothing');
+ok(Chart::share(array(array('label' => 'None', 'n' => 0))) === '', 'and neither does a total of zero');
+ok(strpos(Chart::share(array(array('label' => '<script>x</script>', 'n' => 1))), '<script>') === false,
+   'a category name cannot inject markup');
+
+// Past the fifth category the rest becomes "Other": a sixth shade is a shade
+// nobody can tell from the fifth.
+$many = array();
+foreach (range(1, 9) as $i) {
+    $many[] = array('label' => 'cat' . $i, 'n' => 10 - $i);
+}
+$folded = Chart::fold($many, 5);
+ok(count($folded) === 5, 'nine categories fold into five');
+ok($folded[4]['label'] === 'Other', 'the last of which is called Other');
+ok($folded[4]['n'] === 5 + 4 + 3 + 2 + 1, 'and holds everything the first four did not',
+   (string) $folded[4]['n']);
+ok(Chart::fold($many, 20) === $many, 'a list shorter than the limit is left alone');
+ok(count(Chart::fold($many, 0)) === 1, 'and a nonsensical limit still produces something drawable');
+
+// The ramp is monotonic and stops before it fades into the panel behind it.
+ok(Chart::shade(0) > Chart::shade(1) && Chart::shade(1) > Chart::shade(4),
+   'each band is painted more faintly than the one before it');
+ok(Chart::shade(4) >= 0.3, 'and the faintest still stands off the surface', (string) Chart::shade(4));
+ok(Chart::shade(99) === Chart::shade(4), 'past the ramp it stops getting fainter rather than disappearing');
+
+// Stacked columns: the height is the day's total, the bands say what it was made of.
+$stackRows = array();
+foreach (range(1, 10) as $i) {
+    $stackRows[] = array(
+        'day'  => gmdate('Y-m-d', strtotime('2026-08-01 UTC') + ($i - 1) * 86400),
+        'ok'   => $i,
+        'bad'  => $i % 3,
+    );
+}
+$stack = Chart::stack($stackRows, array('ok', 'bad'), array('ok' => 'answered', 'bad' => 'refused'));
+ok(strpos($stack, '<svg') === 0, 'the stacked chart is an SVG');
+$expected = 0;
+foreach ($stackRows as $row) {
+    $expected += ($row['ok'] > 0 ? 1 : 0) + ($row['bad'] > 0 ? 1 : 0);
+}
+ok(substr_count($stack, '<rect') === $expected, 'a band with nothing in it is not drawn',
+   substr_count($stack, '<rect') . ' for ' . $expected);
+ok(strpos($stack, '— 1 answered') !== false, 'and every band says what it is in its tooltip');
+ok(Chart::stack(array(), array('ok')) === '', 'no rows draws nothing');
+ok(Chart::stack($stackRows, array()) === '', 'and neither does no series');
+$allZero = array(array('day' => '2026-08-01', 'ok' => 0), array('day' => '2026-08-02', 'ok' => 0));
+ok(strpos(Chart::stack($allZero, array('ok')), '<rect') === false,
+   'a flat zero window is not a wall of full-height columns');
+
+// The legend swatch is painted by the same ramp as the chart, so a caption
+// written by hand cannot drift out of step with the bands above it.
+ok(strpos(Chart::key(1, 'refused'), sprintf('opacity:%.2f', Chart::shade(1))) !== false,
+   'a legend swatch matches the band it stands for');
+ok(strpos(Chart::key(0, '<script>x</script>'), '<script>') === false,
+   'and a legend label cannot inject markup either');
+
+// The weekday chart names its days, and stays quiet when nothing happened.
+$week = array(1 => 10, 2 => 4, 3 => 0, 4 => 0, 5 => 6, 6 => 0, 7 => 1);
+$weekSvg = Chart::weekdays($week);
+ok(substr_count($weekSvg, '<rect') === 4, 'only the days with traffic get a column');
+ok(substr_count($weekSvg, '<text') === 7, 'but every day is still labelled');
+ok(strpos($weekSvg, 'Mon — 10 views') !== false, 'and the busiest one says so',
+   $weekSvg);
+ok(Chart::weekdays(array_fill(1, 7, 0)) === '', 'an empty week draws nothing');
+
+// The hour chart took a noun so that a page about GitHub does not say "views".
+ok(strpos(Chart::hours(array(3 => 5), 'Requests', 'requests'), '5 requests') !== false,
+   'the hour chart says what it is counting');
 
 // ------------------------------------------------------------------ catalog
 

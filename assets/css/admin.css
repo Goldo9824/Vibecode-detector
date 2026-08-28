@@ -261,6 +261,57 @@ table.admin-table td.num { text-align: right; font-variant-numeric: tabular-nums
   font-size: 9px;
 }
 
+/*
+ * A band in a stacked column or a share bar.
+ *
+ * One colour at five strengths rather than five colours. The categories these
+ * draw are ordered by size, so a sequential ramp says "bigger" where a set of
+ * hues would only say "different" — and the panel keeps its one accent for the
+ * thing that is actually wrong, which is the whole reason it has an accent.
+ * The strength itself is set per rect by lib/Chart.php, so the ramp is defined
+ * once, in PHP, rather than in two places that can drift apart.
+ */
+/* --ink-2 rather than --ink: at full strength the strongest band is a whole
+   column of it, and pure ink at that size is a slab. The mid tone sits in the
+   same register as the single-series charts beside it. */
+.c-seg { fill: var(--ink-2); }
+.c-seg:hover { fill: var(--red); }
+
+/* The one hour GitHub said no in, on a chart of hours it did not. Emphasis
+   rather than a second series: the point of the chart is finding these. */
+.c-bar.is-hit { fill: var(--red); }
+.c-bar.is-hit:hover { fill: var(--red-2); }
+
+/* The share bar is a measure, not a plot: no axis, no grid, and short. */
+.chart-share { height: 26px; }
+
+/*
+ * The figures beside a share bar.
+ *
+ * Not decoration — it is the part that has to be readable when two bands are
+ * a shade apart, or when the reader cannot tell the shades apart at all. The
+ * bar shows the proportion; this says what it is.
+ */
+.share-key {
+  list-style: none;
+  margin: .7rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: .3rem .9rem;
+  font-family: var(--mono);
+  font-size: .75rem;
+}
+.share-key li {
+  display: flex;
+  align-items: baseline;
+  gap: .4rem;
+}
+.share-key .key-seg { margin-left: 0; flex: none; }
+.share-label { color: var(--ink-2); overflow-wrap: anywhere; }
+.share-n { margin-left: auto; color: var(--ink); font-variant-numeric: tabular-nums; }
+.share-pct { color: var(--ink-3); font-variant-numeric: tabular-nums; min-width: 2.5rem; text-align: right; }
+
 .chart-figure figcaption {
   font-family: var(--mono);
   font-size: .6875rem;
@@ -279,6 +330,11 @@ table.admin-table td.num { text-align: right; font-variant-numeric: tabular-nums
 }
 .key:first-child { margin-left: 0; }
 .key-bar { background: var(--rule-2); }
+.key-hit { background: var(--red); }
+/* A band of a stacked chart or a share bar. Chart::key() sets the strength
+   inline, from the same ramp the bands themselves are painted from — so the
+   swatch is the colour it stands for and cannot drift out of step with it. */
+.key-seg { background: var(--ink-2); }
 .key-line { height: 2px; background: var(--red); vertical-align: 3px; border-radius: 0; }
 
 /* A bar behind a table label: the same comparison a bar chart would draw,
@@ -407,3 +463,63 @@ a.page:hover { border-color: var(--rule-2); color: var(--ink); background: var(-
   cursor: help;
 }
 .stat .n .approx { border-bottom-width: 2px; }
+
+/* ------------------------------------------------------------------ nav bar */
+
+/*
+ * Where the panel's pages are. It was one page with a link on it and then five
+ * pages with links between some of them; this is the row every page carries so
+ * that none of them is a dead end.
+ */
+.admin-nav {
+  display: flex;
+  gap: .3rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+  font-family: var(--mono);
+  font-size: .75rem;
+}
+.admin-nav a {
+  padding: .35rem .7rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  color: var(--ink-2);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.admin-nav a:hover { border-color: var(--rule-2); color: var(--ink); background: var(--paper-3); }
+.admin-nav a.is-on { border-color: var(--red); color: var(--red); }
+
+/* A figure that is a state rather than a quantity: how close to a ceiling, or
+   how long ago something last went wrong. */
+.stat.is-warn .n { color: var(--red); }
+.stat.is-good .n { color: var(--green); }
+
+/* An outcome, in the words the log stores it in. Status colour with the word
+   beside it, never the colour alone. */
+.badge.is-ok { border-color: var(--green); color: var(--green); }
+.badge.is-blocked { border-color: var(--red); color: var(--red); }
+.badge.is-missing,
+.badge.is-error { border-color: var(--rule-2); color: var(--ink-3); }
+
+/* What somebody typed, in a table of things they typed. Kept narrow so one
+   long note cannot push the columns beside it off the page. */
+td.note {
+  font-family: var(--sans);
+  color: var(--ink-2);
+  max-width: 26rem;
+  overflow-wrap: anywhere;
+}
+td.note:empty::after { content: '—'; color: var(--ink-3); }
+
+/* A score, in the colour the meter painted it. */
+.score-chip {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  padding: .1rem .4rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--rule-2);
+}
+.score-chip.is-ai { border-color: var(--red); color: var(--red); }
+.score-chip.is-mixed { border-color: var(--amber); color: var(--amber); }
+.score-chip.is-human { border-color: var(--green); color: var(--green); }

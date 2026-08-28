@@ -371,6 +371,38 @@ final class VisitLog
     }
 
     /**
+     * Views per day of the week, Monday first.
+     *
+     * The hour chart says when in a day; this says which days, which for a
+     * site people find at work looks completely different from one people
+     * find at the weekend. Both are needed: a weekday average hides a
+     * Saturday that is half of everything, and vice versa.
+     *
+     * @return array<int,int> keyed 1 (Monday) to 7 (Sunday)
+     */
+    public static function byWeekday(PDO $pdo, int $days = 30, bool $includeBots = false): array
+    {
+        $stmt = $pdo->prepare(
+            "SELECT WEEKDAY(created_at) AS d, COUNT(*) AS n FROM visit_log
+             WHERE " . self::WINDOW . ($includeBots ? '' : " AND device <> 'bot'") . "
+             GROUP BY WEEKDAY(created_at)"
+        );
+        $stmt->execute(array($days - 1));
+
+        // MySQL's WEEKDAY() is 0 for Monday; the chart counts from 1 so that
+        // the array reads the way the days are named rather than the way one
+        // particular database function happens to index them.
+        $out = array_fill(1, 7, 0);
+        foreach ($stmt->fetchAll() as $row) {
+            $d = (int) $row['d'] + 1;
+            if ($d >= 1 && $d <= 7) {
+                $out[$d] = (int) $row['n'];
+            }
+        }
+        return $out;
+    }
+
+    /**
      * Delete anything past the retention window.
      *
      * Called from the admin page rather than from the logging path: pruning on

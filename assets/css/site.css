@@ -1093,6 +1093,141 @@ label.field code { font-family: var(--mono); font-size: .95em; text-transform: n
   max-width: 66ch;
 }
 
+/*
+ * "Does this reading look wrong?"
+ *
+ * Sits between the caveats and the certificate, which is where the argument
+ * actually happens: the notes have just finished explaining why the number
+ * might be wrong, and the certificate is about to offer to print it. Dressed
+ * as part of the panel rather than as a form — three choices on a rule, and
+ * the rest of it only appears once one has been picked.
+ */
+.report {
+  padding: 1.25rem clamp(1.25rem, 4vw, 2rem) 1.5rem;
+  border-top: 1px solid var(--rule);
+}
+.report-lead {
+  margin: 0 0 1rem;
+  font-family: var(--sans);
+  font-size: .875rem;
+  color: var(--ink-2);
+  max-width: 56ch;
+}
+
+.report-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: .5rem;
+}
+
+/* The whole cell is the target, not the eight pixels of the radio inside it. */
+.report-choice {
+  position: relative;
+  display: block;
+  padding: .7rem .85rem;
+  background: var(--paper-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color .1s linear, background .1s linear;
+}
+.report-choice:hover { border-color: var(--rule-2); }
+.report-choice input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.report-choice-label {
+  display: block;
+  font-family: var(--mono);
+  font-size: .8125rem;
+  color: var(--ink);
+}
+.report-choice-note {
+  display: block;
+  margin-top: .25rem;
+  font-family: var(--sans);
+  font-size: .75rem;
+  line-height: 1.4;
+  color: var(--ink-3);
+}
+.report-choice:has(input:checked) { border-color: var(--red); background: var(--red-soft); }
+.report-choice:has(input:checked) .report-choice-label { color: var(--red); }
+/* :has() is young enough to need a floor under it: without it the choice is
+   still made and still sent, it just does not light up. The focus ring below
+   is the part that has to work everywhere, so it is not written with :has(). */
+.report-choice:focus-within { border-color: var(--red); }
+
+.report-more { margin-top: 1rem; }
+
+.report-truth {
+  border: 0;
+  padding: 0;
+  margin: 0 0 1rem;
+}
+.report-truth legend {
+  padding: 0;
+  font-size: .6875rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: .5rem;
+}
+.report-truth label {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  margin-right: 1rem;
+  font-family: var(--mono);
+  font-size: .8125rem;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+/* The one native control left on the page. Left native on purpose — a radio
+   somebody has re-drawn is a radio that behaves oddly with a keyboard — but
+   painted in this site's accent rather than the browser's. */
+.report-truth input { accent-color: var(--red); margin: 0; }
+
+.report textarea {
+  width: 100%;
+  background: var(--paper-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: .8125rem;
+  line-height: 1.5;
+  padding: .6rem .7rem;
+  resize: vertical;
+  /* The site-wide textarea is the code box, and it is fourteen rems tall
+     because a paste needs to be. A sentence does not: without this the note
+     field opens as a screenful of empty and reads as work. */
+  min-height: 0;
+  height: 4.5rem;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+.report textarea:focus { border-color: var(--red); outline: none; }
+
+.report-send {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: .9rem;
+}
+.report-note,
+.report-done {
+  font-family: var(--sans);
+  font-size: .8125rem;
+  color: var(--ink-3);
+  margin: 0;
+  max-width: 52ch;
+}
+.report-done { margin-top: .5rem; }
+.report.is-sent .report-done { color: var(--green); }
+
 .cert-bar {
   display: flex;
   align-items: center;

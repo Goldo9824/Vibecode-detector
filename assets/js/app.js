@@ -467,6 +467,8 @@
     cert.href = 'api/certificate.php?p=' + encodeURIComponent(data.cert.payload) +
                 '&s=' + encodeURIComponent(data.cert.sig);
 
+    resetReport(data);
+
     results.hidden = false;
     results.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
@@ -651,6 +653,128 @@
     });
 
     host.hidden = false;
+  }
+
+  /*
+   * "Does this reading look wrong?"
+   *
+   * The reading is identified by the certificate it was issued with, not by
+   * anything this form says about it: the token is a signature over the mode,
+   * the address, the score and the verdict, so a report can only ever dispute
+   * a reading the server actually produced. That also means the form has one
+   * job — which way it is wrong — and does not have to ask the reader to
+   * describe a result that is on the screen in front of them.
+   *
+   * Nothing here is required. A direction alone is a complete report; the note
+   * and the "what is it really" are there for people who know something the
+   * page does not.
+   */
+  var reportBox = $('r-report');
+  var reportForm = $('form-report');
+  var reportMore = $('report-more');
+  var reportDone = $('report-done');
+  var reportComment = $('report-comment');
+  var reportCert = null;
+
+  // The one thing this file is not allowed to guess: whether there is anywhere
+  // to file a report. The server writes it into the block, because the answer
+  // is whether an operator configured a database.
+  var COLLECTS = reportBox && reportBox.getAttribute('data-collect') === '1';
+
+  // Where to send somebody when there is nowhere to file a report. Read off
+  // the block rather than written down here, so it stays in step with
+  // VCD_REPO_URL for anyone who forks this.
+  var ISSUE_URL = (reportBox && reportBox.getAttribute('data-issues')) || '';
+
+  function reportChoice() {
+    var picked = reportForm.querySelector('input[name="direction"]:checked');
+    return picked ? picked.value : '';
+  }
+
+  // Back to the state a fresh reading deserves: no direction picked, no note
+  // left over from the last one, and the thank-you gone. Without this a second
+  // analysis inherits the first one's report and reads as already sent.
+  function resetReport(data) {
+    if (!reportBox) return;
+
+    reportCert = data.cert;
+    reportBox.hidden = false;
+    reportForm.reset();
+    reportForm.hidden = false;
+    reportMore.hidden = true;
+    reportDone.hidden = true;
+    reportDone.textContent = '';
+    reportBox.classList.remove('is-sent');
+
+    if (!COLLECTS) {
+      // Nothing is recorded on this installation, so the honest version of
+      // this block is a link to the place that does keep a record.
+      reportForm.hidden = true;
+      $('report-lead').textContent = 'This installation keeps no record, so there is nothing here to file a report into.';
+      reportDone.hidden = false;
+      reportDone.textContent = '';
+      if (ISSUE_URL) {
+        var link = el('a', null, 'Report a wrong reading on the issue tracker \u2192');
+        link.href = ISSUE_URL;
+        link.rel = 'noopener';
+        reportDone.appendChild(link);
+      }
+    }
+  }
+
+  if (reportForm && COLLECTS) {
+    // Picking a direction opens the rest. Two clicks is the whole report; the
+    // rest is for people with more to say, and hiding it until then keeps the
+    // first click from looking like the start of a form.
+    reportForm.addEventListener('change', function (e) {
+      if (e.target && e.target.name === 'direction') {
+        reportMore.hidden = false;
+      }
+    });
+
+    reportForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (!reportCert) return;
+
+      var direction = reportChoice();
+      if (!direction) {
+        reportMore.hidden = true;
+        showError('Pick which way the score is wrong first.');
+        return;
+      }
+
+      var truth = reportForm.querySelector('input[name="truth"]:checked');
+      var body = new FormData();
+      body.append('p', reportCert.payload);
+      body.append('s', reportCert.sig);
+      body.append('direction', direction);
+      body.append('truth', truth ? truth.value : 'unsure');
+      body.append('comment', reportComment.value);
+
+      var button = reportForm.querySelector('button[type="submit"]');
+      if (button) button.disabled = true;
+
+      fetch('api/feedback.php', {
+        method: 'POST',
+        body: body,
+        headers: { 'Accept': 'application/json' }
+      })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (!data.ok) throw new Error(data.error || 'That report did not go through.');
+          // The form goes rather than staying filled in: it has been sent, and
+          // a form still sitting there invites the same report twice.
+          reportForm.hidden = true;
+          reportDone.hidden = false;
+          reportDone.textContent = data.message;
+          reportBox.classList.add('is-sent');
+        })
+        .catch(function (err) {
+          if (button) button.disabled = false;
+          reportDone.hidden = false;
+          reportDone.textContent = (err && err.message) || 'That report did not go through.';
+        });
+    });
   }
 
   function renderNotes(data) {

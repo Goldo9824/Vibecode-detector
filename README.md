@@ -248,11 +248,24 @@ AI agent to read and call the endpoint correctly on its own.
 ## Admin panel
 
 An optional, password-gated dashboard at `/admin/` for creating and revoking
-named API keys and seeing usage — total analyses by mode, the most-analysed
-websites, and the same broken down per key. Every website that has ever been
-analysed has its own searchable, sortable list forty rows to a page, and its
-own page of charts. Inert with no database configured; see
-**[docs/ADMIN.md](docs/ADMIN.md)**.
+named API keys and seeing usage — total analyses by mode and per day, the
+most-analysed websites, traffic, and the same broken down per key. Every website
+that has ever been analysed has its own searchable, sortable list forty rows to
+a page, and its own page of charts.
+
+Two of its five pages answer questions nothing else can:
+
+- **GitHub** — every repository that has been searched, every time GitHub
+  refused, and how many repositories an hour gets through before it does.
+  GitHub allows 60 API requests an hour per address and a repository read
+  spends up to eight of them, so that ceiling is what decides how many people
+  can use the repository tab at once.
+- **Reports** — what people say when a reading looks wrong. Every result on the
+  front page carries a *Does this reading look wrong?* block: too high, too
+  low, or about right. The panel shows where on the scale the disagreement
+  sits, and how often a reading is disputed per hundred analyses.
+
+Inert with no database configured; see **[docs/ADMIN.md](docs/ADMIN.md)**.
 
 How the public pages describe themselves to a search engine — titles,
 canonicals, Open Graph, structured data and the sitemap — is in
@@ -269,7 +282,7 @@ verify.php         certificate verification
 llms.txt           instructions for an AI agent calling api/website.php
 robots.txt         disallows /admin/, points at the sitemap
 sitemap.php        served as /sitemap.xml, built for whatever domain it runs on
-api/               analyze.php, website.php, certificate.php
+api/               analyze.php, website.php, certificate.php, feedback.php
 admin/             optional password-gated key management and usage dashboard
 lib/
   Catalog.php      every signal, its weight and its reasoning — the source of truth
@@ -286,6 +299,9 @@ lib/
   Db.php           optional MySQL connection, used only by admin/
   ApiKeys.php      API key CRUD, backed by Db.php
   UsageLog.php     usage recording and stats, backed by Db.php
+  VisitLog.php     page views, counted without identifying anyone
+  GitHubLog.php    what the GitHub allowance is spent on, and when it runs out
+  Feedback.php     readings people reported as wrong, and what they said
   AdminAuth.php    admin session, login and CSRF
   AdminUi.php      how the panel words dates, modes and page numbers
   Num.php          counters past a thousand: 1.2k, 17k, 1.5M, and small ones in words
@@ -313,7 +329,7 @@ The one opt-in exception: an operator can configure a database for `admin/`
 (see [docs/ADMIN.md](docs/ADMIN.md)) to manage named API keys and to see how the
 site is used. **With no database configured, that code path is inert and the site
 keeps nothing at all** — which is the default for anyone who forks this and does not
-set one up. With one configured, two things are recorded:
+set one up. With one configured, four things are recorded:
 
 - **Analyses** — the mode, and for URL and repository checks the address or
   repository name analysed. Never the pasted content, never the fetched page, never
@@ -321,6 +337,12 @@ set one up. With one configured, two things are recorded:
 - **Visits** — one row per page view: the path, a timestamp, the referring site's
   host, and a coarse client class. No address, no cookie, no session, and never the
   query string, which is where the URL somebody asked about would be.
+- **GitHub requests** — one row per request this site makes to GitHub's API: the
+  repository, which endpoint, the status, and what GitHub said was left of the
+  hourly allowance. Nothing about who asked for it.
+- **Reported readings** — when somebody says a reading looks wrong: the reading
+  itself, which way they say it is wrong, and their note. Nothing about who they
+  are, and no field to leave an email in — there is nowhere for an answer to go.
 
 Counting people rather than page views needs *something* per visitor, and the
 something is a token: an HMAC of address and user agent under this installation's
